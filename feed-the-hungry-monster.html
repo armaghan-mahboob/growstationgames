@@ -1,0 +1,2058 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Feed the Hungry Monster</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Fredoka:wght@500;600;700&display=swap" rel="stylesheet">
+<style>
+/* =====================================================================
+   UI STYLES
+   Palette: sky #9edbff, meadow #7fd47a, monster violet #7b5cff,
+   sunflower #ffd23f, berry #ff6fae, ink #2b2350
+   ===================================================================== */
+:root {
+  --ink: #2b2350;
+  --ink-soft: #6a6292;
+  --purple: #7b5cff;
+  --purple-dark: #5a3fd6;
+  --pink: #ff6fae;
+  --yellow: #ffd23f;
+  --green: #35c27f;
+  --green-dark: #23935e;
+  --shadow: 0 6px 0 rgba(43,35,80,.14), 0 14px 30px rgba(43,35,80,.16);
+  --font: "Fredoka", "Baloo 2", "Comic Sans MS", "Chalkboard SE", ui-rounded, system-ui, sans-serif;
+  --mR: 120px; /* monster radius, set from JS */
+}
+* { box-sizing: border-box; }
+[hidden] { display: none !important; }
+html, body { margin: 0; height: 100%; overflow: hidden; }
+body {
+  font-family: var(--font);
+  color: var(--ink);
+  background: linear-gradient(180deg, #9edbff 0%, #cdeeff 50%, #fff3d4 100%);
+  -webkit-user-select: none; user-select: none;
+}
+button { font-family: inherit; }
+button:focus-visible { outline: 5px solid var(--pink); outline-offset: 4px; }
+
+/* ---------- scenery ---------- */
+#scenery { position: fixed; inset: 0; z-index: 0; pointer-events: none; overflow: hidden; }
+.cloud { position: absolute; left: 0; background: #fff; border-radius: 999px; opacity: .9; animation: drift linear infinite; }
+.cloud::before, .cloud::after { content: ""; position: absolute; background: #fff; border-radius: 50%; }
+.cloud::before { width: 50%; height: 140%; left: 14%; top: -62%; }
+.cloud::after  { width: 36%; height: 110%; right: 14%; top: -40%; }
+@keyframes drift { from { transform: translateX(-260px); } to { transform: translateX(calc(100vw + 260px)); } }
+#hills { position: absolute; left: 0; bottom: 0; width: 100%; height: 30vh; }
+.flower { position: absolute; font-size: clamp(20px, 2.2vw, 34px); }
+
+/* ---------- canvases ---------- */
+#stage, #top { position: fixed; inset: 0; width: 100%; height: 100%; display: block; }
+#stage { z-index: 2; cursor: none; }
+#top { z-index: 40; pointer-events: none; }
+#video { position: fixed; left: 0; top: 0; width: 2px; height: 2px; opacity: 0; pointer-events: none; }
+
+/* ---------- HUD ---------- */
+#hud {
+  position: fixed; top: 0; left: 0; right: 0; z-index: 5;
+  display: flex; align-items: flex-start; justify-content: space-between; gap: 12px;
+  padding: 14px 18px; pointer-events: none;
+}
+#hud.hidden { visibility: hidden; }
+.hud-col { display: flex; flex-direction: column; gap: 8px; align-items: flex-start; }
+.hud-right { display: flex; gap: 10px; align-items: flex-start; }
+.hud-right .hud-col { align-items: flex-end; }
+.pill {
+  background: #fff; border-radius: 20px; box-shadow: var(--shadow);
+  padding: 6px 16px; font-weight: 700; font-size: clamp(20px, 2vw, 30px);
+  display: flex; align-items: center; gap: 8px; white-space: nowrap;
+}
+.pill.bump { animation: bump .45s; }
+.icon-btn {
+  pointer-events: auto; border: none; background: #fff; box-shadow: var(--shadow);
+  width: clamp(54px, 4.8vw, 68px); height: clamp(54px, 4.8vw, 68px);
+  border-radius: 20px; font-size: clamp(24px, 2.4vw, 32px); cursor: pointer;
+  display: grid; place-items: center;
+}
+.icon-btn:active { transform: translateY(3px); }
+#order {
+  background: #fff; border-radius: 30px; box-shadow: var(--shadow);
+  padding: 8px 22px 6px; display: flex; flex-direction: column; align-items: center; gap: 2px;
+}
+#order .row { display: flex; align-items: center; gap: 12px; }
+#orderIcon { width: clamp(44px, 4.4vw, 64px); height: clamp(44px, 4.4vw, 64px); }
+#slots { display: flex; gap: 8px; }
+.slot {
+  width: clamp(34px, 3.4vw, 52px); height: clamp(34px, 3.4vw, 52px); border-radius: 50%;
+  border: 4px dashed #cbbfff; background: #f6f3ff; display: grid; place-items: center;
+  font-weight: 700; color: #b9acf5; font-size: clamp(16px, 1.6vw, 24px);
+}
+.slot img { width: 92%; height: 92%; }
+.slot.filled { border-style: solid; border-color: var(--green); background: #e6fbf0; animation: pop .45s; }
+#countText { font-size: clamp(38px, 4.6vw, 70px); font-weight: 700; line-height: 1; margin-left: 6px; white-space: nowrap; }
+#countText b { color: var(--purple); display: inline-block; }
+#countText.bump b { animation: bump .5s; }
+#levelStars { font-size: clamp(16px, 1.5vw, 22px); letter-spacing: 4px; }
+#levelStars .off { filter: grayscale(1); opacity: .3; }
+
+/* colour word tag, used in bubble and order card */
+.cw { display: inline-block; color: #fff; padding: 0 .28em; border-radius: .35em; font-weight: 700; }
+.cw-red { background: #f0303f; }
+.cw-green { background: #2fa84f; }
+.cw-yellow { background: #ffc800; color: var(--ink); }
+#orderTag { font-size: clamp(22px, 2.4vw, 34px); }
+
+/* ---------- speech bubble ---------- */
+#bubble {
+  position: fixed; z-index: 6;
+  right: calc(50% + var(--mR) * 1.12);
+  bottom: calc(var(--mR) * 0.95);
+  max-width: min(calc(50% - var(--mR) * 1.12 - 20px), 560px);
+  background: #fff; border-radius: 34px; padding: 16px 26px; box-shadow: var(--shadow);
+  font-size: clamp(26px, min(3.4vw, 5.6vh), 52px); font-weight: 700; line-height: 1.15;
+  transform-origin: right bottom; transition: opacity .25s, transform .25s;
+  pointer-events: none;
+}
+#bubble::after {
+  content: ""; position: absolute; right: -24px; bottom: 28px;
+  border-style: solid; border-width: 16px 0 16px 28px;
+  border-color: transparent transparent transparent #fff;
+}
+#bubble.hide { opacity: 0; transform: scale(.6); }
+#bubble.pop { animation: bubblePop .4s; }
+#bubble img { height: 1.05em; vertical-align: -0.18em; }
+#bubble .num { color: var(--purple); font-size: 1.25em; }
+
+/* ---------- camera preview ---------- */
+#preview {
+  position: fixed; right: 16px; bottom: 16px; z-index: 30;
+  width: clamp(150px, 16vw, 250px); aspect-ratio: 4 / 3;
+  border-radius: 20px; overflow: hidden; border: 5px solid #fff;
+  box-shadow: var(--shadow); background: #3b3366;
+}
+#preview canvas { width: 100%; height: 100%; display: block; }
+#preview .tag {
+  position: absolute; left: 8px; top: 8px; background: rgba(255,255,255,.92);
+  border-radius: 12px; padding: 2px 10px; font-size: clamp(13px, 1.1vw, 16px); font-weight: 600;
+  display: flex; align-items: center; gap: 6px;
+}
+.dot { width: 10px; height: 10px; border-radius: 50%; background: #c4c0d6; }
+.dot.ok { background: var(--green); }
+#preview.lost { animation: pulseBorder 1s infinite; width: clamp(220px, 26vw, 380px); }
+
+/* ---------- full screen overlays ---------- */
+.screen {
+  position: fixed; inset: 0; z-index: 20;
+  display: flex; align-items: center; justify-content: center; padding: 24px;
+  background: rgba(255,248,232,.55); backdrop-filter: blur(3px);
+}
+.screen.top { align-items: flex-start; padding-top: 3vh; background: rgba(255,248,232,.2); backdrop-filter: none; }
+.card {
+  background: #fff; border-radius: 40px; box-shadow: var(--shadow);
+  padding: clamp(20px, 3vw, 42px); text-align: center; max-width: min(92vw, 940px);
+  animation: cardIn .45s cubic-bezier(.2,1.4,.4,1);
+}
+.card.wide { max-width: min(96vw, 1180px); padding: clamp(16px, 2vw, 30px); }
+h1.title {
+  font-size: clamp(42px, min(7vw, 10vh), 104px); line-height: .95; margin: 0 0 10px;
+  color: var(--purple); text-shadow: 0 6px 0 #e4dcff; letter-spacing: -.01em;
+}
+.h2 { font-size: clamp(34px, 4.4vw, 62px); margin: 4px 0 10px; color: var(--purple); line-height: 1; }
+.big-text { font-size: clamp(22px, min(3vw, 4.6vh), 42px); font-weight: 600; margin: 6px 0 18px; line-height: 1.2; }
+.note { font-size: clamp(15px, 1.3vw, 19px); color: var(--ink-soft); margin: 14px auto 0; max-width: 34em; }
+.emoji-big { font-size: clamp(64px, 9vw, 120px); line-height: 1; }
+.emoji-big.peek { display: inline-block; animation: peek 1.4s ease-in-out infinite; }
+.btn-row { display: flex; gap: 18px; justify-content: center; align-items: center; flex-wrap: wrap; margin-top: 8px; }
+.btn-row.col { flex-direction: column; }
+.btn {
+  pointer-events: auto; position: relative; overflow: hidden; isolation: isolate;
+  border: none; border-radius: 999px; padding: .38em 1.3em;
+  font-size: clamp(30px, 3.4vw, 50px); font-weight: 700; color: #fff; background: var(--green);
+  box-shadow: 0 8px 0 var(--green-dark), 0 16px 26px rgba(0,0,0,.14); cursor: pointer;
+  transition: transform .1s, box-shadow .1s;
+}
+.btn:active { transform: translateY(5px); box-shadow: 0 3px 0 var(--green-dark); }
+.btn.purple { background: var(--purple); box-shadow: 0 8px 0 var(--purple-dark), 0 16px 26px rgba(0,0,0,.14); }
+.btn.secondary {
+  background: #fff; color: var(--purple); font-size: clamp(18px, 1.8vw, 26px);
+  box-shadow: 0 6px 0 #ddd4ff, 0 10px 18px rgba(0,0,0,.08); padding: .45em 1.2em; margin-top: 14px;
+}
+.btn[disabled] { filter: grayscale(.85); opacity: .55; cursor: default; }
+/* fill bar shown while a hand hovers over a button */
+.btn .fill {
+  position: absolute; left: 0; top: 0; bottom: 0; z-index: -1;
+  width: calc(var(--p, 0) * 100%); background: rgba(255,255,255,.42);
+}
+
+/* loading */
+.loader { font-size: clamp(48px, 6vw, 80px); display: flex; gap: 18px; justify-content: center; }
+.loader span { display: inline-block; animation: bounce .9s ease-in-out infinite; }
+.loader span:nth-child(2) { animation-delay: .15s; }
+.loader span:nth-child(3) { animation-delay: .3s; }
+
+/* calibration */
+.calib-wrap { display: flex; gap: clamp(16px, 2.5vw, 34px); align-items: center; justify-content: center; flex-wrap: wrap; }
+.calib-cam { position: relative; }
+#calibCanvas {
+  display: block; width: min(46vw, calc(46vh * 4 / 3), 620px); aspect-ratio: 4 / 3;
+  border-radius: 28px; background: #3b3366; border: 6px solid #fff; box-shadow: var(--shadow);
+}
+#calibArrow {
+  position: absolute; inset: 0; display: grid; place-items: center;
+  font-size: clamp(70px, 9vw, 130px); pointer-events: none; animation: nudge 1s ease-in-out infinite;
+}
+.checks { display: flex; flex-direction: column; gap: 12px; text-align: left; }
+.check {
+  display: flex; align-items: center; gap: 12px;
+  font-size: clamp(22px, 2.4vw, 36px); font-weight: 600;
+  background: #f4f1ff; border-radius: 22px; padding: 8px 18px; transition: background .3s;
+}
+.check .ic { font-size: 1.25em; width: 1.4em; text-align: center; }
+.check .mk { margin-left: auto; padding-left: 12px; font-size: 1.1em; color: #cfc8ea; }
+.check.ok { background: #dff8ea; }
+.check.ok .mk { color: var(--green); }
+#calibHint { min-height: 1.3em; margin: 14px 0 8px; color: var(--purple-dark); }
+
+/* final stats */
+.stats { display: flex; gap: clamp(10px, 2vw, 26px); justify-content: center; flex-wrap: wrap; margin: 6px 0 22px; }
+.stat { background: #f6f3ff; border-radius: 26px; padding: 10px 20px; min-width: 130px; }
+.stat .sv { font-size: clamp(36px, 4.4vw, 62px); font-weight: 700; color: var(--purple); line-height: 1.05; }
+.stat .sl { font-size: clamp(16px, 1.5vw, 22px); font-weight: 600; color: var(--ink-soft); }
+
+/* level complete popup */
+#levelCard { position: fixed; left: 0; right: 0; top: 24%; z-index: 15; display: flex; justify-content: center; pointer-events: none; }
+.lc-inner { background: #fff; border-radius: 36px; box-shadow: var(--shadow); padding: 16px 40px 18px; text-align: center; animation: cardIn .5s cubic-bezier(.2,1.4,.4,1); }
+.lc-title { font-size: clamp(32px, 4vw, 58px); font-weight: 700; color: var(--purple); }
+.lc-stars span { font-size: clamp(56px, 7vw, 100px); display: inline-block; filter: grayscale(1); opacity: .25; margin: 0 4px; }
+.lc-stars span.on { filter: none; opacity: 1; animation: starPop .5s; }
+
+@keyframes pop { 0% { transform: scale(.4); } 60% { transform: scale(1.25); } 100% { transform: scale(1); } }
+@keyframes bump { 0% { transform: scale(1); } 40% { transform: scale(1.4); } 100% { transform: scale(1); } }
+@keyframes bubblePop { 0% { transform: scale(.7); } 60% { transform: scale(1.06); } 100% { transform: scale(1); } }
+@keyframes cardIn { from { transform: scale(.85) translateY(20px); opacity: 0; } to { transform: none; opacity: 1; } }
+@keyframes bounce { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-20px); } }
+@keyframes starPop { 0% { transform: scale(0) rotate(-40deg); } 70% { transform: scale(1.3) rotate(10deg); } 100% { transform: scale(1); } }
+@keyframes pulseBorder { 0%, 100% { border-color: #fff; } 50% { border-color: var(--pink); } }
+@keyframes peek { 0%, 100% { transform: rotate(-7deg); } 50% { transform: rotate(7deg); } }
+@keyframes nudge { 0%, 100% { transform: translateX(-12px); } 50% { transform: translateX(12px); } }
+@media (prefers-reduced-motion: reduce) { .cloud, .loader span, #calibArrow, .emoji-big.peek { animation: none; } }
+
+/* =====================================================================
+   MOBILE / SMALL-SCREEN LAYOUT
+   CSS only: nothing above or in the game logic changes. Desktop (wide)
+   screens are not affected by any rule in this block.
+   ===================================================================== */
+
+/* Phones (narrow) and landscape phones (short): compact HUD, cards and screens */
+@media (max-width: 720px), (max-height: 500px) {
+  /* HUD: pills + buttons on one row, order card centred on a second row */
+  #hud { display: flex; flex-wrap: wrap; align-items: center; justify-content: flex-start; gap: 5px; padding: 8px 10px; }
+  #hud .hud-col, #hud .hud-right { display: contents; }
+  #levelPill  { order: 1; }
+  #scorePill  { order: 2; }
+  #starPill   { order: 3; }
+  #streakPill { order: 4; }
+  #btnSound   { order: 5; margin-left: auto; }
+  #btnPause   { order: 6; }
+  #hud::before { content: ""; order: 9; flex: 0 0 100%; height: 0; }
+  #order      { order: 10; margin: 0 auto; max-width: 100%; }
+  .pill { padding: 3px 9px; font-size: 14px; gap: 4px; border-radius: 16px; box-shadow: 0 4px 0 rgba(43,35,80,.14), 0 8px 16px rgba(43,35,80,.14); }
+  .icon-btn { width: 38px; height: 38px; border-radius: 13px; font-size: 19px; }
+  #order { padding: 5px 14px 3px; border-radius: 24px; }
+  #order .row { gap: 8px; }
+  #orderTag { font-size: 16px; }
+  #orderIcon { width: 36px; height: 36px; }
+  #slots { gap: 5px; }
+  .slot { width: 28px; height: 28px; border-width: 3px; font-size: 14px; }
+  #countText { font-size: 28px; margin-left: 2px; }
+  #levelStars { font-size: 13px; letter-spacing: 3px; }
+
+  /* camera preview: small, tucked in the bottom corner, clear of the monster */
+  #preview { right: 8px; bottom: 8px; width: 96px; border-width: 3px; border-radius: 14px; }
+  #preview.lost { width: 150px; }
+  #preview .tag { left: 4px; top: 4px; padding: 1px 7px; font-size: 11px; gap: 4px; }
+  .dot { width: 8px; height: 8px; }
+
+  /* full-screen cards: scroll instead of getting cut off */
+  .screen { padding: 12px; overflow-y: auto; }
+  .screen:not(.top) .card { margin: auto; }
+  .screen.top { padding-top: 12px; }
+  .card { border-radius: 30px; padding: 20px 18px; max-width: 94vw; }
+  .card.wide { max-width: 96vw; padding: 16px 14px; }
+  h1.title { font-size: clamp(30px, 9vw, 44px); margin-bottom: 8px; text-shadow: 0 4px 0 #e4dcff; }
+  .h2 { font-size: clamp(28px, 8vw, 40px); }
+  .big-text { font-size: clamp(18px, 5.2vw, 24px); margin: 4px 0 14px; }
+  .note { font-size: 14px; margin-top: 12px; }
+  .emoji-big { font-size: 64px; }
+  .btn { font-size: clamp(24px, 7vw, 30px); max-width: 100%; }
+  .btn.secondary { font-size: clamp(16px, 4.6vw, 19px); margin-top: 12px; }
+  .btn-row { gap: 12px; }
+  .loader { font-size: 48px; gap: 14px; }
+
+  /* calibration */
+  #calibCanvas { width: min(78vw, calc(30vh * 4 / 3), 420px); border-radius: 20px; border-width: 4px; }
+  #calibArrow { font-size: 64px; }
+  .checks { gap: 8px; width: 100%; }
+  .check { font-size: clamp(16px, 4.8vw, 22px); padding: 6px 14px; border-radius: 18px; }
+  #calibHint { margin: 10px 0 6px; }
+
+  /* final stats + level complete */
+  .stats { gap: 8px; margin: 4px 0 16px; }
+  .stat { min-width: 0; flex: 1 1 120px; padding: 8px 12px; border-radius: 20px; }
+  .stat .sv { font-size: 32px; }
+  .stat .sl { font-size: 15px; }
+  #levelCard { padding: 0 12px; }
+  .lc-inner { padding: 12px 24px 14px; border-radius: 28px; }
+  .lc-title { font-size: clamp(26px, 7.5vw, 36px); }
+  .lc-stars span { font-size: clamp(44px, 13vw, 64px); margin: 0 2px; }
+}
+
+/* Very small phones */
+@media (max-width: 360px) {
+  #hud { padding: 6px 8px; gap: 4px; }
+  .pill { padding: 2px 7px; font-size: 13px; gap: 3px; }
+  .icon-btn { width: 34px; height: 34px; border-radius: 11px; font-size: 17px; }
+  #preview { width: 84px; }
+}
+
+/* Portrait phones: speech bubble sits above the monster (there is no room beside it) */
+@media (max-width: 720px) and (orientation: portrait) {
+  #bubble {
+    left: 12px; right: 12px; margin: 0 auto; width: fit-content;
+    max-width: calc(100% - 24px); text-align: center;
+    bottom: calc(var(--mR) * 2.3 + 22px);
+    padding: 10px 18px; border-radius: 26px;
+    font-size: clamp(20px, 6vw, 28px);
+    transform-origin: center bottom;
+  }
+  #bubble::after {
+    right: auto; left: 50%; bottom: -17px; margin-left: -14px;
+    border-width: 18px 14px 0 14px; border-color: #fff transparent transparent transparent;
+  }
+  .flower { font-size: 20px; }
+}
+
+/* Landscape phones: slightly smaller speech bubble text */
+@media (max-height: 500px) and (orientation: landscape) {
+  #bubble { font-size: 22px; padding: 10px 18px; border-radius: 26px; }
+  .card { padding: 14px 20px; }
+  h1.title { font-size: clamp(30px, 9vh, 44px); }
+}
+</style>
+</head>
+<body>
+
+<!-- ============================ SCENERY ============================ -->
+<div id="scenery" aria-hidden="true">
+  <div class="cloud" style="top:17vh;width:180px;height:56px;animation-duration:95s;animation-delay:-20s"></div>
+  <div class="cloud" style="top:31vh;width:130px;height:42px;animation-duration:75s;animation-delay:-52s;opacity:.7"></div>
+  <div class="cloud" style="top:7vh;width:220px;height:64px;animation-duration:120s;animation-delay:-85s"></div>
+  <div class="cloud" style="top:42vh;width:150px;height:46px;animation-duration:88s;animation-delay:-6s;opacity:.6"></div>
+  <svg id="hills" viewBox="0 0 1440 320" preserveAspectRatio="none">
+    <path d="M0,170 C240,90 430,230 720,160 C1010,95 1210,210 1440,140 L1440,320 L0,320Z" fill="#b5ecaa"/>
+    <path d="M0,235 C300,175 520,290 820,240 C1100,195 1280,270 1440,225 L1440,320 L0,320Z" fill="#7fd47a"/>
+  </svg>
+  <span class="flower" style="left:5%;bottom:5vh">🌼</span>
+  <span class="flower" style="left:14%;bottom:12vh">🌷</span>
+  <span class="flower" style="left:31%;bottom:4vh">🌼</span>
+  <span class="flower" style="left:66%;bottom:9vh">🌷</span>
+  <span class="flower" style="left:77%;bottom:16vh">🌼</span>
+</div>
+
+<canvas id="stage"></canvas>
+<video id="video" playsinline muted></video>
+
+<!-- ============================ HUD ============================ -->
+<header id="hud" class="hidden">
+  <div class="hud-col">
+    <div class="pill" id="levelPill">Level 1/6</div>
+    <div class="pill" id="scorePill">🏆 <span id="scoreVal">0</span></div>
+  </div>
+  <div id="order">
+    <div class="row">
+      <span id="orderTag" class="cw" hidden></span>
+      <img id="orderIcon" alt="">
+      <div id="slots"></div>
+      <div id="countText"><b>0</b> / 3</div>
+    </div>
+    <div id="levelStars" title="Stars for this level"><span>⭐</span><span>⭐</span><span>⭐</span></div>
+  </div>
+  <div class="hud-right">
+    <div class="hud-col">
+      <div class="pill" id="starPill">⭐ <span id="starVal">0</span></div>
+      <div class="pill" id="streakPill" hidden>🔥 <span id="streakVal">0</span></div>
+    </div>
+    <button class="icon-btn" id="btnSound" title="Sound on/off (M)" aria-label="Sound on or off">🔊</button>
+    <button class="icon-btn" id="btnPause" title="Pause (Space)" aria-label="Pause">⏸️</button>
+  </div>
+</header>
+
+<div id="bubble">I'm hungry! 😋</div>
+
+<div id="levelCard" hidden>
+  <div class="lc-inner">
+    <div class="lc-title" id="lcTitle">Great counting!</div>
+    <div class="lc-stars"><span>⭐</span><span>⭐</span><span>⭐</span></div>
+  </div>
+</div>
+
+<div id="preview" hidden>
+  <canvas id="previewCanvas"></canvas>
+  <div class="tag"><span class="dot" id="camDot"></span><span id="camLabel">Looking…</span></div>
+</div>
+
+<!-- ============================ SCREENS ============================ -->
+<section class="screen top" id="titleScreen">
+  <div class="card">
+    <h1 class="title">Feed the<br>Hungry Monster</h1>
+    <p class="big-text">Count the fruit and feed the monster! 🍎🍌🍊</p>
+    <div class="btn-row">
+      <button class="btn" id="btnStart">▶ Start</button>
+    </div>
+    <button class="btn secondary" id="btnMouse">🖱️ Play with the mouse instead</button>
+    <p class="note">The game uses your camera to see your hands. The video stays on this computer and nothing is recorded.</p>
+  </div>
+</section>
+
+<section class="screen" id="loadScreen" hidden>
+  <div class="card">
+    <div class="loader"><span>🍎</span><span>🍌</span><span>🍊</span></div>
+    <p class="big-text" id="loadMsg">Waking up the monster…</p>
+    <p class="note">Please allow the camera when your browser asks.</p>
+    <button class="btn secondary" id="btnLoadMouse" hidden>🖱️ Taking long? Play with the mouse</button>
+  </div>
+</section>
+
+<section class="screen" id="errScreen" hidden>
+  <div class="card">
+    <div class="emoji-big">🙈</div>
+    <h2 class="h2" id="errTitle">Oops!</h2>
+    <p class="big-text" id="errMsg"></p>
+    <div class="btn-row">
+      <button class="btn" id="btnRetry">🔄 Try again</button>
+      <button class="btn purple" id="btnErrMouse">🖱️ Play with mouse</button>
+    </div>
+  </div>
+</section>
+
+<section class="screen" id="calibScreen" hidden>
+  <div class="card wide">
+    <h2 class="h2">Let's get ready!</h2>
+    <div class="calib-wrap">
+      <div class="calib-cam">
+        <canvas id="calibCanvas"></canvas>
+        <div id="calibArrow"></div>
+      </div>
+      <div class="checks">
+        <div class="check" id="chkSee"><span class="ic">👀</span><span>I can see you</span><span class="mk">✔</span></div>
+        <div class="check" id="chkMid"><span class="ic">🎯</span><span>In the middle</span><span class="mk">✔</span></div>
+        <div class="check" id="chkHand"><span class="ic">✋</span><span>Hand up high</span><span class="mk">✔</span></div>
+      </div>
+    </div>
+    <p class="big-text" id="calibHint">Stand where I can see you!</p>
+    <div class="btn-row">
+      <button class="btn" id="btnCalibGo" data-dwell disabled><span class="fill"></span>Let's play!</button>
+    </div>
+    <button class="btn secondary" id="btnCalibSkip">Skip</button>
+  </div>
+</section>
+
+<section class="screen" id="pauseScreen" hidden>
+  <div class="card">
+    <div class="emoji-big">⏸️</div>
+    <h2 class="h2">Paused</h2>
+    <div class="btn-row col">
+      <button class="btn" id="btnResume" data-dwell><span class="fill"></span>▶ Keep playing</button>
+      <button class="btn purple" id="btnRestart">🔄 Start over</button>
+    </div>
+    <button class="btn secondary" id="btnRecal">📷 Check the camera again</button>
+  </div>
+</section>
+
+<section class="screen" id="lostScreen" hidden>
+  <div class="card">
+    <div class="emoji-big peek">🙈</div>
+    <h2 class="h2">I can't see you!</h2>
+    <p class="big-text">Step back so I can see you!</p>
+    <p class="note">The game carries on by itself as soon as I see you again.</p>
+    <button class="btn secondary" id="btnLostMenu">Pause menu</button>
+  </div>
+</section>
+
+<section class="screen top" id="finalScreen" hidden>
+  <div class="card">
+    <h1 class="title">You did it! 🎉</h1>
+    <p class="big-text">The monster is full and happy!</p>
+    <div class="stats">
+      <div class="stat"><div class="sv" id="fStars">0</div><div class="sl">⭐ stars</div></div>
+      <div class="stat"><div class="sv" id="fFruits">0</div><div class="sl">🍎 fruits fed</div></div>
+      <div class="stat"><div class="sv" id="fStreak">0</div><div class="sl">🔥 best streak</div></div>
+      <div class="stat"><div class="sv" id="fScore">0</div><div class="sl">🏆 points</div></div>
+    </div>
+    <button class="btn" id="btnAgain" data-dwell><span class="fill"></span>🔄 Play again</button>
+  </div>
+</section>
+
+<canvas id="top"></canvas>
+
+<script type="module">
+/* #####################################################################
+   SECTION 1: CONFIG, CONTENT AND SMALL HELPERS
+   ##################################################################### */
+const MP_VERSION = '0.10.14';
+const MP_BASE = `https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@${MP_VERSION}`;
+const HAND_MODEL_URL = 'https://storage.googleapis.com/mediapipe-models/hand_landmarker/hand_landmarker/float16/1/hand_landmarker.task';
+const POSE_MODEL_URL = 'https://storage.googleapis.com/mediapipe-models/pose_landmarker/pose_landmarker_lite/float16/1/pose_landmarker_lite.task';
+
+// All "forgiving" numbers live here so they are easy to tune.
+const CFG = {
+  poseEvery: 3,        // run the (heavier) pose model every N video frames
+  grabDwell: 0.42,     // seconds a hand must hover over a fruit to grab it
+  grabRadius: 1.65,    // grab zone = fruit radius x this (near-misses count)
+  hoverRadius: 2.6,    // fruit starts reacting / drifting toward the hand
+  magnet: 2.4,         // how strongly a fruit drifts toward a nearby hand
+  pinchOn: 0.42,       // thumb-index distance / hand size to count as pinch
+  pinchOff: 0.58,
+  lostAfter: 1800,     // ms without seeing the child before pausing
+  foundAfter: 700,     // ms of seeing the child again before auto-resume
+  btnDwell: 1.3,       // seconds to "press" a big button by hovering a hand
+  hintAfter: 9000,     // ms without progress before the monster gives a hint
+  flyTime: 0.65,       // seconds a fruit takes to fly to the mouth
+};
+
+const FRUIT = {
+  apple:      { one: 'apple',      many: 'apples' },
+  banana:     { one: 'banana',     many: 'bananas' },
+  orange:     { one: 'orange',     many: 'oranges' },
+  strawberry: { one: 'strawberry', many: 'strawberries' },
+};
+
+// Levels: what the monster asks for and what floats around.
+const LEVELS = [
+  { kind: 'apple', color: 'red', count: 3, colorWord: null, intro: "I'm hungry!",
+    spawn: [{ kind: 'apple', color: 'red', n: 5 }] },
+  { kind: 'banana', color: 'yellow', count: 5, colorWord: null, intro: 'Yummy! I want more!',
+    spawn: [{ kind: 'banana', color: 'yellow', n: 7 }] },
+  { kind: 'orange', color: 'orange', count: 2, colorWord: null, intro: "I'm still hungry!",
+    spawn: [{ kind: 'orange', color: 'orange', n: 4 }] },
+  { kind: 'apple', color: 'red', count: 3, colorWord: 'red', intro: 'Now look at the colors!',
+    spawn: [{ kind: 'apple', color: 'red', n: 4 }, { kind: 'apple', color: 'green', n: 3 }, { kind: 'apple', color: 'yellow', n: 2 }] },
+  { kind: 'apple', color: 'green', count: 2, colorWord: 'green', intro: 'Ooh, a tricky one!',
+    spawn: [{ kind: 'apple', color: 'green', n: 3 }, { kind: 'apple', color: 'red', n: 3 }, { kind: 'apple', color: 'yellow', n: 1 }] },
+  { kind: 'strawberry', color: 'red', count: 4, colorWord: null, intro: "Last one! I'm so hungry!",
+    spawn: [{ kind: 'strawberry', color: 'red', n: 5 }, { kind: 'banana', color: 'yellow', n: 2 }, { kind: 'orange', color: 'orange', n: 2 }] },
+];
+
+const NUM_WORDS = ['zero', 'one', 'two', 'three', 'four', 'five', 'six', 'seven', 'eight', 'nine', 'ten'];
+const CANVAS_FONT = '"Fredoka", "Baloo 2", "Comic Sans MS", sans-serif';
+
+const $ = (id) => document.getElementById(id);
+const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
+const lerp = (a, b, t) => a + (b - a) * t;
+const rand = (a, b) => a + Math.random() * (b - a);
+const dist = (ax, ay, bx, by) => Math.hypot(ax - bx, ay - by);
+const easeOutBack = (t) => { const c1 = 1.70158, c3 = c1 + 1; return 1 + c3 * Math.pow(t - 1, 3) + c1 * Math.pow(t - 1, 2); };
+const shuffle = (a) => { for (let i = a.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [a[i], a[j]] = [a[j], a[i]]; } return a; };
+const article = (w) => (/^[aeiou]/i.test(w) ? 'an' : 'a');
+const cap = (s) => s.charAt(0).toUpperCase() + s.slice(1);
+
+/* One Euro filter: smooths jitter when the hand is still, stays snappy when it moves. */
+class LowPass { constructor() { this.y = null; } f(x, a) { this.y = this.y === null ? x : a * x + (1 - a) * this.y; return this.y; } }
+class OneEuro {
+  constructor(minCutoff = 1.0, beta = 4, dCutoff = 1) { this.minCutoff = minCutoff; this.beta = beta; this.dCutoff = dCutoff; this.x = new LowPass(); this.dx = new LowPass(); this.t = null; }
+  alpha(cutoff, dt) { const tau = 1 / (2 * Math.PI * cutoff); return 1 / (1 + tau / dt); }
+  filter(v, t) {
+    if (this.t === null) { this.t = t; this.dx.f(0, 1); return this.x.f(v, 1); }
+    const dt = Math.max(1e-3, t - this.t); this.t = t;
+    const dv = (v - this.x.y) / dt;
+    const edv = this.dx.f(dv, this.alpha(this.dCutoff, dt));
+    return this.x.f(v, this.alpha(this.minCutoff + this.beta * Math.abs(edv), dt));
+  }
+}
+
+/* #####################################################################
+   SECTION 2: AUDIO (Web Audio sound effects + speech synthesis)
+   ##################################################################### */
+const Sound = {
+  ctx: null, master: null, muted: false,
+  init() {
+    try {
+      if (!this.ctx) {
+        const AC = window.AudioContext || window.webkitAudioContext;
+        if (!AC) return;
+        this.ctx = new AC();
+        this.master = this.ctx.createGain();
+        this.master.gain.value = 0.55;
+        this.master.connect(this.ctx.destination);
+      }
+      if (this.ctx.state === 'suspended') this.ctx.resume();
+    } catch (e) { console.warn('Audio not available', e); }
+  },
+  tone(freq, dur, o = {}) {
+    if (!this.ctx || this.muted) return;
+    const { type = 'sine', vol = 0.3, slide = null, delay = 0 } = o;
+    const t = this.ctx.currentTime + delay;
+    const osc = this.ctx.createOscillator(), g = this.ctx.createGain();
+    osc.type = type; osc.frequency.setValueAtTime(freq, t);
+    if (slide) osc.frequency.exponentialRampToValueAtTime(slide, t + dur);
+    g.gain.setValueAtTime(0.0001, t);
+    g.gain.exponentialRampToValueAtTime(vol, t + 0.015);
+    g.gain.exponentialRampToValueAtTime(0.0001, t + dur);
+    osc.connect(g); g.connect(this.master);
+    osc.start(t); osc.stop(t + dur + 0.05);
+  },
+  noise(dur, o = {}) {
+    if (!this.ctx || this.muted) return;
+    const { vol = 0.3, freq = 900, delay = 0, type = 'lowpass' } = o;
+    const t = this.ctx.currentTime + delay;
+    const len = Math.max(1, Math.floor(this.ctx.sampleRate * dur));
+    const buf = this.ctx.createBuffer(1, len, this.ctx.sampleRate);
+    const d = buf.getChannelData(0);
+    for (let i = 0; i < len; i++) d[i] = (Math.random() * 2 - 1) * Math.pow(1 - i / len, 2);
+    const src = this.ctx.createBufferSource(); src.buffer = buf;
+    const f = this.ctx.createBiquadFilter(); f.type = type; f.frequency.value = freq;
+    const g = this.ctx.createGain(); g.gain.value = vol;
+    src.connect(f); f.connect(g); g.connect(this.master);
+    src.start(t);
+  },
+  pop()     { this.tone(480, 0.16, { slide: 1100, vol: 0.32 }); this.noise(0.25, { freq: 2200, vol: 0.07, type: 'bandpass', delay: 0.03 }); },
+  spawn()   { this.tone(rand(700, 1000), 0.09, { vol: 0.08, type: 'triangle' }); },
+  chomp()   { for (let i = 0; i < 3; i++) { this.noise(0.08, { freq: 700, vol: 0.5, delay: i * 0.12 }); this.tone(150, 0.07, { type: 'square', vol: 0.06, delay: i * 0.12 }); } },
+  count(n)  { const notes = [523.25, 587.33, 659.25, 698.46, 783.99, 880, 987.77]; const f = notes[(n - 1) % notes.length]; this.tone(f, 0.4, { type: 'triangle', vol: 0.3, delay: 0.1 }); this.tone(f * 2, 0.3, { vol: 0.07, delay: 0.12 }); },
+  oops()    { this.tone(392, 0.16, { type: 'triangle', vol: 0.18 }); this.tone(330, 0.24, { type: 'triangle', vol: 0.18, delay: 0.15 }); },
+  star(i)   { this.tone(880 * Math.pow(1.19, i), 0.35, { type: 'triangle', vol: 0.28 }); this.tone(1760 * Math.pow(1.19, i), 0.25, { vol: 0.06 }); },
+  ready()   { [659, 784, 1047].forEach((f, i) => this.tone(f, 0.22, { type: 'triangle', vol: 0.25, delay: i * 0.1 })); },
+  fanfare() { [523, 659, 784, 1047].forEach((f, i) => this.tone(f, 0.28, { type: 'triangle', vol: 0.28, delay: i * 0.11 })); this.tone(1047, 0.7, { vol: 0.14, delay: 0.45 }); this.tone(1319, 0.7, { vol: 0.1, delay: 0.45 }); },
+  grand()   { const m = [523, 659, 784, 659, 784, 1047, 988, 1047]; m.forEach((f, i) => this.tone(f, 0.26, { type: 'triangle', vol: 0.26, delay: i * 0.14 })); [523, 659, 784, 1047].forEach((f) => this.tone(f, 1.3, { vol: 0.07, delay: m.length * 0.14 })); },
+};
+
+const Voice = {
+  ok: 'speechSynthesis' in window, voice: null,
+  pick() {
+    const vs = speechSynthesis.getVoices();
+    const pref = ['Samantha', 'Google US English', 'Microsoft Aria', 'Microsoft Jenny', 'Karen', 'Tessa', 'Moira', 'Google UK English Female'];
+    for (const p of pref) { const v = vs.find((x) => x.name.includes(p)); if (v) { this.voice = v; return; } }
+    this.voice = vs.find((x) => /^en[-_]/i.test(x.lang)) || null;
+  },
+  say(text, { interrupt = false, rate = 0.95, pitch = 1.35 } = {}) {
+    if (!this.ok || Sound.muted) return;
+    try {
+      if (interrupt) speechSynthesis.cancel();
+      const u = new SpeechSynthesisUtterance(text);
+      if (this.voice) u.voice = this.voice;
+      u.lang = (this.voice && this.voice.lang) || 'en-US';
+      u.rate = rate; u.pitch = pitch;
+      speechSynthesis.speak(u);
+    } catch (e) { /* speech is a bonus, never block the game */ }
+  },
+  stop() { if (this.ok) speechSynthesis.cancel(); },
+};
+if (Voice.ok) { Voice.pick(); speechSynthesis.addEventListener('voiceschanged', () => Voice.pick()); }
+
+/* #####################################################################
+   SECTION 3: TRACKING SYSTEM
+   Camera + MediaPipe Hand Landmarker (pointing / pinching) and
+   Pose Landmarker (is the child there, centred, how big in frame).
+   Output: smoothed "pointers" in screen coordinates.
+   ##################################################################### */
+const Track = {
+  mode: 'none',              // 'camera' | 'mouse'
+  video: $('video'), stream: null,
+  hand: null, pose: null, loadPromise: null,
+  ready: false,
+  lastVideoTime: -1, frame: 0, lastTs: 0,
+  handRes: null, handLms: [], poseLm: null, poseAt: 0,
+  personSeenAt: 0, handSeenAt: 0, handUpAt: 0, foundSince: 0,
+  body: { valid: false, cx: 0, sy: 0, sw: 0 },   // smoothed body frame in video pixels (mirrored)
+  bodyRaw: null,                                   // latest unsmoothed body frame, for calibration
+  pointers: new Map(),                             // key -> pointer
+  mouse: { movedAt: -1e9, clicked: false },
+};
+
+async function startCamera() {
+  if (Track.stream && Track.stream.active) return;
+  if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+    throw Object.assign(new Error('Camera API not available'), { name: 'InsecureContext' });
+  }
+  const stream = await navigator.mediaDevices.getUserMedia({
+    audio: false,
+    video: { facingMode: 'user', width: { ideal: 640 }, height: { ideal: 480 } },
+  });
+  Track.stream = stream;
+  const v = Track.video;
+  v.srcObject = stream;
+  await v.play();
+  if (!v.videoWidth) await new Promise((r) => v.addEventListener('loadedmetadata', r, { once: true }));
+  const ar = `${v.videoWidth} / ${v.videoHeight}`;
+  $('preview').style.aspectRatio = ar;
+  $('calibCanvas').style.aspectRatio = ar;
+  stream.getVideoTracks().forEach((t) => t.addEventListener('ended', onCameraEnded));
+}
+
+function stopCamera() {
+  if (Track.stream) Track.stream.getTracks().forEach((t) => t.stop());
+  Track.stream = null;
+  Track.ready = false;
+}
+
+function onCameraEnded() {
+  if (Track.mode !== 'camera') return;
+  Track.ready = false; Track.stream = null;
+  Calib.active = false;
+  if (inGameState()) { Game.paused = true; Game.pauseReason = 'camera'; }
+  showError(Object.assign(new Error('Camera stopped'), { name: 'CameraEnded' }));
+}
+
+async function loadModels() {
+  let vision;
+  try {
+    vision = await import(`${MP_BASE}/vision_bundle.mjs`);
+  } catch (e) {
+    throw Object.assign(new Error('Could not load MediaPipe'), { name: 'ModelError', cause: e });
+  }
+  try {
+    const files = await vision.FilesetResolver.forVisionTasks(`${MP_BASE}/wasm`);
+    // Try the GPU first, fall back to CPU on machines without WebGL support.
+    const create = async (Cls, opts) => {
+      try { return await Cls.createFromOptions(files, { ...opts, baseOptions: { ...opts.baseOptions, delegate: 'GPU' } }); }
+      catch (e) {
+        console.warn('GPU delegate failed, using CPU', e);
+        return await Cls.createFromOptions(files, { ...opts, baseOptions: { ...opts.baseOptions, delegate: 'CPU' } });
+      }
+    };
+    Track.hand = await create(vision.HandLandmarker, {
+      baseOptions: { modelAssetPath: HAND_MODEL_URL },
+      runningMode: 'VIDEO', numHands: 2,
+      minHandDetectionConfidence: 0.4, minHandPresenceConfidence: 0.4, minTrackingConfidence: 0.4,
+    });
+    try {
+      Track.pose = await create(vision.PoseLandmarker, {
+        baseOptions: { modelAssetPath: POSE_MODEL_URL },
+        runningMode: 'VIDEO', numPoses: 1,
+        minPoseDetectionConfidence: 0.4, minPosePresenceConfidence: 0.4, minTrackingConfidence: 0.4,
+      });
+    } catch (e) {
+      console.warn('Pose model unavailable, continuing with hands only', e);
+      Track.pose = null;
+    }
+  } catch (e) {
+    throw Object.assign(new Error('Model load failed'), { name: 'ModelError', cause: e });
+  }
+}
+
+/* Runs once per animation frame; only does work when a new video frame arrived. */
+function trackingStep(now) {
+  if (Track.mode !== 'camera' || !Track.ready || !Track.hand) return;
+  const v = Track.video;
+  if (v.readyState < 2 || v.currentTime === Track.lastVideoTime) return;
+  Track.lastVideoTime = v.currentTime;
+  Track.frame++;
+  Track.lastTs = Math.max(Track.lastTs + 1, now);
+  try { Track.handRes = Track.hand.detectForVideo(v, Track.lastTs); }
+  catch (e) { console.warn('hand detect', e); Track.handRes = null; }
+  if (Track.pose && Track.frame % CFG.poseEvery === 0) {
+    Track.lastTs += 1;
+    try {
+      const res = Track.pose.detectForVideo(v, Track.lastTs);
+      Track.poseAt = now;
+      processPose(res, now);
+    } catch (e) { console.warn('pose detect', e); }
+  }
+  processHands(now);
+}
+
+function processPose(res, now) {
+  const lm = res && res.landmarks && res.landmarks[0];
+  Track.poseLm = lm || null;
+  if (!lm) return;
+  const vw = Track.video.videoWidth || 640, vh = Track.video.videoHeight || 480;
+  const vis = (p) => (p.visibility ?? 1);
+  const ls = lm[11], rs = lm[12], nose = lm[0];
+  if ((vis(ls) + vis(rs) + vis(nose)) / 3 > 0.35) Track.personSeenAt = now;
+  if (vis(ls) > 0.5 && vis(rs) > 0.5) {
+    const cx = (1 - (ls.x + rs.x) / 2) * vw;                       // mirrored
+    const sy = ((ls.y + rs.y) / 2) * vh;
+    const sw = Math.hypot((ls.x - rs.x) * vw, (ls.y - rs.y) * vh);
+    const b = Track.body;
+    if (!b.valid) Object.assign(b, { cx, sy, sw, valid: true });
+    else { const a = 0.15; b.cx = lerp(b.cx, cx, a); b.sy = lerp(b.sy, sy, a); b.sw = lerp(b.sw, sw, a); }
+    Track.bodyRaw = { cx, sy, sw, nx: cx / vw, at: now };
+  }
+}
+
+function processHands(now) {
+  const res = Track.handRes;
+  const vw = Track.video.videoWidth || 640, vh = Track.video.videoHeight || 480;
+  const raw = [];
+  Track.handLms = (res && res.landmarks) || [];
+  if (Track.handLms.length) {
+    Track.personSeenAt = now; Track.handSeenAt = now;
+    const hd = res.handedness || res.handednesses || [];
+    Track.handLms.forEach((lm, i) => {
+      let key = 'hand-' + ((hd[i] && hd[i][0] && hd[i][0].categoryName) || i);
+      if (raw.some((r) => r.key === key)) key += '-' + i;
+      const tip = lm[8], thumb = lm[4], wrist = lm[0], knuckle = lm[9];
+      const size = Math.hypot((wrist.x - knuckle.x) * vw, (wrist.y - knuckle.y) * vh) || 1;
+      const pinchD = Math.hypot((tip.x - thumb.x) * vw, (tip.y - thumb.y) * vh) / size;
+      // Pointer = index fingertip, nudged toward the palm so open hands and fists both work.
+      const px = tip.x * 0.7 + knuckle.x * 0.3, py = tip.y * 0.7 + knuckle.y * 0.3;
+      raw.push({ key, nx: 1 - px, ny: py, pinchD, src: 'hand' });
+      const topY = Math.min(tip.y, lm[12].y, wrist.y) * vh;
+      if (!Track.body.valid || topY < Track.body.sy) Track.handUpAt = now;
+    });
+  } else if (Track.poseLm && now - Track.poseAt < 450 && now - Track.handSeenAt > 300) {
+    // Fallback: small hands far from the camera are sometimes missed by the hand
+    // model, so use the wrists / index points from the pose model instead.
+    const lm = Track.poseLm;
+    [[15, 19, 'pose-L'], [16, 20, 'pose-R']].forEach(([wi, ii, key]) => {
+      const w = lm[wi], ix = lm[ii];
+      if ((w.visibility ?? 0) > 0.55 && (ix.visibility ?? 0) > 0.5) {
+        const px = ix.x * 0.7 + w.x * 0.3, py = ix.y * 0.7 + w.y * 0.3;
+        raw.push({ key, nx: 1 - px, ny: py, pinchD: 9, src: 'pose' });
+        if (Track.body.valid && py * vh < Track.body.sy) Track.handUpAt = now;
+      }
+    });
+  }
+  updatePointers(raw, now);
+}
+
+/* Map a mirrored, normalised camera point to screen pixels.
+   When we know where the body is, we map a comfortable "reach box" around the
+   shoulders to the whole screen, so small children far away can still reach
+   every corner without walking. */
+function mapToScreen(nx, ny) {
+  const W = innerWidth, H = innerHeight;
+  const vw = Track.video.videoWidth || 640, vh = Track.video.videoHeight || 480;
+  let u, w;
+  const b = Track.body;
+  if (b.valid) {
+    const sw = clamp(b.sw, vw * 0.1, vw * 0.5);
+    const halfW = Math.min(1.5 * sw, vw * 0.47);
+    const height = Math.min(2.7 * sw, vh * 0.95);
+    const left = clamp(b.cx - halfW, 0, vw - 2 * halfW);
+    const top = clamp(b.sy - height * (1.75 / 2.7), 0, vh - height);
+    u = (nx * vw - left) / (2 * halfW);
+    w = (ny * vh - top) / height;
+  } else {
+    u = (nx - 0.12) / 0.76;
+    w = (ny - 0.06) / 0.7;
+  }
+  return { x: clamp(u, -0.02, 1.02) * W, y: clamp(w, -0.02, 1.04) * H };
+}
+
+function updatePointers(raw, now) {
+  const t = now / 1000;
+  for (const r of raw) {
+    const s = mapToScreen(r.nx, r.ny);
+    let p = Track.pointers.get(r.key);
+    if (!p) {
+      p = { key: r.key, fx: new OneEuro(1.0, 4, 1), fy: new OneEuro(1.0, 4, 1), x: s.x, y: s.y,
+            pinch: false, pinchEdge: false, seenAt: now, cooldownUntil: 0, trail: [] };
+      Track.pointers.set(r.key, p);
+    }
+    p.x = p.fx.filter(s.x / innerWidth, t) * innerWidth;
+    p.y = p.fy.filter(s.y / innerHeight, t) * innerHeight;
+    const was = p.pinch;
+    p.pinch = was ? r.pinchD < CFG.pinchOff : r.pinchD < CFG.pinchOn;
+    if (p.pinch && !was) p.pinchEdge = true;
+    p.seenAt = now;
+  }
+  for (const [k, p] of Track.pointers) if (k !== 'mouse' && now - p.seenAt > 300) Track.pointers.delete(k);
+}
+
+function setMouse(x, y) {
+  let p = Track.pointers.get('mouse');
+  if (!p) { p = { key: 'mouse', x, y, pinch: false, pinchEdge: false, cooldownUntil: 0, trail: [], seenAt: 0 }; Track.pointers.set('mouse', p); }
+  p.x = x; p.y = y; p.seenAt = performance.now();
+  Track.mouse.movedAt = performance.now();
+}
+
+/* Hands from the camera, plus the mouse if it is being used. */
+function activePointers(now) {
+  const out = [];
+  for (const p of Track.pointers.values()) {
+    if (p.key === 'mouse') { if (Track.mode === 'mouse' || now - Track.mouse.movedAt < 2500) out.push(p); }
+    else out.push(p);
+  }
+  return out;
+}
+
+/* Is the child still there? Pause when lost, resume when found again. */
+function checkPresence(now) {
+  if (Track.mode !== 'camera' || !Track.ready || Calib.active || !inGameState()) return;
+  const lostMs = Track.pose ? CFG.lostAfter : 6000; // hands-only mode: hands drop out more often
+  if (!Game.paused && now - Track.personSeenAt > lostMs) { pauseGame('lost'); return; }
+  if (Game.paused && Game.pauseReason === 'lost') {
+    if (now - Track.personSeenAt < 300) {
+      if (!Track.foundSince) Track.foundSince = now;
+      if (now - Track.foundSince > CFG.foundAfter) {
+        resumeGame();
+        Voice.say("There you are! Let's keep going!", { interrupt: true });
+      }
+    } else Track.foundSince = 0;
+  }
+}
+
+/* ---------- calibration (uses tracking data, drives the setup screen) ---------- */
+const Calib = { active: false, resume: false, okSince: 0, ready: false, readyAt: 0, spokenHint: '', lastSpoke: 0, lastUI: '' };
+
+function openCalibration(resume = false) {
+  Object.assign(Calib, { active: true, resume, okSince: 0, ready: false, readyAt: 0, spokenHint: '', lastSpoke: 0, lastUI: '' });
+  if (resume) { Game.paused = true; Game.pauseReason = 'calib'; }
+  else Game.state = 'calib';
+  UI.hideScreens(); UI.show('calibScreen');
+  $('preview').hidden = true;
+  $('btnCalibGo').disabled = true;
+  Voice.say("Let's get ready!", { interrupt: true });
+}
+
+function updateCalibration(now) {
+  const vw = Track.video.videoWidth || 640;
+  const b = Track.bodyRaw && now - Track.bodyRaw.at < 700 ? Track.bodyRaw : null;
+  let see, mid, hand, hint, voice, arrow = '';
+  if (Track.pose) {
+    see = !!b;
+    const swr = b ? b.sw / vw : 0;
+    const tooClose = see && swr > 0.46, tooFar = see && swr < 0.06;
+    // Mirrored view: if the child shows on the left, they should move right.
+    const off = see ? (b.nx < 0.3 ? 'right' : b.nx > 0.7 ? 'left' : '') : '';
+    mid = see && !tooClose && !tooFar && !off;
+    hand = now - Track.handUpAt < 600;
+    if (!see) { hint = 'Stand where I can see you!'; voice = hint; }
+    else if (tooClose) { hint = 'Step back a little! 👣'; voice = 'Step back a little!'; }
+    else if (tooFar) { hint = 'Come a little closer!'; voice = hint; }
+    else if (off) { hint = 'Move to the middle!'; voice = hint; arrow = off === 'right' ? '➡️' : '⬅️'; }
+    else if (!hand) { hint = 'Now put your hand up high! ✋'; voice = 'Now put your hand up high!'; }
+    else { hint = "Great! Let's play!"; voice = ''; }
+  } else {
+    see = now - Track.handSeenAt < 500; mid = see; hand = see;
+    hint = see ? "Great! Let's play!" : 'Show me your hand! ✋';
+    voice = see ? '' : 'Show me your hand!';
+  }
+  const uiKey = [see, mid, hand, hint, arrow].join('|');
+  if (uiKey !== Calib.lastUI) {
+    Calib.lastUI = uiKey;
+    $('chkSee').classList.toggle('ok', see);
+    $('chkMid').classList.toggle('ok', mid);
+    $('chkHand').classList.toggle('ok', hand);
+    $('calibHint').textContent = hint;
+    $('calibArrow').textContent = arrow;
+  }
+  if (voice && voice !== Calib.spokenHint && now - Calib.lastSpoke > 2500) {
+    Voice.say(voice, { interrupt: true }); Calib.spokenHint = voice; Calib.lastSpoke = now;
+  }
+  if (see && mid && hand) {
+    if (!Calib.okSince) Calib.okSince = now;
+    if (!Calib.ready && now - Calib.okSince > 900) {
+      Calib.ready = true; Calib.readyAt = now;
+      $('btnCalibGo').disabled = false;
+      Sound.ready();
+      Voice.say("Great! Let's play!", { interrupt: true });
+    }
+  } else Calib.okSince = 0;
+  if (Calib.ready && now - Calib.readyAt > 2600) finishCalibration();
+  drawCamView($('calibCanvas'), { guide: true, centered: mid });
+}
+
+function finishCalibration() {
+  if (!Calib.active) return;
+  Calib.active = false;
+  UI.hide('calibScreen');
+  if (Track.mode === 'camera') $('preview').hidden = false;
+  Track.personSeenAt = performance.now();
+  if (Calib.resume) resumeGame(); else startGame();
+}
+
+/* #####################################################################
+   SECTION 4: GAME LOGIC
+   Levels, fruits, grabbing, eating, scoring, pause / restart.
+   ##################################################################### */
+const Game = {
+  state: 'title',            // title | loading | calib | intro | play | levelDone | final
+  paused: false, pauseReason: null,
+  time: 0, timers: [],       // game clock (stops while paused) and scheduled events
+  levelIdx: 0, level: null, fed: 0, inFlight: 0, mistakes: 0,
+  score: 0, totalStars: 0, streak: 0, bestStreak: 0, totalFed: 0,
+  fruits: [], particles: [], confetti: [], confettiUntil: 0,
+  lastProgress: 0, nextId: 1, reqHTML: '', bubbleToken: 0,
+  area: { r: 50, x0: 0, x1: 0, y0: 0, y1: 0 },
+};
+const inGameState = () => ['intro', 'play', 'levelDone'].includes(Game.state);
+const matches = (f, L) => f.kind === L.kind && (!L.colorWord || f.color === L.color);
+const levelStars = (mistakes) => (mistakes <= 1 ? 3 : mistakes <= 3 ? 2 : 1); // never below 1 star
+
+function after(ms, fn) { Game.timers.push({ at: Game.time + ms, fn }); }
+function runTimers() {
+  if (!Game.timers.length) return;
+  const due = Game.timers.filter((t) => t.at <= Game.time);
+  if (!due.length) return;
+  Game.timers = Game.timers.filter((t) => t.at > Game.time);
+  due.forEach((t) => t.fn());
+}
+
+const fruitR = () => clamp(Math.min(innerWidth, innerHeight * 1.3) * 0.05, 36, 68);
+
+/* The floating zone: below the HUD, above the monster, bubble and camera preview. */
+function computeArea() {
+  const r = fruitR();
+  const hudB = $('hud').getBoundingClientRect().bottom || 120;
+  let bottom = Monster.y - Monster.R * 1.3;
+  const bub = $('bubble');
+  if (!bub.classList.contains('hide')) bottom = Math.min(bottom, bub.getBoundingClientRect().top);
+  const pv = $('preview');
+  if (!pv.hidden) bottom = Math.min(bottom, pv.getBoundingClientRect().top);
+  const y0 = hudB + r * 1.05 + 6;
+  let y1 = bottom - r;
+  if (y1 < y0 + r * 1.5) y1 = y0 + r * 1.5;
+  Game.area = { r, x0: r * 1.15 + 8, x1: innerWidth - r * 1.15 - 8, y0, y1 };
+}
+
+function requestNoun(L) {
+  const name = FRUIT[L.kind].many;
+  return {
+    html: (L.colorWord ? `<span class="cw cw-${L.colorWord}">${L.colorWord.toUpperCase()}</span> ` : '') + name,
+    speech: (L.colorWord ? L.colorWord + ' ' : '') + name,
+  };
+}
+function requestParts(L) {
+  const n = requestNoun(L);
+  return {
+    html: `Give me <span class="num">${L.count}</span> ${n.html}! <img src="${fruitIcon(L.kind, L.color)}" alt="">`,
+    speech: `Give me ${NUM_WORDS[L.count]} ${n.speech}!`,
+  };
+}
+
+function startGame() {
+  Object.assign(Game, {
+    paused: false, pauseReason: null, timers: [], fruits: [], particles: [],
+    levelIdx: 0, score: 0, totalStars: 0, streak: 0, bestStreak: 0, totalFed: 0, confettiUntil: 0,
+  });
+  Monster.happyT = 0;
+  Voice.stop();
+  UI.hideScreens(); UI.hideLevelCard();
+  $('hud').classList.remove('hidden');
+  $('btnRecal').hidden = Track.mode !== 'camera';
+  if (Track.mode === 'camera') $('preview').hidden = false;
+  startLevel(0);
+}
+
+function startLevel(i) {
+  const L = LEVELS[i];
+  Object.assign(Game, { levelIdx: i, level: L, fed: 0, inFlight: 0, mistakes: 0, timers: [], state: 'intro' });
+  Game.fruits = Game.fruits.filter((f) => f.state === 'leave'); // old fruit finishes floating away
+  Monster.happyT = 0;
+  UI.setOrder(L); UI.updateHUD();
+  const req = requestParts(L);
+  Game.reqHTML = req.html;
+  UI.bubble(L.intro + ' 😋');
+  Voice.say(L.intro);
+  after(1700, () => { UI.bubble(req.html); Voice.say(req.speech); });
+  after(2600, () => {
+    computeArea();
+    spawnFruits(L);
+    Game.state = 'play';
+    Game.lastProgress = Game.time;
+  });
+}
+
+function spawnFruits(L) {
+  const list = [];
+  L.spawn.forEach((s) => { for (let k = 0; k < s.n; k++) list.push({ kind: s.kind, color: s.color }); });
+  shuffle(list);
+  const A = Game.area, placed = [];
+  list.forEach((d, i) => {
+    let best = null, bestD = -1;
+    for (let k = 0; k < 40; k++) {
+      const x = rand(A.x0, A.x1), y = rand(A.y0, A.y1);
+      const md = placed.reduce((m, p) => Math.min(m, dist(x, y, p.x, p.y)), 1e9);
+      if (md > bestD) { bestD = md; best = { x, y }; }
+      if (md > A.r * 3) break;
+    }
+    placed.push(best);
+    Game.fruits.push({
+      id: Game.nextId++, kind: d.kind, color: d.color, x: best.x, y: best.y, vx: 0, vy: 0,
+      ang: rand(0, Math.PI * 2), r: A.r, phase: rand(0, Math.PI * 2),
+      state: 'spawn', t: -i * 0.12, scale: 0, alpha: 1, dwell: 0, hover: 0, wig: 0, rot: 0,
+      noGrab: 0, hint: 0, bob: 0, hoverP: null, hoverD: Infinity, popped: false,
+    });
+  });
+}
+
+/* Which fruit is each hand near? Hover long enough (or pinch / click) to grab. */
+function updateSelection(dt, now) {
+  const ptrs = activePointers(now);
+  const floating = Game.fruits.filter((f) => f.state === 'float' && f.noGrab <= 0);
+  for (const p of ptrs) {
+    if (p.cooldownUntil > now) continue;
+    for (const f of floating) {
+      const d = dist(p.x, p.y, f.x, f.y + f.bob);
+      if (d < f.r * CFG.hoverRadius && d < f.hoverD) { f.hoverD = d; f.hoverP = p; }
+    }
+  }
+  const clicked = Track.mouse.clicked;
+  for (const f of floating) {
+    const p = f.hoverP;
+    f.hover += ((p ? 1 : 0) - f.hover) * Math.min(1, dt * 10);
+    if (p && f.hoverD < f.r * CFG.grabRadius && p.cooldownUntil <= now) {
+      if ((p.key === 'mouse' && clicked) || p.pinchEdge) { trySelect(f, p, now); continue; }
+      f.dwell += dt;
+      if (f.dwell >= CFG.grabDwell) trySelect(f, p, now);
+    } else f.dwell = Math.max(0, f.dwell - dt * 2);
+  }
+}
+
+function trySelect(f, p, now) {
+  const L = Game.level;
+  p.cooldownUntil = now + 450;
+  f.dwell = 0;
+  if (!matches(f, L)) { rejectFruit(f); return; }
+  if (Game.fed + Game.inFlight >= L.count) return;
+  Game.inFlight++;
+  f.state = 'fly'; f.t = 0;
+  f.from = { x: f.x, y: f.y + f.bob };
+  f.ctrl = { x: lerp(f.x, Monster.x, 0.5), y: Math.max(40, Math.min(f.y, Monster.mouthY) - Monster.R * 1.2) };
+  f.scale0 = f.scale;
+  Game.streak++;
+  Game.bestStreak = Math.max(Game.bestStreak, Game.streak);
+  Game.lastProgress = Game.time;
+  Sound.pop();
+  sparkles(f.from.x, f.from.y);
+  UI.updateHUD();
+}
+
+/* Wrong fruit: gentle "hmm", the fruit bounces away. No points lost. */
+function rejectFruit(f) {
+  const L = Game.level;
+  Game.mistakes++; Game.streak = 0; Game.lastProgress = Game.time;
+  f.state = 'reject'; f.t = 0; f.noGrab = 1.4; f.hover = 0;
+  const dir = f.x < Monster.x ? -1 : 1;
+  f.vx = dir * rand(160, 240); f.vy = -rand(80, 160);
+  Monster.shake = 1;
+  Sound.oops();
+  const want = requestNoun(L);
+  let html, speech;
+  if (f.kind !== L.kind) {
+    const one = FRUIT[f.kind].one;
+    html = `Hmm, that's ${article(one)} ${one}! <img src="${fruitIcon(f.kind, f.color)}" alt=""><br>I want ${want.html}.`;
+    speech = `Hmm, that's ${article(one)} ${one}! I want ${want.speech}.`;
+  } else {
+    html = `Hmm, that one is <span class="cw cw-${f.color}">${f.color}</span>!<br>I want ${want.html}.`;
+    speech = `Hmm, that one is ${f.color}! I want ${want.speech}.`;
+  }
+  UI.bubbleTemp(html, 2800);
+  Voice.say(speech, { interrupt: true });
+  UI.updateHUD();
+}
+
+function eatFruit(f) {
+  Game.inFlight = Math.max(0, Game.inFlight - 1);
+  Game.fed++; Game.totalFed++;
+  const bonus = Game.streak >= 3 ? 5 : 0;
+  Game.score += 10 + bonus;
+  Monster.chomp();
+  Sound.chomp(); Sound.count(Game.fed);
+  Voice.say(cap(NUM_WORDS[Game.fed]) + '!', { rate: 1.0, pitch: 1.45 });
+  crumbs(Monster.mouthX, Monster.mouthY, fruitMainColor(f.kind, f.color));
+  addText(String(Game.fed), Monster.x + Monster.R * 1.25, Monster.y - Monster.R * 1.0,
+          { size: Monster.R * 1.1, color: '#7b5cff', max: 1.2, rise: 50 });
+  addText(`+${10 + bonus}`, Monster.x - Monster.R * 1.1, Monster.y - Monster.R * 0.9,
+          { size: Monster.R * 0.4, color: '#35c27f', max: 1.0, rise: 70 });
+  if (Game.streak > 0 && Game.streak % 3 === 0) {
+    addText('Super! ⭐', Monster.x, Monster.y - Monster.R * 1.75, { size: Monster.R * 0.45, color: '#ff6fae', max: 1.4, rise: 40 });
+  }
+  UI.fillSlot(Game.fed, f); UI.bumpCount(); UI.updateHUD();
+  if (Game.fed >= Game.level.count) after(800, levelComplete);
+}
+
+function levelComplete() {
+  if (Game.state !== 'play') return;
+  Game.state = 'levelDone';
+  const stars = levelStars(Game.mistakes);
+  Game.totalStars += stars;
+  Monster.happyT = 3.2;
+  UI.bubble('Yum! Thank you! 💜');
+  Voice.say('Yum! Thank you!');
+  Sound.fanfare();
+  starBurst(Monster.x, Monster.y - Monster.R * 0.4);
+  Game.fruits.forEach((f) => { if (f.state !== 'fly') { f.state = 'leave'; f.t = 0; } });
+  UI.showLevelCard(stars);
+  UI.updateHUD();
+  after(3800, () => {
+    UI.hideLevelCard();
+    if (Game.levelIdx + 1 < LEVELS.length) startLevel(Game.levelIdx + 1);
+    else finishGame();
+  });
+}
+
+function finishGame() {
+  Game.state = 'final';
+  Game.fruits.forEach((f) => { f.state = 'leave'; f.t = 0; });
+  Monster.happyT = 1e6;
+  UI.bubble("I'm so full! Thank you, friend! 💜");
+  Sound.grand();
+  Voice.say("You did it! I'm so full! Thank you, friend!");
+  Game.confettiUntil = performance.now() + 6000;
+  burstConfetti(160);
+  after(1400, () => {
+    $('fStars').textContent = `${Game.totalStars}/${LEVELS.length * 3}`;
+    $('fFruits').textContent = Game.totalFed;
+    $('fStreak').textContent = Game.bestStreak;
+    $('fScore').textContent = Game.score;
+    UI.show('finalScreen');
+  });
+}
+
+/* If nothing happens for a while, point at a correct fruit. */
+function giveHint() {
+  Game.lastProgress = Game.time;
+  const L = Game.level;
+  const cands = Game.fruits.filter((f) => f.state === 'float' && matches(f, L));
+  if (!cands.length) return;
+  cands[Math.floor(Math.random() * cands.length)].hint = 4;
+  const word = (L.colorWord ? L.colorWord + ' ' : '') + FRUIT[L.kind].one;
+  Voice.say(`Can you find ${article(word)} ${word}? Reach up high!`);
+}
+
+function updateFruit(f, dt) {
+  f.t += dt;
+  const A = Game.area;
+  switch (f.state) {
+    case 'spawn': {
+      if (f.t >= 0 && !f.popped) { f.popped = true; Sound.spawn(); }
+      const k = clamp(f.t / 0.5, 0, 1);
+      f.scale = f.t < 0 ? 0 : easeOutBack(k);
+      f.bob = Math.sin(Game.time / 500 + f.phase) * 6;
+      if (k >= 1) { f.state = 'float'; f.scale = 1; }
+      break;
+    }
+    case 'float':
+    case 'reject': {
+      if (f.noGrab > 0) { f.noGrab -= dt; f.hover = 0; f.dwell = 0; }
+      if (f.state === 'reject') {
+        f.wig = Math.sin(f.t * 30) * 0.35 * Math.max(0, 1 - f.t / 0.7);
+        f.x += f.vx * dt; f.y += f.vy * dt;
+        f.vx *= Math.pow(0.05, dt); f.vy *= Math.pow(0.05, dt);
+        if (f.t > 0.8) { f.state = 'float'; f.wig = 0; }
+      } else {
+        // slow wandering drift
+        f.ang += (Math.random() - 0.5) * dt * 2;
+        const sp = 20 + 8 * Math.sin(f.phase);
+        f.vx += (Math.cos(f.ang) * sp - f.vx) * Math.min(1, dt * 1.5);
+        f.vy += (Math.sin(f.ang) * sp * 0.6 - f.vy) * Math.min(1, dt * 1.5);
+        f.x += f.vx * dt; f.y += f.vy * dt;
+        // magnet: a fruit drifts toward a nearby hand, so near-misses still work
+        if (f.hoverP) {
+          const k = clamp(1 - f.hoverD / (f.r * CFG.hoverRadius), 0, 1) * CFG.magnet * dt;
+          f.x += (f.hoverP.x - f.x) * k; f.y += (f.hoverP.y - f.bob - f.y) * k;
+        }
+      }
+      // keep fruit from overlapping
+      for (const g of Game.fruits) {
+        if (g === f || (g.state !== 'float' && g.state !== 'reject')) continue;
+        const d = dist(f.x, f.y, g.x, g.y), m = f.r + g.r + 10;
+        if (d < m && d > 0.01) { const push = (m - d) * Math.min(1, dt * 4) * 0.5; f.x += ((f.x - g.x) / d) * push; f.y += ((f.y - g.y) / d) * push; }
+      }
+      // soft walls
+      if (f.x < A.x0) { f.x = A.x0; f.ang = rand(-0.7, 0.7); }
+      if (f.x > A.x1) { f.x = A.x1; f.ang = Math.PI + rand(-0.7, 0.7); }
+      if (f.y < A.y0) { f.y = A.y0; f.ang = rand(0.4, 2.7); }
+      if (f.y > A.y1) { f.y = A.y1; f.ang = -rand(0.4, 2.7); }
+      f.scale = 1;
+      f.bob = Math.sin(Game.time / 500 + f.phase) * 6;
+      f.hint = Math.max(0, f.hint - dt);
+      break;
+    }
+    case 'fly': {
+      const k = clamp(f.t / CFG.flyTime, 0, 1);
+      const e = k * k * 0.6 + k * 0.4;
+      const p0 = f.from, p1 = f.ctrl, p2 = { x: Monster.mouthX, y: Monster.mouthY };
+      const a = (1 - e) * (1 - e), b = 2 * (1 - e) * e, c = e * e;
+      f.x = a * p0.x + b * p1.x + c * p2.x;
+      f.y = a * p0.y + b * p1.y + c * p2.y;
+      f.scale = f.scale0 * (1 - 0.6 * e);
+      f.rot += dt * 9;
+      f.bob = 0;
+      if (k >= 1) { f.dead = true; eatFruit(f); }
+      break;
+    }
+    case 'leave': {
+      f.y -= 170 * dt;
+      f.alpha = Math.max(0, 1 - f.t / 0.8);
+      f.scale = 1 + f.t * 0.25;
+      if (f.t > 0.8) f.dead = true;
+      break;
+    }
+  }
+}
+
+function updateGame(dt, now) {
+  for (const f of Game.fruits) { f.hoverP = null; f.hoverD = Infinity; }
+  if (Game.state === 'play') updateSelection(dt, now);
+  for (const f of Game.fruits) updateFruit(f, dt);
+  Game.fruits = Game.fruits.filter((f) => !f.dead);
+  if (Game.state === 'play' && Game.time - Game.lastProgress > CFG.hintAfter) giveHint();
+}
+
+/* ---------- pause / resume / restart ---------- */
+function pauseGame(reason = 'manual') {
+  if (!inGameState()) return;
+  if (Game.paused && reason === 'lost') return;
+  Game.paused = true; Game.pauseReason = reason;
+  Voice.stop();
+  UI.hideScreens();
+  if (reason === 'lost') {
+    UI.show('lostScreen');
+    $('preview').classList.add('lost');
+    Track.foundSince = 0;
+    Voice.say("I can't see you. Step back so I can see you!");
+  } else UI.show('pauseScreen');
+}
+
+function resumeGame() {
+  Game.paused = false; Game.pauseReason = null;
+  UI.hideScreens();
+  $('preview').classList.remove('lost');
+  Track.personSeenAt = performance.now(); Track.foundSince = 0;
+}
+
+function togglePause() {
+  if (Calib.active || !inGameState()) return;
+  if (!Game.paused) { pauseGame('manual'); return; }
+  if (Game.pauseReason === 'lost') { Game.pauseReason = 'manual'; UI.hideScreens(); UI.show('pauseScreen'); return; }
+  resumeGame();
+}
+
+function restartGame() { $('preview').classList.remove('lost'); startGame(); }
+
+/* #####################################################################
+   SECTION 5: RENDERING (canvas: monster, fruit, particles, cursors)
+   ##################################################################### */
+const stage = $('stage'), topCv = $('top');
+const sctx = stage.getContext('2d'), tctx = topCv.getContext('2d');
+let VW = innerWidth, VH = innerHeight;
+
+const Monster = {
+  x: 0, y: 0, R: 120, yOff: 0,
+  mouth: 0, chew: 0, shake: 0, happyT: 0, puff: 0, eatPulse: 0,
+  blink: 0, blinkT: 0, nextBlink: 2, lookX: 0, lookY: 0,
+  layout() {
+    this.R = clamp(Math.min(innerWidth * 0.11, innerHeight * 0.17), 70, 150);
+    this.x = innerWidth / 2;
+    this.y = innerHeight - this.R - 14;
+    document.documentElement.style.setProperty('--mR', this.R + 'px');
+  },
+  get mouthX() { return this.x; },
+  get mouthY() { return this.y + this.yOff + this.R * 0.34; },
+  chomp() { this.chew = 0.55; this.puff = 1; this.eatPulse = 1; },
+  update(dt, t, now) {
+    const flying = Game.fruits.find((f) => f.state === 'fly');
+    let target = 0;
+    if (flying) target = 0.6 + 0.4 * clamp(flying.t / CFG.flyTime, 0, 1);
+    else if (this.chew > 0) target = 0.12 + 0.4 * Math.abs(Math.sin(this.chew * 17));
+    else if (this.shake > 0.3) target = 0.15;
+    this.chew = Math.max(0, this.chew - dt);
+    this.mouth += (target - this.mouth) * Math.min(1, dt * 18);
+    this.shake = Math.max(0, this.shake - dt * 1.4);
+    this.happyT = Math.max(0, this.happyT - dt);
+    this.puff = Math.max(0, this.puff - dt * 1.5);
+    this.eatPulse = Math.max(0, this.eatPulse - dt * 3);
+    this.nextBlink -= dt;
+    if (this.nextBlink <= 0) { this.blinkT = 0.18; this.nextBlink = rand(2, 5); }
+    if (this.blinkT > 0) { this.blinkT -= dt; this.blink = Math.sin(clamp(1 - this.blinkT / 0.18, 0, 1) * Math.PI); }
+    else this.blink = 0;
+    // eyes follow the flying fruit, else the nearest hand, else wander
+    let lx = this.x + Math.sin(t * 0.6) * this.R * 2, ly = this.y - this.R * 2.5;
+    if (flying) { lx = flying.x; ly = flying.y; }
+    else {
+      const ps = activePointers(now);
+      let bd = Infinity;
+      for (const p of ps) { const d = dist(p.x, p.y, this.x, this.y); if (d < bd) { bd = d; lx = p.x; ly = p.y; } }
+    }
+    this.lookX += (lx - this.lookX) * Math.min(1, dt * 8);
+    this.lookY += (ly - this.lookY) * Math.min(1, dt * 8);
+  },
+};
+
+function resize() {
+  VW = innerWidth; VH = innerHeight;
+  const dpr = Math.min(2, devicePixelRatio || 1);
+  for (const c of [stage, topCv]) { c.width = Math.round(VW * dpr); c.height = Math.round(VH * dpr); }
+  sctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+  tctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+  Monster.layout();
+  computeArea();
+  const r = fruitR();
+  Game.fruits.forEach((f) => (f.r = r));
+}
+
+function starPath(ctx, x, y, ro, ri, n = 5, rot = 0) {
+  ctx.beginPath();
+  for (let i = 0; i < n * 2; i++) {
+    const a = rot - Math.PI / 2 + (i * Math.PI) / n, r = i % 2 ? ri : ro;
+    const px = x + Math.cos(a) * r, py = y + Math.sin(a) * r;
+    if (i) ctx.lineTo(px, py); else ctx.moveTo(px, py);
+  }
+  ctx.closePath();
+}
+function roundRectPath(ctx, x, y, w, h, r) {
+  ctx.beginPath(); ctx.moveTo(x + r, y);
+  ctx.arcTo(x + w, y, x + w, y + h, r); ctx.arcTo(x + w, y + h, x, y + h, r);
+  ctx.arcTo(x, y + h, x, y, r); ctx.arcTo(x, y, x + w, y, r); ctx.closePath();
+}
+
+/* ---------- the monster ---------- */
+function drawMonster(ctx, t) {
+  const m = Monster, R = m.R;
+  const flying = Game.fruits.some((f) => f.state === 'fly');
+  const hop = m.happyT > 0 ? Math.abs(Math.sin(t * 7)) * R * 0.2 * Math.min(1, m.happyT) : 0;
+  const x = m.x + Math.sin(t * 32) * R * 0.09 * m.shake;
+  const y = m.y - hop;
+  m.yOff = -hop;
+  const breath = Math.sin(t * 2.2) * 0.025 + m.eatPulse * 0.07;
+  const outline = '#3b2a86', lw = Math.max(3, R * 0.045);
+
+  // ground shadow
+  ctx.save();
+  ctx.fillStyle = 'rgba(70,50,140,0.18)';
+  ctx.beginPath(); ctx.ellipse(m.x, m.y + R * 1.02, R * (0.95 - (hop / R) * 0.6), R * 0.15, 0, 0, Math.PI * 2); ctx.fill();
+  ctx.restore();
+
+  ctx.save();
+  ctx.translate(x, y);
+  ctx.scale(1 + breath, 1 - breath);
+  ctx.lineJoin = 'round'; ctx.lineCap = 'round';
+
+  // feet
+  ctx.fillStyle = '#5b3fd8'; ctx.strokeStyle = outline; ctx.lineWidth = lw;
+  for (const s of [-1, 1]) { ctx.beginPath(); ctx.ellipse(s * R * 0.45, R * 0.9, R * 0.3, R * 0.16, 0, 0, Math.PI * 2); ctx.fill(); ctx.stroke(); }
+
+  // arms (wave when happy, reach up when food is coming)
+  for (const s of [-1, 1]) {
+    let a;
+    if (m.happyT > 0) a = -1.1 + Math.sin(t * 10 + (s > 0 ? 0 : Math.PI)) * 0.5;
+    else if (flying) a = -0.9;
+    else a = 0.35 + Math.sin(t * 2 + s) * 0.08;
+    ctx.save();
+    ctx.translate(s * R * 0.84, R * 0.12);
+    ctx.rotate(s * a);
+    ctx.beginPath(); ctx.ellipse(s * R * 0.24, 0, R * 0.3, R * 0.15, 0, 0, Math.PI * 2);
+    ctx.fillStyle = '#7b5cff'; ctx.fill(); ctx.stroke();
+    ctx.restore();
+  }
+
+  // horns
+  ctx.fillStyle = '#ffd23f'; ctx.strokeStyle = '#c99a00';
+  for (const s of [-1, 1]) {
+    ctx.beginPath();
+    ctx.moveTo(s * R * 0.22, -R * 0.78);
+    ctx.quadraticCurveTo(s * R * 0.38, -R * 1.25, s * R * 0.62, -R * 1.15);
+    ctx.quadraticCurveTo(s * R * 0.55, -R * 0.9, s * R * 0.6, -R * 0.62);
+    ctx.closePath(); ctx.fill(); ctx.stroke();
+  }
+
+  // fuzzy body
+  const g = ctx.createRadialGradient(-R * 0.35, -R * 0.45, R * 0.1, 0, 0, R * 1.1);
+  g.addColorStop(0, '#a893ff'); g.addColorStop(0.6, '#7b5cff'); g.addColorStop(1, '#6243e6');
+  ctx.beginPath();
+  const N = 64;
+  for (let i = 0; i <= N; i++) {
+    const a = (i / N) * Math.PI * 2, rr = R * (1 + 0.035 * Math.sin(a * 11 + t * 1.3));
+    const px = Math.cos(a) * rr, py = Math.sin(a) * rr * 0.97;
+    if (i) ctx.lineTo(px, py); else ctx.moveTo(px, py);
+  }
+  ctx.closePath();
+  ctx.fillStyle = g; ctx.fill();
+  ctx.lineWidth = lw; ctx.strokeStyle = outline; ctx.stroke();
+
+  // belly and spots
+  ctx.fillStyle = 'rgba(214,203,255,0.55)';
+  ctx.beginPath(); ctx.ellipse(0, R * 0.47, R * 0.55, R * 0.4, 0, 0, Math.PI * 2); ctx.fill();
+  ctx.fillStyle = 'rgba(255,255,255,0.18)';
+  for (const [sx, sy, sr] of [[-0.66, -0.05, 0.08], [0.68, -0.22, 0.06], [0.58, 0.45, 0.07], [-0.5, -0.62, 0.05]]) {
+    ctx.beginPath(); ctx.arc(sx * R, sy * R, sr * R, 0, Math.PI * 2); ctx.fill();
+  }
+
+  // eyes
+  const happyEyes = m.happyT > 0 && !flying;
+  for (const s of [-1, 1]) {
+    const ex = s * R * 0.34, ey = -R * 0.3, er = R * 0.25;
+    if (happyEyes) {
+      ctx.beginPath(); ctx.arc(ex, ey + er * 0.3, er * 0.6, Math.PI * 1.1, Math.PI * 1.9);
+      ctx.lineWidth = R * 0.08; ctx.strokeStyle = outline; ctx.stroke();
+      continue;
+    }
+    ctx.save();
+    ctx.beginPath(); ctx.arc(ex, ey, er, 0, Math.PI * 2); ctx.fillStyle = '#fff'; ctx.fill();
+    ctx.clip();
+    const gx = m.lookX - (m.x + ex), gy = m.lookY - (m.y + ey), gl = Math.hypot(gx, gy) || 1;
+    const off = Math.min(er * 0.42, gl * 0.1);
+    const px = ex + (gx / gl) * off, py = ey + (gy / gl) * off;
+    ctx.fillStyle = '#2b2350'; ctx.beginPath(); ctx.arc(px, py, er * 0.5, 0, Math.PI * 2); ctx.fill();
+    ctx.fillStyle = '#fff'; ctx.beginPath(); ctx.arc(px - er * 0.18, py - er * 0.2, er * 0.17, 0, Math.PI * 2); ctx.fill();
+    if (m.blink > 0) { ctx.fillStyle = '#8a6fff'; ctx.fillRect(ex - er, ey - er, er * 2, er * 2 * m.blink); }
+    ctx.restore();
+    ctx.beginPath(); ctx.arc(ex, ey, er, 0, Math.PI * 2); ctx.lineWidth = lw; ctx.strokeStyle = outline; ctx.stroke();
+  }
+
+  // cheeks
+  ctx.fillStyle = 'rgba(255,111,174,0.55)';
+  for (const s of [-1, 1]) {
+    const k = 1 + m.puff * 0.45;
+    ctx.beginPath(); ctx.ellipse(s * R * 0.62, R * 0.06, R * 0.14 * k, R * 0.09 * k, 0, 0, Math.PI * 2); ctx.fill();
+  }
+
+  // mouth
+  const o = m.mouth, cy = R * 0.3;
+  if (o < 0.07) {
+    ctx.beginPath(); ctx.moveTo(-R * 0.3, cy - R * 0.04); ctx.quadraticCurveTo(0, cy + R * 0.22, R * 0.3, cy - R * 0.04);
+    ctx.lineWidth = R * 0.07; ctx.strokeStyle = outline; ctx.stroke();
+  } else {
+    const w = R * (0.36 + 0.16 * o), h = R * (0.1 + 0.5 * o);
+    const mouthPath = () => {
+      ctx.beginPath();
+      ctx.moveTo(-w, cy - h * 0.25);
+      ctx.quadraticCurveTo(0, cy - h * 0.6, w, cy - h * 0.25);
+      ctx.quadraticCurveTo(w * 0.95, cy + h * 0.95, 0, cy + h);
+      ctx.quadraticCurveTo(-w * 0.95, cy + h * 0.95, -w, cy - h * 0.25);
+      ctx.closePath();
+    };
+    mouthPath(); ctx.fillStyle = '#5a1748'; ctx.fill();
+    ctx.save(); mouthPath(); ctx.clip();
+    ctx.fillStyle = '#ff7aa8'; ctx.beginPath(); ctx.ellipse(0, cy + h * 0.95, w * 0.6, h * 0.5, 0, 0, Math.PI * 2); ctx.fill();
+    ctx.fillStyle = '#fff';
+    for (const s of [-1, 1]) {
+      const tx = s * w * 0.42, ty = cy - h * 0.48;
+      ctx.beginPath(); ctx.moveTo(tx - R * 0.07, ty); ctx.lineTo(tx + R * 0.07, ty); ctx.lineTo(tx, ty + R * 0.12); ctx.closePath(); ctx.fill();
+    }
+    ctx.restore();
+    mouthPath(); ctx.lineWidth = lw; ctx.strokeStyle = outline; ctx.stroke();
+  }
+  ctx.restore();
+}
+
+/* ---------- fruit drawings ---------- */
+const APPLE_COLORS = { red: ['#ff7070', '#e02f3d'], green: ['#b2ec72', '#4dab38'], yellow: ['#fff07a', '#eab308'] };
+function fruitMainColor(kind, color) {
+  if (kind === 'apple') return (APPLE_COLORS[color] || APPLE_COLORS.red)[1];
+  return { banana: '#ffd84a', orange: '#ff9a2e', strawberry: '#ff3b5c' }[kind];
+}
+
+function drawFruitShape(ctx, kind, color, r) {
+  ctx.lineJoin = 'round'; ctx.lineCap = 'round';
+  const lw = Math.max(2, r * 0.07);
+  const shine = (x, y) => { ctx.fillStyle = 'rgba(255,255,255,.55)'; ctx.beginPath(); ctx.ellipse(x * r, y * r, r * 0.13, r * 0.25, 0.5, 0, Math.PI * 2); ctx.fill(); };
+  if (kind === 'apple') {
+    const [c1, c2] = APPLE_COLORS[color] || APPLE_COLORS.red;
+    ctx.strokeStyle = '#7a4a24'; ctx.lineWidth = r * 0.12;
+    ctx.beginPath(); ctx.moveTo(0, -r * 0.55); ctx.quadraticCurveTo(r * 0.05, -r * 0.85, r * 0.18, -r * 1.0); ctx.stroke();
+    ctx.fillStyle = '#4cbf5a'; ctx.strokeStyle = '#2f8a3c'; ctx.lineWidth = lw * 0.7;
+    ctx.beginPath(); ctx.ellipse(r * 0.42, -r * 0.88, r * 0.26, r * 0.12, -0.5, 0, Math.PI * 2); ctx.fill(); ctx.stroke();
+    ctx.beginPath();
+    ctx.moveTo(0, -r * 0.58);
+    ctx.bezierCurveTo(r * 0.55, -r * 1.0, r * 1.12, -r * 0.6, r * 0.98, r * 0.08);
+    ctx.bezierCurveTo(r * 0.88, r * 0.72, r * 0.45, r * 1.02, 0, r * 0.86);
+    ctx.bezierCurveTo(-r * 0.45, r * 1.02, -r * 0.88, r * 0.72, -r * 0.98, r * 0.08);
+    ctx.bezierCurveTo(-r * 1.12, -r * 0.6, -r * 0.55, -r * 1.0, 0, -r * 0.58);
+    ctx.closePath();
+    const g = ctx.createRadialGradient(-r * 0.35, -r * 0.35, r * 0.1, 0, 0, r * 1.1);
+    g.addColorStop(0, c1); g.addColorStop(1, c2);
+    ctx.fillStyle = g; ctx.fill();
+    ctx.strokeStyle = 'rgba(60,20,40,.45)'; ctx.lineWidth = lw; ctx.stroke();
+    shine(-0.45, -0.25);
+  } else if (kind === 'banana') {
+    ctx.save(); ctx.translate(0, r * 0.14); ctx.scale(1.22, 1.22);
+    ctx.beginPath();
+    ctx.moveTo(-r * 0.92, -r * 0.5);
+    ctx.quadraticCurveTo(-r * 0.1, r * 1.15, r * 0.95, -r * 0.42);
+    ctx.quadraticCurveTo(r * 0.95, -r * 0.22, r * 0.78, -r * 0.22);
+    ctx.quadraticCurveTo(-r * 0.05, r * 0.3, -r * 0.72, -r * 0.55);
+    ctx.closePath();
+    const g = ctx.createLinearGradient(0, -r * 0.5, 0, r * 0.4);
+    g.addColorStop(0, '#fff07a'); g.addColorStop(1, '#f2c014');
+    ctx.fillStyle = g; ctx.fill();
+    ctx.strokeStyle = '#b98f00'; ctx.lineWidth = lw; ctx.stroke();
+    ctx.strokeStyle = 'rgba(255,255,255,.6)'; ctx.lineWidth = r * 0.08;
+    ctx.beginPath(); ctx.moveTo(-r * 0.55, -r * 0.28); ctx.quadraticCurveTo(-r * 0.05, r * 0.45, r * 0.55, -r * 0.12); ctx.stroke();
+    ctx.fillStyle = '#6b4a1f';
+    ctx.beginPath(); ctx.arc(r * 0.9, -r * 0.36, r * 0.08, 0, Math.PI * 2); ctx.fill();
+    ctx.beginPath(); ctx.arc(-r * 0.86, -r * 0.52, r * 0.06, 0, Math.PI * 2); ctx.fill();
+    ctx.restore();
+  } else if (kind === 'orange') {
+    ctx.fillStyle = '#6b4a1f';
+    ctx.beginPath(); ctx.ellipse(0, -r * 0.86, r * 0.07, r * 0.1, 0, 0, Math.PI * 2); ctx.fill();
+    const g = ctx.createRadialGradient(-r * 0.3, -r * 0.35, r * 0.1, 0, 0, r * 1.05);
+    g.addColorStop(0, '#ffc66b'); g.addColorStop(1, '#ff7f11');
+    ctx.beginPath(); ctx.arc(0, 0, r * 0.9, 0, Math.PI * 2); ctx.fillStyle = g; ctx.fill();
+    ctx.strokeStyle = 'rgba(150,60,0,.45)'; ctx.lineWidth = lw; ctx.stroke();
+    ctx.fillStyle = 'rgba(200,90,0,.35)';
+    for (const [dx, dy] of [[0.3, 0.2], [-0.2, 0.45], [0.5, -0.2], [-0.5, 0.1], [0.05, 0.6], [0.4, 0.5], [-0.45, -0.35]]) {
+      ctx.beginPath(); ctx.arc(dx * r, dy * r, r * 0.035, 0, Math.PI * 2); ctx.fill();
+    }
+    ctx.fillStyle = '#4cbf5a'; ctx.strokeStyle = '#2f8a3c'; ctx.lineWidth = lw * 0.7;
+    ctx.beginPath(); ctx.ellipse(r * 0.25, -r * 0.92, r * 0.25, r * 0.11, -0.35, 0, Math.PI * 2); ctx.fill(); ctx.stroke();
+    shine(-0.42, -0.3);
+  } else if (kind === 'strawberry') {
+    ctx.strokeStyle = '#2a7d36'; ctx.lineWidth = r * 0.1;
+    ctx.beginPath(); ctx.moveTo(0, -r * 0.65); ctx.lineTo(r * 0.06, -r * 0.98); ctx.stroke();
+    ctx.beginPath();
+    ctx.moveTo(0, -r * 0.62);
+    ctx.bezierCurveTo(r * 0.62, -r * 0.92, r * 1.08, -r * 0.42, r * 0.86, r * 0.12);
+    ctx.bezierCurveTo(r * 0.66, r * 0.62, r * 0.26, r * 0.96, 0, r * 1.0);
+    ctx.bezierCurveTo(-r * 0.26, r * 0.96, -r * 0.66, r * 0.62, -r * 0.86, r * 0.12);
+    ctx.bezierCurveTo(-r * 1.08, -r * 0.42, -r * 0.62, -r * 0.92, 0, -r * 0.62);
+    ctx.closePath();
+    const g = ctx.createRadialGradient(-r * 0.3, -r * 0.3, r * 0.1, 0, 0, r * 1.1);
+    g.addColorStop(0, '#ff8a98'); g.addColorStop(1, '#e3203f');
+    ctx.fillStyle = g; ctx.fill();
+    ctx.strokeStyle = 'rgba(110,10,30,.45)'; ctx.lineWidth = lw; ctx.stroke();
+    ctx.fillStyle = '#fff3b0';
+    for (const [sx, sy] of [[-0.5, -0.2], [-0.05, -0.28], [0.45, -0.22], [-0.3, 0.12], [0.22, 0.1], [0.6, 0.12], [-0.62, 0.18], [0, 0.45], [-0.3, 0.48], [0.3, 0.48], [0, 0.75]]) {
+      ctx.beginPath(); ctx.ellipse(sx * r, sy * r, r * 0.045, r * 0.07, 0, 0, Math.PI * 2); ctx.fill();
+    }
+    ctx.save();
+    ctx.translate(0, -r * 0.6); ctx.scale(1, 0.5);
+    starPath(ctx, 0, 0, r * 0.55, r * 0.2, 6, 0);
+    ctx.fillStyle = '#43b34f'; ctx.fill(); ctx.strokeStyle = '#2a7d36'; ctx.lineWidth = lw; ctx.stroke();
+    ctx.restore();
+    shine(-0.45, -0.2);
+  }
+}
+
+function drawFruit(ctx, kind, color, x, y, r, rot = 0, scale = 1) {
+  ctx.save(); ctx.translate(x, y); ctx.rotate(rot); ctx.scale(scale, scale);
+  drawFruitShape(ctx, kind, color, r);
+  ctx.restore();
+}
+
+const iconCache = {};
+function fruitIcon(kind, color) {
+  const key = kind + '-' + color;
+  if (!iconCache[key]) {
+    const c = document.createElement('canvas'); c.width = c.height = 128;
+    const x = c.getContext('2d'); x.translate(64, 68);
+    drawFruitShape(x, kind, color, 48);
+    iconCache[key] = c.toDataURL();
+  }
+  return iconCache[key];
+}
+
+function drawFruits(ctx, t, flyingOnly) {
+  for (const f of Game.fruits) {
+    if ((f.state === 'fly') !== flyingOnly) continue;
+    if (f.state === 'spawn' && f.t < 0) continue;
+    const y = f.y + f.bob;
+    ctx.save();
+    ctx.globalAlpha = f.alpha;
+    if (f.hint > 0) {
+      const pulse = 0.5 + 0.5 * Math.sin(t * 8);
+      ctx.fillStyle = `rgba(255,210,63,${0.25 + 0.25 * pulse})`;
+      ctx.beginPath(); ctx.arc(f.x, y, f.r * (1.45 + 0.15 * pulse), 0, Math.PI * 2); ctx.fill();
+      const ay = y - f.r * 1.7 - Math.abs(Math.sin(t * 6)) * 16;
+      ctx.beginPath(); ctx.moveTo(f.x - f.r * 0.35, ay - f.r * 0.4); ctx.lineTo(f.x + f.r * 0.35, ay - f.r * 0.4); ctx.lineTo(f.x, ay + f.r * 0.1); ctx.closePath();
+      ctx.fillStyle = '#ffd23f'; ctx.fill(); ctx.lineWidth = 4; ctx.strokeStyle = '#c99a00'; ctx.stroke();
+    }
+    if (f.hover > 0.02 && f.state !== 'fly') {
+      ctx.fillStyle = `rgba(255,255,255,${0.5 * f.hover})`;
+      ctx.beginPath(); ctx.arc(f.x, y, f.r * 1.4, 0, Math.PI * 2); ctx.fill();
+    }
+    const rot = f.state === 'fly' ? f.rot : f.wig + Math.sin(t * 1.5 + f.phase) * 0.08;
+    drawFruit(ctx, f.kind, f.color, f.x, y, f.r, rot, f.scale * (1 + 0.15 * (f.state === 'fly' ? 0 : f.hover)));
+    if (f.dwell > 0 && f.state === 'float') {
+      const k = clamp(f.dwell / CFG.grabDwell, 0, 1);
+      ctx.lineCap = 'round'; ctx.lineWidth = f.r * 0.16;
+      ctx.strokeStyle = 'rgba(255,255,255,.75)';
+      ctx.beginPath(); ctx.arc(f.x, y, f.r * 1.32, 0, Math.PI * 2); ctx.stroke();
+      ctx.strokeStyle = '#ffb800';
+      ctx.beginPath(); ctx.arc(f.x, y, f.r * 1.32, -Math.PI / 2, -Math.PI / 2 + k * Math.PI * 2); ctx.stroke();
+    }
+    ctx.restore();
+  }
+}
+
+/* ---------- particles ---------- */
+function addParticle(p) {
+  Game.particles.push(Object.assign({ type: 'dot', life: 0, max: 1, vx: 0, vy: 0, g: 0, rot: 0, vr: 0, size: 6, color: '#fff', rise: 0 }, p));
+}
+function crumbs(x, y, color) {
+  for (let i = 0; i < 16; i++) addParticle({ type: 'dot', x, y, vx: rand(-240, 240), vy: rand(-340, -80), g: 800, size: rand(4, 9), color, max: rand(0.5, 0.9) });
+}
+function sparkles(x, y) {
+  for (let i = 0; i < 10; i++) {
+    const a = rand(0, Math.PI * 2), s = rand(120, 260);
+    addParticle({ type: 'star', x, y, vx: Math.cos(a) * s, vy: Math.sin(a) * s, size: rand(7, 13), color: '#ffd23f', vr: rand(-6, 6), max: 0.6 });
+  }
+}
+function starBurst(x, y) {
+  for (let i = 0; i < 18; i++) {
+    const a = (i / 18) * Math.PI * 2, s = rand(260, 420);
+    addParticle({ type: 'star', x, y, vx: Math.cos(a) * s, vy: Math.sin(a) * s, g: 200, size: rand(12, 20), color: ['#ffd23f', '#ff6fae', '#35c27f', '#7b5cff'][i % 4], vr: rand(-5, 5), max: 1.2 });
+  }
+}
+function addText(text, x, y, o) { addParticle({ type: 'text', text, x, y, size: o.size, color: o.color, max: o.max, rise: o.rise }); }
+
+function updateParticles(dt) {
+  for (const p of Game.particles) {
+    p.life += dt; p.vy += p.g * dt; p.x += p.vx * dt; p.y += p.vy * dt; p.rot += p.vr * dt;
+    if (p.type === 'star') { p.vx *= Math.pow(0.2, dt); p.vy *= Math.pow(0.2, dt); }
+  }
+  Game.particles = Game.particles.filter((p) => p.life < p.max);
+}
+
+function drawParticles(ctx) {
+  for (const p of Game.particles) {
+    const k = p.life / p.max;
+    ctx.save();
+    ctx.globalAlpha = clamp(1 - Math.max(0, (k - 0.6) / 0.4), 0, 1);
+    if (p.type === 'dot') {
+      ctx.fillStyle = p.color; ctx.beginPath(); ctx.arc(p.x, p.y, p.size * (1 - k * 0.5), 0, Math.PI * 2); ctx.fill();
+    } else if (p.type === 'star') {
+      starPath(ctx, p.x, p.y, p.size, p.size * 0.45, 5, p.rot); ctx.fillStyle = p.color; ctx.fill();
+    } else if (p.type === 'text') {
+      const s = p.life < 0.25 ? easeOutBack(p.life / 0.25) : 1;
+      ctx.translate(p.x, p.y - p.life * p.rise); ctx.scale(s, s);
+      ctx.font = `700 ${p.size}px ${CANVAS_FONT}`; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+      ctx.lineJoin = 'round'; ctx.lineWidth = p.size * 0.18; ctx.strokeStyle = '#fff';
+      ctx.strokeText(p.text, 0, 0); ctx.fillStyle = p.color; ctx.fillText(p.text, 0, 0);
+    }
+    ctx.restore();
+  }
+}
+
+/* ---------- confetti (top layer, above the final screen) ---------- */
+function burstConfetti(n) {
+  const cols = ['#ffd23f', '#ff6fae', '#35c27f', '#7b5cff', '#4cc9f0', '#ff8a1f'];
+  for (let i = 0; i < n; i++) {
+    Game.confetti.push({ x: rand(0, VW), y: rand(-VH * 0.6, -10), vx: rand(-60, 60), vy: rand(80, 220), rot: rand(0, 6), vr: rand(-8, 8), w: rand(8, 14), h: rand(12, 22), color: cols[i % cols.length], sway: rand(0, 6) });
+  }
+}
+function updateConfetti(dt, now) {
+  if (now < Game.confettiUntil && Math.random() < dt * 30) burstConfetti(2);
+  for (const c of Game.confetti) { c.sway += dt * 3; c.x += (c.vx + Math.sin(c.sway) * 60) * dt; c.y += c.vy * dt; c.rot += c.vr * dt; }
+  Game.confetti = Game.confetti.filter((c) => c.y < VH + 40);
+}
+function drawConfetti(ctx) {
+  for (const c of Game.confetti) {
+    ctx.save(); ctx.translate(c.x, c.y); ctx.rotate(c.rot); ctx.fillStyle = c.color;
+    ctx.fillRect(-c.w / 2, -c.h / 2, c.w, c.h * Math.abs(Math.cos(c.rot * 0.7)) + 2);
+    ctx.restore();
+  }
+}
+
+/* ---------- hand cursors: a friendly magic star that follows each hand ---------- */
+function drawPointers(ctx, now) {
+  const base = clamp(VW * 0.017, 18, 30);
+  for (const p of activePointers(now)) {
+    const col = p.key === 'mouse' ? '#7b5cff' : (/Left|-L$/.test(p.key) ? '#ff6fae' : '#2ec4b6');
+    p.trail.push({ x: p.x, y: p.y, t: now });
+    while (p.trail.length && now - p.trail[0].t > 260) p.trail.shift();
+    for (let i = 0; i < p.trail.length; i++) {
+      const q = p.trail[i], k = i / p.trail.length;
+      ctx.fillStyle = `rgba(255,214,80,${0.45 * k})`;
+      ctx.beginPath(); ctx.arc(q.x, q.y, base * 0.45 * k, 0, Math.PI * 2); ctx.fill();
+    }
+    const r = base * (p.pinch ? 0.8 : 1);
+    const glow = ctx.createRadialGradient(p.x, p.y, 0, p.x, p.y, r * 2.4);
+    glow.addColorStop(0, 'rgba(255,240,150,.7)'); glow.addColorStop(1, 'rgba(255,240,150,0)');
+    ctx.fillStyle = glow; ctx.beginPath(); ctx.arc(p.x, p.y, r * 2.4, 0, Math.PI * 2); ctx.fill();
+    ctx.lineWidth = 5; ctx.strokeStyle = col;
+    ctx.beginPath(); ctx.arc(p.x, p.y, r * 1.55, 0, Math.PI * 2); ctx.stroke();
+    starPath(ctx, p.x, p.y, r * 1.15, r * 0.52, 5, now / 900);
+    ctx.fillStyle = '#ffd23f'; ctx.fill(); ctx.lineWidth = 3; ctx.strokeStyle = '#fff'; ctx.stroke();
+  }
+}
+
+/* ---------- camera views (corner preview and calibration) ---------- */
+const POSE_LINKS = [[11, 12], [11, 13], [13, 15], [12, 14], [14, 16], [11, 23], [12, 24], [23, 24], [23, 25], [25, 27], [24, 26], [26, 28]];
+const HAND_LINKS = [[0, 1], [1, 2], [2, 3], [3, 4], [0, 5], [5, 6], [6, 7], [7, 8], [5, 9], [9, 10], [10, 11], [11, 12], [9, 13], [13, 14], [14, 15], [15, 16], [13, 17], [17, 18], [18, 19], [19, 20], [0, 17]];
+
+function drawCamView(cv, opts = {}) {
+  const v = Track.video;
+  if (!v || v.readyState < 2) return;
+  const rect = cv.getBoundingClientRect(), dpr = Math.min(2, devicePixelRatio || 1);
+  const w = Math.round(rect.width * dpr), h = Math.round(rect.height * dpr);
+  if (!w || !h) return;
+  if (cv.width !== w || cv.height !== h) { cv.width = w; cv.height = h; }
+  const ctx = cv.getContext('2d');
+  // mirrored video, like a mirror
+  ctx.save(); ctx.translate(w, 0); ctx.scale(-1, 1); ctx.drawImage(v, 0, 0, w, h); ctx.restore();
+  const X = (x) => (1 - x) * w, Y = (y) => y * h;
+  ctx.lineCap = 'round'; ctx.lineJoin = 'round';
+  if (opts.guide) {
+    ctx.save();
+    ctx.fillStyle = 'rgba(255,255,255,0.22)';
+    ctx.fillRect(0, 0, w * 0.3, h); ctx.fillRect(w * 0.7, 0, w * 0.3, h);
+    ctx.setLineDash([w * 0.025, w * 0.018]); ctx.lineWidth = Math.max(4, w / 100);
+    ctx.strokeStyle = opts.centered ? '#35c27f' : '#ffffff';
+    roundRectPath(ctx, w * 0.3, h * 0.04, w * 0.4, h * 0.92, w * 0.04); ctx.stroke();
+    ctx.restore();
+  }
+  const lm = Track.poseLm;
+  if (lm) {
+    ctx.strokeStyle = 'rgba(123,92,255,0.9)'; ctx.lineWidth = Math.max(3, w / 90);
+    for (const [a, b] of POSE_LINKS) {
+      const p = lm[a], q = lm[b];
+      if ((p.visibility ?? 1) < 0.5 || (q.visibility ?? 1) < 0.5) continue;
+      ctx.beginPath(); ctx.moveTo(X(p.x), Y(p.y)); ctx.lineTo(X(q.x), Y(q.y)); ctx.stroke();
+    }
+    const nose = lm[0];
+    if ((nose.visibility ?? 1) > 0.5) { ctx.fillStyle = '#ff6fae'; ctx.beginPath(); ctx.arc(X(nose.x), Y(nose.y), Math.max(4, w / 60), 0, Math.PI * 2); ctx.fill(); }
+  }
+  for (const hl of Track.handLms) {
+    ctx.strokeStyle = '#ffd23f'; ctx.lineWidth = Math.max(2, w / 160);
+    for (const [a, b] of HAND_LINKS) { ctx.beginPath(); ctx.moveTo(X(hl[a].x), Y(hl[a].y)); ctx.lineTo(X(hl[b].x), Y(hl[b].y)); ctx.stroke(); }
+    const tip = hl[8];
+    ctx.fillStyle = '#fff'; ctx.beginPath(); ctx.arc(X(tip.x), Y(tip.y), Math.max(4, w / 50), 0, Math.PI * 2); ctx.fill(); ctx.stroke();
+  }
+}
+
+let camLabelState = null;
+function drawPreview(now) {
+  drawCamView($('previewCanvas'));
+  const seen = now - Track.personSeenAt < 500;
+  if (seen !== camLabelState) {
+    camLabelState = seen;
+    $('camDot').classList.toggle('ok', seen);
+    $('camLabel').textContent = seen ? 'I see you!' : 'Looking…';
+  }
+}
+
+function render(t, now) {
+  sctx.clearRect(0, 0, VW, VH);
+  drawFruits(sctx, t, false);
+  drawMonster(sctx, t);
+  drawFruits(sctx, t, true);   // flying fruit on top of the monster
+  drawParticles(sctx);
+  tctx.clearRect(0, 0, VW, VH);
+  drawConfetti(tctx);
+  drawPointers(tctx, now);
+}
+
+/* #####################################################################
+   SECTION 6: UI (screens, HUD, bubble, buttons, errors)
+   ##################################################################### */
+const UI = {
+  show(id) { $(id).hidden = false; },
+  hide(id) { $(id).hidden = true; },
+  hideScreens() { document.querySelectorAll('.screen').forEach((s) => (s.hidden = true)); },
+  bubble(html) {
+    const b = $('bubble');
+    b.innerHTML = html;
+    b.classList.remove('hide', 'pop'); void b.offsetWidth; b.classList.add('pop');
+  },
+  bubbleTemp(html, ms) {
+    const tok = ++Game.bubbleToken;
+    this.bubble(html);
+    after(ms, () => { if (tok === Game.bubbleToken && Game.state === 'play') this.bubble(Game.reqHTML); });
+  },
+  setOrder(L) {
+    $('orderIcon').src = fruitIcon(L.kind, L.color);
+    const tag = $('orderTag');
+    if (L.colorWord) { tag.hidden = false; tag.className = 'cw cw-' + L.colorWord; tag.textContent = L.colorWord.toUpperCase(); }
+    else tag.hidden = true;
+    const slots = $('slots'); slots.innerHTML = '';
+    for (let i = 1; i <= L.count; i++) { const s = document.createElement('div'); s.className = 'slot'; s.textContent = i; slots.appendChild(s); }
+  },
+  fillSlot(n, f) {
+    const s = $('slots').children[n - 1];
+    if (!s) return;
+    s.classList.add('filled');
+    s.innerHTML = `<img src="${fruitIcon(f.kind, f.color)}" alt="">`;
+  },
+  bumpCount() { const c = $('countText'); c.classList.remove('bump'); void c.offsetWidth; c.classList.add('bump'); },
+  updateHUD() {
+    const L = Game.level;
+    $('levelPill').textContent = `Level ${Game.levelIdx + 1}/${LEVELS.length}`;
+    $('scoreVal').textContent = Game.score;
+    if ($('starVal').textContent !== String(Game.totalStars)) {
+      $('starVal').textContent = Game.totalStars;
+      const sp = $('starPill'); sp.classList.remove('bump'); void sp.offsetWidth; sp.classList.add('bump');
+    }
+    $('streakPill').hidden = Game.streak < 2;
+    $('streakVal').textContent = Game.streak;
+    $('countText').innerHTML = `<b>${Game.fed}</b> / ${L ? L.count : 0}`;
+    const s = levelStars(Game.mistakes);
+    [...$('levelStars').children].forEach((el, i) => el.classList.toggle('off', i >= s));
+  },
+  showLevelCard(stars) {
+    const card = $('levelCard');
+    card.hidden = false;
+    const inner = card.querySelector('.lc-inner');
+    inner.style.animation = 'none'; void inner.offsetWidth; inner.style.animation = '';
+    $('lcTitle').textContent = ['Good job!', 'Great counting!', 'Super counting!'][stars - 1];
+    const spans = card.querySelectorAll('.lc-stars span');
+    spans.forEach((s) => s.classList.remove('on'));
+    spans.forEach((s, i) => { if (i < stars) after(400 + i * 350, () => { s.classList.add('on'); Sound.star(i); }); });
+  },
+  hideLevelCard() { $('levelCard').hidden = true; },
+};
+
+/* Big buttons can be "pressed" by holding a hand over them. */
+function updateDwellButtons(dt, now) {
+  const hands = Track.mode === 'camera' ? activePointers(now).filter((p) => p.key !== 'mouse') : [];
+  document.querySelectorAll('[data-dwell]').forEach((btn) => {
+    const visible = btn.getClientRects().length > 0 && !btn.closest('[hidden]');
+    if (btn.disabled || !visible || !hands.length) {
+      if (btn._p) { btn._p = 0; btn.style.setProperty('--p', 0); }
+      return;
+    }
+    const r = btn.getBoundingClientRect(), pad = 24;
+    const over = hands.some((p) => p.x > r.left - pad && p.x < r.right + pad && p.y > r.top - pad && p.y < r.bottom + pad);
+    btn._p = over ? (btn._p || 0) + dt / CFG.btnDwell : Math.max(0, (btn._p || 0) - dt * 1.5);
+    btn.style.setProperty('--p', Math.min(1, btn._p));
+    if (btn._p >= 1) { btn._p = 0; btn.style.setProperty('--p', 0); Sound.pop(); btn.click(); }
+  });
+}
+
+const ERRORS = {
+  NotAllowedError: ['The camera is blocked', 'Click the camera icon in the address bar, choose "Allow", then press Try again.'],
+  SecurityError: ['The camera is blocked', 'Click the camera icon in the address bar, choose "Allow", then press Try again.'],
+  NotFoundError: ['No camera found', 'Plug in a webcam and press Try again, or play with the mouse.'],
+  OverconstrainedError: ['No camera found', 'Plug in a webcam and press Try again, or play with the mouse.'],
+  NotReadableError: ['The camera is busy', 'Another app may be using it. Close that app, then press Try again.'],
+  AbortError: ['The camera is busy', 'Another app may be using it. Close that app, then press Try again.'],
+  InsecureContext: ["The camera can't start here", 'Open this file in Chrome, Edge or Firefox, or serve it from https or localhost.'],
+  ModelError: ["The hand finder didn't load", 'It needs an internet connection the first time. Check the connection, then press Try again.'],
+  CameraEnded: ['The camera turned off', 'Press Try again to switch it back on.'],
+  default: ['Something went wrong with the camera', 'Press Try again, or play with the mouse.'],
+};
+
+function showError(err) {
+  console.warn('Camera / tracking problem:', err);
+  const [title, msg] = ERRORS[err && err.name] || ERRORS.default;
+  $('errTitle').textContent = title;
+  $('errMsg').textContent = msg;
+  UI.hideScreens(); UI.show('errScreen');
+  $('preview').hidden = true;
+  Voice.say('Oops! I need a grown-up to help.', { interrupt: true });
+}
+
+let loadTimer = null;
+async function beginCamera() {
+  Sound.init();
+  Track.mode = 'camera';
+  if (!inGameState()) Game.state = 'loading';
+  UI.hideScreens(); UI.show('loadScreen');
+  $('loadMsg').textContent = 'Waking up the monster…';
+  $('btnLoadMouse').hidden = true;
+  clearTimeout(loadTimer);
+  loadTimer = setTimeout(() => ($('btnLoadMouse').hidden = false), 15000);
+  if (!Track.hand && !Track.loadPromise) {
+    Track.loadPromise = loadModels().catch((e) => { Track.loadPromise = null; throw e; });
+  }
+  const models = Track.hand ? Promise.resolve() : Track.loadPromise;
+  models.catch(() => {}); // handled below, after the camera step
+  try {
+    await startCamera();
+    $('loadMsg').textContent = 'Getting the hand finder ready…';
+    await models;
+    clearTimeout(loadTimer);
+    if (Track.mode !== 'camera') return;          // switched to mouse meanwhile
+    Track.ready = true;
+    Track.personSeenAt = performance.now();
+    openCalibration(inGameState() && Game.paused);
+  } catch (err) {
+    clearTimeout(loadTimer);
+    if (Track.mode !== 'camera') return;
+    showError(err);
+  }
+}
+
+function beginMouse() {
+  Sound.init();
+  clearTimeout(loadTimer);
+  Track.mode = 'mouse';
+  stopCamera();
+  Calib.active = false;
+  $('preview').hidden = true;
+  for (const k of [...Track.pointers.keys()]) if (k !== 'mouse') Track.pointers.delete(k);
+  if (inGameState() && Game.paused) { $('btnRecal').hidden = true; resumeGame(); }
+  else startGame();
+}
+
+function toggleMute() {
+  Sound.muted = !Sound.muted;
+  if (Sound.muted) Voice.stop();
+  $('btnSound').textContent = Sound.muted ? '🔇' : '🔊';
+}
+
+function wireUI() {
+  $('btnStart').addEventListener('click', beginCamera);
+  $('btnRetry').addEventListener('click', beginCamera);
+  $('btnMouse').addEventListener('click', beginMouse);
+  $('btnErrMouse').addEventListener('click', beginMouse);
+  $('btnLoadMouse').addEventListener('click', beginMouse);
+  $('btnCalibGo').addEventListener('click', finishCalibration);
+  $('btnCalibSkip').addEventListener('click', finishCalibration);
+  $('btnPause').addEventListener('click', () => { Sound.init(); togglePause(); });
+  $('btnSound').addEventListener('click', () => { Sound.init(); toggleMute(); });
+  $('btnResume').addEventListener('click', resumeGame);
+  $('btnRestart').addEventListener('click', restartGame);
+  $('btnRecal').addEventListener('click', () => openCalibration(true));
+  $('btnLostMenu').addEventListener('click', () => { Game.pauseReason = 'manual'; $('preview').classList.remove('lost'); UI.hideScreens(); UI.show('pauseScreen'); });
+  $('btnAgain').addEventListener('click', restartGame);
+
+  window.addEventListener('pointermove', (e) => setMouse(e.clientX, e.clientY));
+  stage.addEventListener('pointerdown', (e) => { Sound.init(); setMouse(e.clientX, e.clientY); Track.mouse.clicked = true; });
+
+  window.addEventListener('keydown', (e) => {
+    if (e.code === 'Space' || e.key === 'p' || e.key === 'P') {
+      if (inGameState()) { e.preventDefault(); togglePause(); }
+    } else if (e.key === 'Escape') {
+      if (inGameState() && !Game.paused) pauseGame('manual');
+    } else if (e.key === 'm' || e.key === 'M') {
+      toggleMute();
+    } else if (e.key === 'r' || e.key === 'R') {
+      if ((Game.paused && inGameState()) || Game.state === 'final') restartGame();
+    } else if (e.key === 'Enter' && Game.state === 'title' && !$('titleScreen').hidden) {
+      beginCamera();
+    }
+  });
+
+  document.addEventListener('visibilitychange', () => {
+    if (document.hidden && inGameState() && !Game.paused) pauseGame('manual');
+  });
+  window.addEventListener('resize', resize);
+}
+
+/* #####################################################################
+   SECTION 7: MAIN LOOP
+   ##################################################################### */
+let lastFrame = performance.now(), areaTimer = 0;
+function loop(now) {
+  const dt = Math.min(0.05, Math.max(0, (now - lastFrame) / 1000));
+  lastFrame = now;
+  const t = now / 1000;
+  try {
+    trackingStep(now);
+    if (Calib.active) updateCalibration(now);
+    checkPresence(now);
+    updateDwellButtons(dt, now);
+    areaTimer -= dt;
+    if (areaTimer <= 0) { computeArea(); areaTimer = 0.5; }
+    if (!Game.paused) {
+      Game.time += dt * 1000;
+      runTimers();
+      updateGame(dt, now);
+      updateParticles(dt);
+    }
+    Track.mouse.clicked = false;
+    for (const p of Track.pointers.values()) p.pinchEdge = false;
+    Monster.update(dt, t, now);
+    updateConfetti(dt, now);
+    render(t, now);
+    if (Track.mode === 'camera' && !$('preview').hidden) drawPreview(now);
+  } catch (e) {
+    console.error(e);
+  }
+  requestAnimationFrame(loop);
+}
+
+wireUI();
+resize();
+Monster.lookX = Monster.x; Monster.lookY = Monster.y - 200;
+requestAnimationFrame(loop);
+</script>
+</body>
+</html>

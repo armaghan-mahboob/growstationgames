@@ -1,0 +1,1080 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, viewport-fit=cover">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="theme-color" content="#79c4ff">
+<title>Wobblewheel Bike Adventure</title>
+<style>
+/* ======================= BASE / LAYOUT ======================= */
+:root{
+  --sat: env(safe-area-inset-top, 0px);
+  --sar: env(safe-area-inset-right, 0px);
+  --sab: env(safe-area-inset-bottom, 0px);
+  --sal: env(safe-area-inset-left, 0px);
+  --font: "Trebuchet MS","Segoe UI",system-ui,-apple-system,Arial,sans-serif;
+  --ink:#2b3a2f; --green:#2a7d46; --sun:#ffb703; --sun-dark:#c98b00; --sky:#79c4ff;
+}
+*{box-sizing:border-box;margin:0;padding:0}
+html,body{width:100%;height:100%;overflow:hidden;background:var(--sky);font-family:var(--font);color:var(--ink);-webkit-text-size-adjust:100%}
+body{position:fixed;inset:0;user-select:none;-webkit-user-select:none;-webkit-tap-highlight-color:transparent;touch-action:manipulation}
+button{font-family:inherit}
+#game{position:absolute;inset:0;width:100%;height:100%;display:block;background:var(--sky);touch-action:none}
+
+/* ======================= BUTTONS ======================= */
+.btn{display:inline-flex;align-items:center;justify-content:center;gap:8px;font-size:clamp(19px,3.4vw,27px);font-weight:800;line-height:1.1;padding:14px 26px;min-height:58px;border:0;border-radius:999px;background:var(--sun);color:#3a2a00;cursor:pointer;box-shadow:0 6px 0 var(--sun-dark);margin:6px;max-width:100%}
+.btn:active{transform:translateY(4px);box-shadow:0 2px 0 var(--sun-dark)}
+.btn.alt{background:#dfeeff;color:#1d3b5e;box-shadow:0 6px 0 #9fbbdc}
+.btn.alt:active{box-shadow:0 2px 0 #9fbbdc}
+.btn.small{font-size:clamp(16px,2.6vw,20px);min-height:48px;padding:10px 18px}
+
+/* ======================= SCREENS (overlays) ======================= */
+.screen{position:absolute;inset:0;z-index:30;display:none;flex-direction:column;align-items:center;justify-content:center;gap:12px;padding:calc(var(--sat) + 14px) calc(var(--sar) + 14px) calc(var(--sab) + 14px) calc(var(--sal) + 14px);background:rgba(18,42,64,.55);overflow-y:auto;overflow-x:hidden;text-align:center;touch-action:pan-y;-webkit-overflow-scrolling:touch}
+.screen.show{display:flex}
+.panel{width:100%;max-width:700px;background:rgba(255,255,255,.96);border-radius:30px;padding:clamp(14px,2.2vw,24px);box-shadow:0 14px 40px rgba(0,0,0,.28);margin:auto}
+.panel h1{font-size:clamp(27px,4.6vw,44px);color:var(--green);line-height:1.05;margin-bottom:6px}
+.panel h2{font-size:clamp(24px,5vw,40px);color:var(--green);margin-bottom:8px}
+.panel p{font-size:clamp(17px,2.8vw,22px);line-height:1.35;margin:6px 0}
+.howto{display:flex;flex-wrap:wrap;justify-content:center;gap:8px;margin:9px 0}
+.howto div{background:#eef8ef;border-radius:16px;padding:8px 11px;font-size:clamp(14px,2vw,17px);font-weight:700;min-width:130px;flex:1 1 140px}
+.howto span{display:block;font-size:29px}
+.btnrow{display:flex;flex-wrap:wrap;justify-content:center;gap:4px;margin-top:8px}
+label.toggle{display:inline-flex;align-items:center;gap:8px;font-size:clamp(16px,2.6vw,20px);font-weight:700;margin-top:8px;cursor:pointer}
+label.toggle input{width:24px;height:24px}
+.tiny{font-size:clamp(13px,2.2vw,16px)!important;color:#5a6a5f}
+
+/* Camera box: one element that is moved between the calibration slot,
+   the HUD slot and the tracking-lost slot */
+.cam-box{position:relative;border-radius:18px;overflow:hidden;background:#111;box-shadow:0 6px 18px rgba(0,0,0,.35);border:3px solid #fff}
+.cam-mirror{position:absolute;inset:0;transform:scaleX(-1)}  /* mirrored preview */
+.cam-mirror video,.cam-mirror canvas{position:absolute;inset:0;width:100%;height:100%;object-fit:cover}
+.cam-label{position:absolute;left:0;right:0;bottom:0;background:rgba(0,0,0,.45);color:#fff;font-size:12px;font-weight:700;text-align:center;padding:2px 4px}
+#calibSlot .cam-box,#lostSlot .cam-box{width:min(70vw,50vh,480px);aspect-ratio:4/3;margin:8px auto}
+#hudCamSlot .cam-box{width:clamp(96px,18vw,180px);aspect-ratio:4/3;pointer-events:auto}
+.checks{display:flex;flex-wrap:wrap;justify-content:center;gap:8px;margin:6px 0}
+.checks span{background:#eee;border-radius:999px;padding:6px 12px;font-weight:800;font-size:clamp(14px,2.4vw,18px)}
+.checks span.ok{background:#c9f2cf;color:#1c6a30}
+.ring{width:84px;height:84px;border-radius:50%;margin:6px auto;background:conic-gradient(#3fbf5a var(--p,0%),#e6e6e6 0);display:flex;align-items:center;justify-content:center}
+.ring span{width:64px;height:64px;border-radius:50%;background:#fff;display:flex;align-items:center;justify-content:center;font-weight:900;font-size:19px;color:#1c6a30}
+
+/* ======================= HUD ======================= */
+#hud{position:absolute;inset:0;z-index:10;display:none;flex-direction:column;justify-content:space-between;gap:6px;padding:calc(var(--sat) + 8px) calc(var(--sar) + 8px) calc(var(--sab) + 8px) calc(var(--sal) + 8px);pointer-events:none;touch-action:none}
+#hud.show{display:flex}
+.hud-top{display:flex;align-items:flex-start;justify-content:space-between;gap:8px;flex-wrap:wrap}
+.chips{display:flex;gap:6px;flex-wrap:wrap;align-items:center}
+.chip{background:rgba(255,255,255,.92);border-radius:999px;padding:7px 13px;font-weight:900;font-size:clamp(15px,2.6vw,22px);white-space:nowrap;box-shadow:0 3px 8px rgba(0,0,0,.18)}
+.pattern-panel{background:rgba(255,255,255,.95);border-radius:20px;padding:6px 12px;display:flex;align-items:center;gap:8px;font-weight:900;font-size:clamp(14px,2.4vw,20px);box-shadow:0 3px 8px rgba(0,0,0,.18)}
+.pattern-panel canvas{width:clamp(110px,22vw,200px);height:clamp(36px,7vw,60px);display:block}
+.icon-btn{pointer-events:auto;width:clamp(48px,8vw,60px);height:clamp(48px,8vw,60px);border-radius:50%;border:0;background:rgba(255,255,255,.95);font-size:clamp(22px,4vw,28px);box-shadow:0 3px 8px rgba(0,0,0,.2);cursor:pointer}
+.caption{align-self:center;max-width:min(92vw,620px);background:rgba(43,58,47,.82);color:#fff;border-radius:18px;padding:8px 16px;font-size:clamp(16px,2.8vw,22px);font-weight:800;text-align:center;opacity:0;transition:opacity .25s}
+.caption.show{opacity:1}
+.hud-bottom{display:flex;align-items:flex-end;justify-content:space-between;gap:8px}
+.touch{display:grid;grid-template-columns:repeat(2,1fr);gap:8px;pointer-events:auto}
+.tbtn{width:clamp(58px,11vw,76px);height:clamp(58px,11vw,76px);border-radius:20px;border:0;background:rgba(255,255,255,.95);font-size:clamp(24px,5vw,34px);box-shadow:0 5px 0 rgba(0,0,0,.25);cursor:pointer;display:flex;align-items:center;justify-content:center;flex-direction:column;line-height:1}
+.tbtn small{font-size:11px;font-weight:800;color:#555}
+.tbtn:active,.tbtn.on{transform:translateY(3px);box-shadow:0 2px 0 rgba(0,0,0,.25);background:#fff2c2}
+.bell-shake{animation:shake .4s}
+@keyframes shake{0%,100%{transform:rotate(0)}25%{transform:rotate(-18deg)}50%{transform:rotate(16deg)}75%{transform:rotate(-10deg)}}
+
+/* Banner for countdown / stage names */
+#banner{position:absolute;inset:0;z-index:20;display:none;align-items:center;justify-content:center;pointer-events:none;padding:16px}
+#banner.show{display:flex}
+#bannerText{background:rgba(255,255,255,.94);border-radius:30px;padding:clamp(14px,3vw,28px) clamp(22px,5vw,46px);font-size:clamp(34px,8vw,72px);font-weight:900;color:var(--green);text-align:center;box-shadow:0 12px 36px rgba(0,0,0,.25);animation:pop .4s;max-width:94vw}
+@keyframes pop{from{transform:scale(.6);opacity:0}to{transform:scale(1);opacity:1}}
+
+/* Results */
+.stars{font-size:clamp(40px,10vw,76px);letter-spacing:4px;margin:6px 0;line-height:1}
+.stars .on{color:#ffb703;text-shadow:0 0 12px #ffd766}
+.stars .off{color:#d8d8d8}
+.results{display:flex;flex-wrap:wrap;justify-content:center;gap:10px;margin:10px 0}
+.results div{background:#f3f8f3;border-radius:16px;padding:10px 16px;font-weight:800;font-size:clamp(16px,2.7vw,22px);min-width:120px}
+.results b{display:block;font-size:clamp(24px,5vw,36px);color:var(--green)}
+
+/* Short landscape phones */
+@media (max-height:460px){
+  .panel{padding:12px 16px;border-radius:20px}
+  .panel h1{font-size:clamp(24px,5vh,36px)}
+  .panel h2{font-size:clamp(20px,5vh,30px)}
+  .howto span{font-size:26px}
+  .howto div{padding:6px 10px}
+  .btn{min-height:48px;padding:10px 20px}
+  #calibSlot .cam-box,#lostSlot .cam-box{width:min(50vw,42vh,360px)}
+  .ring{width:64px;height:64px}.ring span{width:48px;height:48px;font-size:15px}
+}
+</style>
+</head>
+<body>
+
+<canvas id="game"></canvas>
+
+<!-- ======================= HUD (during play) ======================= -->
+<div id="hud">
+  <div class="hud-top">
+    <div class="chips"><div class="chip" id="stageChip">🌲 Woodland</div></div>
+    <div class="pattern-panel"><span>Find:</span><canvas id="patternCanvas"></canvas></div>
+    <div class="chips">
+      <div class="chip" id="leafChip">🍃 0</div>
+      <div class="chip" id="starChip">⭐ 0</div>
+      <button class="icon-btn" id="btnPause" aria-label="Pause">⏸</button>
+    </div>
+  </div>
+  <div class="caption" id="caption"></div>
+  <div class="hud-bottom">
+    <div id="hudCamSlot"></div>
+    <div class="touch" id="touch">
+      <button class="tbtn" id="tLeft" aria-label="Steer left">◀<small>steer</small></button>
+      <button class="tbtn" id="tRight" aria-label="Steer right">▶<small>steer</small></button>
+      <button class="tbtn" id="tPedal" aria-label="Pedal">🚲<small>pedal</small></button>
+      <button class="tbtn" id="tBell" aria-label="Ring the bell">🔔<small>bell</small></button>
+    </div>
+  </div>
+</div>
+
+<div id="banner"><div id="bannerText"></div></div>
+
+<!-- ======================= TITLE ======================= -->
+<div class="screen show" id="sTitle">
+  <div class="panel">
+    <h1>🚲 Wobblewheel Bike Adventure</h1>
+    <p>Ride through a magical forest, cross the bridges and catch the glowing leaves!</p>
+    <div class="howto">
+      <div><span>↔️</span>Lean left or right to steer</div>
+      <div><span>💪</span>Pump your arms up and down, one at a time, to pedal faster!</div>
+      <div><span>🙋</span>Raise a hand to ring the bell</div>
+      <div><span>🪧</span>Ride past the sign that matches the pattern</div>
+    </div>
+    <div class="btnrow">
+      <button class="btn" id="btnStartCam">📷 Play with camera</button>
+      <button class="btn alt" id="btnStartManual">⌨️ Keyboard / touch</button>
+    </div>
+    <label class="toggle"><input type="checkbox" id="voiceToggle" checked> Cheerful voice narration</label>
+    <p class="tiny">Keyboard: ← → steer · Space pedal · B bell · P pause. The camera works on https pages or localhost.</p>
+  </div>
+</div>
+
+<!-- ======================= CALIBRATION ======================= -->
+<div class="screen" id="sCalib">
+  <div class="panel">
+    <h2>Let's get you in the picture!</h2>
+    <p id="calibHint">Sit or stand in the middle so I can see your head, shoulders and arms.</p>
+    <div id="calibSlot">
+      <div class="cam-box" id="camBox">
+        <div class="cam-mirror"><video id="cam" autoplay playsinline muted></video><canvas id="camOverlay"></canvas></div>
+        <div class="cam-label" id="camLabel">camera (mirrored)</div>
+      </div>
+    </div>
+    <div class="checks">
+      <span id="ckHead">Head</span><span id="ckShoulders">Shoulders</span><span id="ckArms">Arms</span>
+      <span id="ckCenter">In the middle</span>
+    </div>
+    <div class="ring" id="calibRing"><span id="calibRingText">0%</span></div>
+    <div class="btnrow">
+      <button class="btn alt small" id="btnCalibSkip">Skip, use keyboard / touch</button>
+      <button class="btn alt small" id="btnCalibBack">Back</button>
+    </div>
+  </div>
+</div>
+
+<!-- ======================= CAMERA ERROR ======================= -->
+<div class="screen" id="sError">
+  <div class="panel">
+    <h2>Hmm, the camera isn't ready 📷</h2>
+    <p id="errorText"></p>
+    <div class="btnrow">
+      <button class="btn" id="btnRetry">Try the camera again</button>
+      <button class="btn alt" id="btnErrManual">Play without camera</button>
+      <button class="btn alt small" id="btnErrBack">Back</button>
+    </div>
+  </div>
+</div>
+
+<!-- ======================= PAUSE ======================= -->
+<div class="screen" id="sPause">
+  <div class="panel">
+    <h2>⏸ Paused</h2>
+    <p>Take a breath. Your bike is waiting on the trail.</p>
+    <div class="btnrow">
+      <button class="btn" id="btnResume">▶ Resume</button>
+      <button class="btn alt" id="btnRestart">🔁 Restart</button>
+      <button class="btn alt" id="btnMenu">🏠 Main menu</button>
+    </div>
+  </div>
+</div>
+
+<!-- ======================= TRACKING LOST ======================= -->
+<div class="screen" id="sLost">
+  <div class="panel">
+    <h2>Where did you go? 👀</h2>
+    <p id="lostText">Step back into the middle of the picture and I'll start again.</p>
+    <div id="lostSlot"></div>
+    <div class="ring" id="lostRing"><span id="lostRingText">…</span></div>
+    <div class="btnrow">
+      <button class="btn alt small" id="btnLostManual">Keep riding with keyboard / touch</button>
+      <button class="btn alt small" id="btnLostMenu">Main menu</button>
+    </div>
+  </div>
+</div>
+
+<!-- ======================= RESULTS ======================= -->
+<div class="screen" id="sResults">
+  <div class="panel">
+    <h2>🎉 Hooray! Adventure complete!</h2>
+    <div class="stars" id="resultStars"></div>
+    <p id="resultMsg"></p>
+    <div class="results">
+      <div>🍃 Leaves<b id="rLeaves">0</b></div>
+      <div>🪧 Sign stars<b id="rSigns">0</b></div>
+      <div>🔔 Bell stars<b id="rBells">0</b></div>
+    </div>
+    <div class="btnrow">
+      <button class="btn" id="btnAgain">🔁 Ride again</button>
+      <button class="btn alt" id="btnMenu2">🏠 Main menu</button>
+    </div>
+  </div>
+</div>
+
+<script type="module">
+/* =====================================================================
+   WOBBLEWHEEL BIKE ADVENTURE
+   1. Helpers, config, stage data
+   2. Sound (Web Audio) and narration (Web Speech)
+   3. TRACKING SYSTEM  : camera, MediaPipe Pose, smoothing, gestures, calibration
+   4. GAME LOGIC       : trail, entities, scoring, stages
+   5. RENDERING        : scenery, trail, bike, particles
+   6. UI & INPUT       : screens, HUD, keyboard, touch
+   7. Main loop and boot
+   ===================================================================== */
+
+/* ------------------------- 1. Helpers & config ------------------------- */
+const $=id=>document.getElementById(id);
+const clamp=(v,a,b)=>Math.max(a,Math.min(b,v));
+const lerp=(a,b,t)=>a+(b-a)*t;
+const rand=(a,b)=>a+Math.random()*(b-a);
+const pick=a=>a[Math.floor(Math.random()*a.length)];
+const FONT='"Trebuchet MS","Segoe UI",Arial,sans-serif';
+
+const CFG={
+  // tracking (all thresholds are deliberately forgiving for children)
+  SMOOTH:0.6, LEAN_RANGE:0.40, LANE_MAX:0.85,
+  LIFT_ON:0.20, LIFT_OFF:0.10, STROKE_REPEAT_MS:900, HAND_RAISE:0.15, BELL_COOLDOWN:500,
+  QUALITY_OK:0.5, STABLE_MS:1300, LOST_GRACE_MS:800, CALIB_HOLD_MS:2000,
+  // gameplay
+  Z_FAR:60, BASE_SPEED:10, BOOST_PER_STROKE:2.4, BOOST_MAX:10, BOOST_DECAY:2.6,
+  STEER_SPEED:2.4, STEER_RATE:13, HIT_W:0.4, SIGN_TOL:0.45
+};
+
+const STAGES=[
+ {name:'Woodland',emoji:'🌲',length:560,speedMul:1,
+  skyTop:'#79c4ff',skyBot:'#e2f6ff',hillFar:'#8fcb8f',hillNear:'#5fab68',ground:'#79c267',
+  trail:'#d9b27c',trailAlt:'#cfa672',edge:'#b58a52',water:'#6fc3e8',
+  leaf:'#ffd84a',leafGlow:'rgba(255,230,120,',ambient:'#f0a33a',ambientKind:'leaf',
+  scenery:['pine','pine','oak','bush'],animal:'bunny',animalName:'bunny',
+  patternLen:[2],shapes:['circle','star'],signCount:2,
+  intro:'Welcome to the Woodland! Lean left and right to steer, and catch the glowing leaves!'},
+ {name:'Flower Valley',emoji:'🌸',length:620,speedMul:1.05,
+  skyTop:'#92d2ff',skyBot:'#fff0f7',hillFar:'#b4de9c',hillNear:'#86c982',ground:'#9bd77b',
+  trail:'#e2c48f',trailAlt:'#d8b983',edge:'#c19a5c',water:'#79cdf0',
+  leaf:'#ff7bb0',leafGlow:'rgba(255,150,200,',ambient:'#ffb3d1',ambientKind:'petal',
+  scenery:['flower','flower','bush','oak'],animal:'bee',animalName:'bee',
+  patternLen:[3],shapes:['circle','star','triangle'],signCount:3,
+  intro:'Flower Valley! The signs have three shapes now. Look carefully!'},
+ {name:'Seaside Path',emoji:'🌊',length:680,speedMul:1.1,
+  skyTop:'#63b9ff',skyBot:'#e9fbff',hillFar:'#6cc3d8',hillNear:'#e6d7a3',ground:'#ead9a6',
+  trail:'#cdb286',trailAlt:'#c3a87c',edge:'#a88b5c',water:'#4fb6e6',
+  leaf:'#5ce4cb',leafGlow:'rgba(120,240,220,',ambient:'#ffffff',ambientKind:'bubble',
+  scenery:['palm','palm','rock','bush'],animal:'crab',animalName:'crab',
+  patternLen:[3,4],shapes:['circle','star','triangle','square'],signCount:3,
+  intro:'The Seaside Path! Ring your bell for the crabs and find the longest patterns!'}
+];
+const SHAPE_COLORS={circle:'#ff6b6b',star:'#ffb703',triangle:'#4cc9f0',square:'#9b5de5'};
+// rhythm of events along every stage
+const SEQ=['leaves','leaves','sign','leaves','bell','leaves','sign','leaves','bridge','leaves'];
+
+// Lean -> lane position. Lanes are "sticky" so small wobbles never push you into the next lane.
+const LANES=[-0.68,0,0.68];
+function snapLane(x,hard){
+  let n=LANES[0]; for(const l of LANES) if(Math.abs(x-l)<Math.abs(x-n)) n=l;
+  if(hard) return n;
+  const d=clamp(Math.abs(x-n)/0.3,0,1); return x+(n-x)*0.7*(1-d*d);
+}
+// One Euro filter: heavy smoothing when still (no jitter), almost none when moving (no lag)
+function makeOneEuro(minCut,beta,dCut){
+  let x=null,dx=0,t=0; const al=(c,dt)=>{const r=2*Math.PI*c*dt; return r/(r+1);};
+  return {reset(){x=null;dx=0;},f(v,now){ if(x===null){x=v;t=now;return v;}
+    const dt=Math.max(0.001,(now-t)/1000); t=now; dx+=((v-x)/dt-dx)*al(dCut,dt); x+=(v-x)*al(minCut+beta*Math.abs(dx),dt); return x; }};
+}
+
+/* ------------------------- 2. Sound & narration ------------------------- */
+const Sfx={
+  ctx:null,gain:null,
+  init(){ if(this.ctx) return; try{ const AC=window.AudioContext||window.webkitAudioContext; this.ctx=new AC(); this.gain=this.ctx.createGain(); this.gain.gain.value=0.35; this.gain.connect(this.ctx.destination);}catch(e){} },
+  resume(){ if(this.ctx&&this.ctx.state==='suspended') this.ctx.resume(); },
+  tone(freq,dur,type='sine',vol=1,slideTo=null,delay=0){
+    if(!this.ctx) return; const t=this.ctx.currentTime+delay;
+    const o=this.ctx.createOscillator(),g=this.ctx.createGain();
+    o.type=type; o.frequency.setValueAtTime(freq,t); if(slideTo) o.frequency.exponentialRampToValueAtTime(slideTo,t+dur);
+    g.gain.setValueAtTime(0.0001,t); g.gain.exponentialRampToValueAtTime(vol,t+0.01); g.gain.exponentialRampToValueAtTime(0.0001,t+dur);
+    o.connect(g); g.connect(this.gain); o.start(t); o.stop(t+dur+0.05);
+  },
+  bell(){ this.tone(1760,0.9,'sine',0.6); this.tone(2637,0.7,'sine',0.25); this.tone(3520,0.4,'sine',0.12); this.tone(1760,0.9,'sine',0.5,null,0.13); },
+  leaf(){ this.tone(880,0.15,'triangle',0.4,1320); },
+  star(){ [523,659,784,1047].forEach((f,i)=>this.tone(f,0.25,'triangle',0.4,null,i*0.07)); },
+  boing(){ this.tone(320,0.3,'sine',0.35,180); },
+  whee(){ this.tone(400,0.45,'sine',0.3,900); },
+  oops(){ this.tone(500,0.2,'triangle',0.25,420); }
+};
+
+const Voice={
+  enabled:true,captionTimer:null,
+  say(text,important=false){
+    const cap=$('caption'); cap.textContent=text; cap.classList.add('show');
+    clearTimeout(this.captionTimer); this.captionTimer=setTimeout(()=>cap.classList.remove('show'),3200);
+    if(!this.enabled||!('speechSynthesis' in window)) return;
+    if(!important&&speechSynthesis.speaking) return;      // don't talk over ourselves for small things
+    if(important) speechSynthesis.cancel();
+    const u=new SpeechSynthesisUtterance(text); u.rate=1; u.pitch=1.15; u.lang='en-US';
+    speechSynthesis.speak(u);
+  },
+  stop(){ if('speechSynthesis' in window) speechSynthesis.cancel(); }
+};
+
+/* ------------------------- 3. TRACKING SYSTEM -------------------------
+   Pipeline per frame:
+     <video> -> MediaPipe PoseLandmarker (33 landmarks, VIDEO mode)
+             -> exponential smoothing of each landmark
+             -> quality score from torso landmark visibility
+             -> gesture signals relative to the calibration pose:
+                  steer   : shift the shoulders left/right (no lower-body tracking)
+                  strokes : alternate arm pumps using wrist height (forgiving)
+                  bell    : raise a hand above the head (rising edge)
+   The preview is mirrored with CSS, so steering is flipped: leaning to the
+   player's own left steers the bike left.
+   --------------------------------------------------------------------- */
+const video=$('cam'),camOverlay=$('camOverlay'),octx=camOverlay.getContext('2d'),camBox=$('camBox');
+const LM={NOSE:0,LSH:11,RSH:12,LEL:13,REL:14,LWR:15,RWR:16};
+const BONES=[[11,12],[11,13],[13,15],[12,14],[14,16]];
+const MP_BASE='https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.14';
+const MODEL_URL='https://storage.googleapis.com/mediapipe-models/pose_landmarker/pose_landmarker_lite/float16/1/pose_landmarker_lite.task';
+
+const Tracking={
+  running:false,stream:null,landmarker:null,lastTs:0,lastDetect:0,
+  smooth:null,quality:0,goodSince:0,badSince:0,stable:false,
+  calib:null,          // {centerX, armBase:{L,R}}
+  m:null,              // latest body measurements (null when not seen well)
+  signals:{steer:0,strokes:0,bell:0,liftL:false,liftR:false,handUp:false},
+  _euro:makeOneEuro(1.3,4,1),_steerRaw:0,_lift:{L:false,R:false},_lastLiftSide:null,_lastStrokeAt:0,_handWasUp:false,_lastBellAt:0,
+
+  async startCamera(){
+    if(!navigator.mediaDevices||!navigator.mediaDevices.getUserMedia){ const e=new Error('no mediaDevices'); e.name='NoMediaDevices'; throw e; }
+    this.stream=await navigator.mediaDevices.getUserMedia({video:{facingMode:'user',width:{ideal:640},height:{ideal:480}},audio:false});
+    video.srcObject=this.stream;
+    await new Promise(res=>{ if(video.readyState>=2) res(); else video.onloadedmetadata=()=>res(); });
+    await video.play().catch(()=>{});
+    this.running=true;
+    const track=this.stream.getVideoTracks()[0];
+    if(track) track.addEventListener('ended',()=>{ this.running=false; });
+  },
+  async loadModel(){
+    if(this.landmarker) return;
+    try{
+      let mod=null;
+      for(const url of [MP_BASE+'/vision_bundle.mjs',MP_BASE]){ try{ mod=await import(url); break; }catch(e){ mod=null; } }
+      if(!mod) throw new Error('import failed');
+      const api=mod.PoseLandmarker?mod:mod.default;
+      const vision=await api.FilesetResolver.forVisionTasks(MP_BASE+'/wasm');
+      const opts=delegate=>({baseOptions:{modelAssetPath:MODEL_URL,delegate},runningMode:'VIDEO',numPoses:1,
+                              minPoseDetectionConfidence:0.5,minPosePresenceConfidence:0.5,minTrackingConfidence:0.5});
+      try{ this.landmarker=await api.PoseLandmarker.createFromOptions(vision,opts('GPU')); }
+      catch(e){ this.landmarker=await api.PoseLandmarker.createFromOptions(vision,opts('CPU')); }
+    }catch(e){ const err=new Error(e&&e.message||'model'); err.name='ModelLoadError'; throw err; }
+  },
+  stop(){
+    if(this.stream) this.stream.getTracks().forEach(t=>t.stop());
+    this.stream=null; video.srcObject=null; this.running=false;
+    this.smooth=null; this.quality=0; this.stable=false; this.goodSince=0; this.badSince=0; this.m=null;
+  },
+  update(now){
+    if(!this.running||!this.landmarker||video.readyState<2||!video.videoWidth){ this._process(null,now); return; }
+    if(now-this.lastDetect<20) return;            // ~35 detections per second is plenty
+    this.lastDetect=now;
+    const ts=Math.max(now,this.lastTs+1); this.lastTs=ts;   // timestamps must increase
+    let lm=null;
+    try{ const r=this.landmarker.detectForVideo(video,ts); lm=(r&&r.landmarks&&r.landmarks[0])||null; }catch(e){ lm=null; }
+    this._process(lm,now);
+  },
+  _process(lm,now){
+    // --- smoothing + quality ---
+    if(!lm){ this.quality*=0.8; }
+    else{
+      if(!this.smooth) this.smooth=lm.map(p=>({x:p.x,y:p.y,visibility:p.visibility??1}));
+      else for(let i=0;i<lm.length;i++){ const s=this.smooth[i],p=lm[i]; s.x+=(p.x-s.x)*CFG.SMOOTH; s.y+=(p.y-s.y)*CFG.SMOOTH; s.visibility+=((p.visibility??1)-s.visibility)*CFG.SMOOTH; }
+      const s=this.smooth; const core=Math.min(s[LM.NOSE].visibility,s[LM.LSH].visibility,s[LM.RSH].visibility,s[LM.LWR].visibility,s[LM.RWR].visibility);
+      const q=clamp((core-0.25)/0.45,0,1); this.quality+=(q-this.quality)*0.4;
+    }
+    const good=this.quality>=CFG.QUALITY_OK;
+    if(good){ if(!this.goodSince) this.goodSince=now; this.badSince=0; this.stable=now-this.goodSince>=CFG.STABLE_MS; }
+    else{ this.goodSince=0; if(!this.badSince) this.badSince=now; this.stable=false; }
+    if(!good||!this.smooth){ this._steerRaw*=0.9; this._euro.reset(); this.signals.steer=this._steerRaw; this.m=null; return; }
+
+    // --- measurements ---
+    const s=this.smooth, mid=(a,b)=>({x:(s[a].x+s[b].x)/2,y:(s[a].y+s[b].y)/2});
+    const sh=mid(LM.LSH,LM.RSH);
+    const shoulderW=Math.max(0.05,Math.abs(s[LM.LSH].x-s[LM.RSH].x));
+    const torso=Math.max(0.08,Math.abs(sh.y-s[LM.NOSE].y)*2.4);
+    // Wrist height relative to the shoulder line: higher = arm pumped upward.
+    const armLift=i=>(sh.y-s[i].y)/torso;
+    const m=this.m={sh,shoulderW,torso,armL:armLift(LM.LWR),armR:armLift(LM.RWR),
+      vis:{head:s[LM.NOSE].visibility,sh:Math.min(s[LM.LSH].visibility,s[LM.RSH].visibility),
+           wrists:Math.min(s[LM.LWR].visibility,s[LM.RWR].visibility)}};
+    const c=this.calib||{centerX:0.5,armBase:{L:m.armL,R:m.armR}};
+
+    // --- steering: move shoulders left/right; lower-body landmarks are not used ---
+    const lean=(sh.x-c.centerX)/shoulderW;
+    this._steerRaw=-clamp(this._euro.f(lean,now)/CFG.LEAN_RANGE,-1,1)*CFG.LANE_MAX;
+    this.signals.steer=this._steerRaw;
+
+    // --- pedalling: alternately pump the arms up and down ---
+    for(const side of ['L','R']){
+      const k=side==='L'?m.armL:m.armR;
+      const wrist=side==='L'?LM.LWR:LM.RWR;
+      if(s[wrist].visibility<0.4){ this._lift[side]=false; continue; }
+      const lift=k-c.armBase[side], was=this._lift[side];
+      const is=was?lift>0.07:lift>0.15;
+      this._lift[side]=is;
+      if(is&&!was&&(side!==this._lastLiftSide||now-this._lastStrokeAt>CFG.STROKE_REPEAT_MS)){
+        this.signals.strokes++; this._lastLiftSide=side; this._lastStrokeAt=now;
+      }
+    }
+    this.signals.liftL=this._lift.L; this.signals.liftR=this._lift.R;
+
+    // --- bell: any wrist above its shoulder ---
+    const handUp=[[LM.LWR,LM.NOSE],[LM.RWR,LM.NOSE]].some(([w,head])=>s[w].visibility>0.4&&s[w].y<s[head].y-0.02);
+    this.signals.handUp=handUp;
+    if(handUp&&!this._handWasUp&&now-this._lastBellAt>CFG.BELL_COOLDOWN){ this.signals.bell++; this._lastBellAt=now; }
+    this._handWasUp=handUp;
+  },
+  captureCalibration(){
+    const m=this.m; if(!m) return false;
+    this.calib={centerX:m.sh.x,armBase:{L:m.armL,R:m.armR}};
+    this._lift={L:false,R:false}; this._handWasUp=false; this._steerRaw=0; this._euro.reset();
+    return true;
+  },
+  // Landmark overlay on the (CSS-mirrored) preview. Coordinates are mapped to object-fit:cover.
+  drawOverlay(mode){
+    const box=camOverlay.parentElement, w=box.clientWidth, h=box.clientHeight; if(!w||!h) return;
+    const dpr=Math.min(2,window.devicePixelRatio||1);
+    if(camOverlay.width!==Math.round(w*dpr)||camOverlay.height!==Math.round(h*dpr)){ camOverlay.width=Math.round(w*dpr); camOverlay.height=Math.round(h*dpr); }
+    octx.setTransform(dpr,0,0,dpr,0,0); octx.clearRect(0,0,w,h);
+    if(mode==='calib'){ // centre guide band
+      octx.fillStyle='rgba(255,255,255,0.12)'; octx.fillRect(w*0.3,0,w*0.4,h);
+      octx.strokeStyle='rgba(255,255,255,0.7)'; octx.setLineDash([8,8]); octx.lineWidth=3;
+      octx.beginPath(); octx.moveTo(w*0.3,0); octx.lineTo(w*0.3,h); octx.moveTo(w*0.7,0); octx.lineTo(w*0.7,h); octx.stroke(); octx.setLineDash([]);
+    }
+    if(!this.smooth) return;
+    const vw=video.videoWidth||4,vh=video.videoHeight||3,sc=Math.max(w/vw,h/vh),ox=(w-vw*sc)/2,oy=(h-vh*sc)/2;
+    const P=i=>({x:ox+this.smooth[i].x*vw*sc,y:oy+this.smooth[i].y*vh*sc,v:this.smooth[i].visibility});
+    const good=this.quality>=CFG.QUALITY_OK;
+    octx.lineWidth=Math.max(2,w*0.012); octx.strokeStyle=good?'#5cff8a':'#ffb14a'; octx.lineCap='round';
+    for(const [a,b] of BONES){ const pa=P(a),pb=P(b); if(pa.v<0.35||pb.v<0.35) continue; octx.beginPath(); octx.moveTo(pa.x,pa.y); octx.lineTo(pb.x,pb.y); octx.stroke(); }
+    for(const i of [0,11,12,13,14,15,16]){
+      const p=P(i); if(p.v<0.35) continue;
+      const hot=((i===15&&this.signals.liftL)||(i===16&&this.signals.liftR)||((i===15||i===16)&&this.signals.handUp));
+      octx.fillStyle=hot?'#ffd23f':'#fff'; octx.beginPath(); octx.arc(p.x,p.y,Math.max(3,w*(hot?0.024:0.016)),0,Math.PI*2); octx.fill();
+    }
+  }
+};
+
+function cameraErrorMessage(e){
+  const n=e&&e.name;
+  const insecure=location.protocol!=='https:'&&location.protocol!=='file:'&&!['localhost','127.0.0.1'].includes(location.hostname);
+  if(n==='NotAllowedError'||n==='PermissionDeniedError') return "The camera permission was turned off. Please allow the camera in your browser (usually the little icon in the address bar) and try again.";
+  if(n==='NotFoundError'||n==='DevicesNotFoundError') return "I couldn't find a camera on this device. You can still play with the keyboard or touch buttons!";
+  if(n==='NotReadableError'||n==='TrackStartError') return "Another app is using the camera right now. Close it and try again.";
+  if(n==='NoMediaDevices'||insecure) return "The camera only works on a secure page (https) or on localhost. You can still play with keyboard or touch.";
+  if(n==='ModelLoadError') return "I couldn't load the body-tracking helper. Please check your internet connection and try again.";
+  return "Something went wrong with the camera: "+(e&&e.message?e.message:'unknown error');
+}
+
+/* ------------------------- 4. GAME LOGIC -------------------------
+   World model: the bike sits at z=0, the trail runs ahead to Z_FAR.
+   Every entity stores its absolute distance d; its depth is z = d - G.dist.
+   Bike x is in "lane units": -1..1 is the trail width.
+   ----------------------------------------------------------------- */
+const G={
+  state:'title',inputMode:'camera',stage:0,dist:0,cursor:0,sceneCursor:0,seq:0,
+  speed:CFG.BASE_SPEED,boost:0,curve:0,curveTarget:0,curveTimer:6,
+  bike:{x:0,vx:0,lean:0,wheel:0,pedal:0,bump:0},aim:0,manualActive:false,aimShown:0,
+  ents:[],scenery:[],parts:[],ambient:[],ambientT:0,
+  score:{leaves:0,leavesTotal:0,signs:0,signsTotal:0,bells:0,bellsTotal:0},
+  target:null,keySteer:{l:false,r:false},touchSteer:0,manualStrokes:0,manualBells:0,
+  bellAt:-9999,lastNudgeAt:0,flash:0,time:0,lastFrame:0,bannerT:null,calibProgress:0,leafChatter:0,pedalTold:false,celebrationAt:0
+};
+
+function resetGame(){
+  Object.assign(G,{stage:0,dist:0,cursor:30,sceneCursor:2,seq:0,speed:CFG.BASE_SPEED,boost:0,curve:0,curveTarget:0,curveTimer:6,
+    ents:[],scenery:[],parts:[],target:null,bellAt:-9999,lastNudgeAt:0,time:0,leafChatter:0,pedalTold:false,celebrationAt:0,
+    bike:{x:0,vx:0,lean:0,wheel:0,pedal:0,bump:0},aim:0,manualActive:false,aimShown:0,
+    score:{leaves:0,leavesTotal:0,signs:0,signsTotal:0,bells:0,bellsTotal:0}});
+  spawnEvents(true); updateHud();
+}
+
+function makePattern(len,shapes){ const p=[]; for(let i=0;i<len;i++) p.push(pick(shapes)); return p; }
+const sameP=(a,b)=>a.length===b.length&&a.every((v,i)=>v===b[i]);
+
+function spawnEvents(sceneryOnly=false){
+  const st=STAGES[G.stage];
+  if(!sceneryOnly){
+    while(G.cursor<G.dist+CFG.Z_FAR+5&&G.cursor<st.length-10){
+      const kind=SEQ[G.seq%SEQ.length]; G.seq++; let len=0;
+      if(kind==='leaves') len=spawnLeaves(G.cursor);
+      else if(kind==='sign') len=spawnSignGroup(G.cursor,st);
+      else if(kind==='bell') len=spawnBellZone(G.cursor,st);
+      else if(kind==='bridge') len=spawnBridge(G.cursor);
+      G.cursor+=len+rand(12,18);
+    }
+  }
+  while(G.sceneCursor<G.dist+CFG.Z_FAR+5){ spawnScenery(G.sceneCursor,st); G.sceneCursor+=rand(4,7); }
+}
+function spawnLeaves(d){
+  const n=3+Math.floor(Math.random()*2), x=pick(LANES);
+  for(let i=0;i<n;i++) G.ents.push({type:'leaf',d:d+i*2.5,x,phase:rand(0,6),taken:false,counted:false});
+  return n*2.5;
+}
+function spawnSignGroup(d,st){
+  const len=pick(st.patternLen), target=makePattern(len,st.shapes);
+  const lanes=st.signCount===2?[-0.5,0.5]:[-0.68,0,0.68];
+  const ti=Math.floor(Math.random()*lanes.length);
+  const signs=lanes.map((x,i)=>{ let p=target; if(i!==ti){ do{ p=makePattern(len,st.shapes);}while(sameP(p,target)); } return {x,pattern:p}; });
+  const g={type:'sign',d,x:0,signs,targetIndex:ti,target,resolved:false};
+  G.ents.push(g);
+  if(!G.target) setTarget(g);
+  return 4;
+}
+function spawnBellZone(d,st){ G.ents.push({type:'bell',d,x:pick([-1.5,1.5]),animal:st.animal,done:false,rewarded:false,wave:0}); return 6; }
+function spawnBridge(d){ G.ents.push({type:'bridge',d,x:0,len:22,crossed:false}); return 22; }
+function spawnScenery(d,st){
+  for(const e of G.ents) if(e.type==='bridge'&&d>e.d-3&&d<e.d+e.len+3) return;   // no trees in the river
+  const side=Math.random()<0.5?-1:1;
+  G.scenery.push({d,x:side*rand(1.35,2.4),kind:pick(st.scenery),size:rand(0.8,1.3),phase:rand(0,6),color:pick(['#ff6b9d','#ffd166','#c77dff','#ff9f1c'])});
+}
+function setTarget(group){
+  G.target=group?group.target:null; drawPatternPanel();
+  if(group) Voice.say('Find '+group.target.join(', ')+'!',true);
+}
+function bridgeAt(z){ for(const e of G.ents) if(e.type==='bridge'){ const zs=e.d-G.dist; if(z>=zs&&z<=zs+e.len) return e; } return null; }
+
+function updateGame(dt,now){
+  const st=STAGES[G.stage]; G.time+=dt;
+  // ---- gather input (camera gestures, then keyboard/touch overrides) ----
+  let tgt=G.aim,strokes=0,bells=0; const cam=G.inputMode==='camera'&&Tracking.running;
+  if(cam){ tgt=Tracking.signals.steer; strokes=Tracking.signals.strokes; bells=Tracking.signals.bell; }
+  Tracking.signals.strokes=0; Tracking.signals.bell=0;
+  const manual=(G.keySteer.r?1:0)-(G.keySteer.l?1:0)+G.touchSteer;
+  if(manual!==0){ if(!G.manualActive){ G.aim=G.bike.x; G.manualActive=true; } G.aim=clamp(G.aim+clamp(manual,-1,1)*CFG.STEER_SPEED*dt,-CFG.LANE_MAX,CFG.LANE_MAX); tgt=G.aim; }
+  else if(G.manualActive){ G.manualActive=false; G.aim=snapLane(G.aim,true); tgt=G.aim; }   // let go: settle into the nearest lane
+  else if(!cam) tgt=G.aim;
+  if(cam&&manual===0) G.aim=tgt;
+  const aim=snapLane(tgt); G.aimShown=aim;
+  strokes+=G.manualStrokes; G.manualStrokes=0; bells+=G.manualBells; G.manualBells=0;
+
+  // ---- speed: gentle automatic rolling, pedalling adds a boost that fades ----
+  if(strokes>0){ G.boost=Math.min(CFG.BOOST_MAX,G.boost+strokes*CFG.BOOST_PER_STROKE); pedalPuff(); if(!G.pedalTold){ G.pedalTold=true; Voice.say("You're pedalling! Faster, faster!"); } }
+  G.boost=Math.max(0,G.boost-CFG.BOOST_DECAY*dt);
+  // Frequent friendly pedal coaching: popup caption + spoken reminder, not just once.
+  const pedalTipEvery=G.pedalTold?22000:10500;
+  if(G.time>5&&now-(G.pedalTipAt||0)>pedalTipEvery){
+    G.pedalTipAt=now;
+    const pedalTip=G.inputMode==='camera'&&Tracking.running
+      ?pick(["Want to go faster? Pump your arms up and down, one at a time, like pedalling!","Pedal power! Keep pumping your arms to make your bike go faster!","Let's speed up! Left arm, right arm, left arm, right arm!","Your bike gets a boost when you pedal! Pump those arms!"])
+      :pick(["Pedal to go faster! Tap the 🚲 pedal button or press Space!","Need more speed? Keep tapping pedal, or press Space again!","Pedal power! Tap the pedal button again and again to zoom faster!"]);
+    Voice.say(pedalTip,true);
+  }
+  G.speed=CFG.BASE_SPEED*st.speedMul+G.boost;
+
+  // ---- trail curve and the gentle sideways drift it causes ----
+  G.curveTimer-=dt; if(G.curveTimer<=0){ G.curveTarget=rand(-0.8,0.8); G.curveTimer=rand(7,13); }
+  G.curve+=(G.curveTarget-G.curve)*Math.min(1,dt*0.35);
+
+  // ---- bike movement ----
+  const b=G.bike, px=b.x;
+  b.x+=(aim-b.x)*Math.min(1,dt*CFG.STEER_RATE);          // quick, critically-damped follow: no overshoot
+  b.vx=(b.x-px)/Math.max(dt,0.001);
+  if(Math.abs(b.x)>1.08){                       // off the edge: guide back, no crash
+    b.x+=(Math.sign(b.x)*0.85-b.x)*Math.min(1,dt*4);
+    if(now-G.lastNudgeAt>4000){ G.lastNudgeAt=now; Sfx.boing(); Voice.say(pick(["Whoops! Back to the trail!","Easy there, back on the path!","Lean the other way, you've got it!"])); }
+  }
+  b.lean+=(clamp(b.vx*0.18,-0.4,0.4)-b.lean)*Math.min(1,dt*10);
+  b.wheel+=G.speed*dt*0.9;
+  b.pedal+=(0.6+G.boost*0.25)*dt*4;
+  b.bump*=Math.max(0,1-dt*4);
+
+  // ---- advance and spawn ----
+  G.dist+=G.speed*dt; spawnEvents();
+
+  // ---- entities ----
+  for(const e of G.ents){ const z=e.d-G.dist; e.z=z; handleEntity(e,z,now,dt); }
+  G.ents=G.ents.filter(e=>e.z>-(e.len||4)-3);
+  G.scenery=G.scenery.filter(s=>s.d-G.dist>-3);
+  if(bells>0) ringBell(now);
+  updateParticles(dt); updateAmbient(dt);
+  G.flash=Math.max(0,G.flash-dt*2);
+  if(G.dist>=st.length) nextStage();
+}
+
+function handleEntity(e,z,now,dt){
+  const b=G.bike;
+  if(e.type==='leaf'){
+    if(!e.taken&&z<0.6&&z>-1.2&&Math.abs(e.x-b.x)<CFG.HIT_W){
+      e.taken=true; e.counted=true; G.score.leaves++; G.score.leavesTotal++; Sfx.leaf();
+      const p=proj(b.x,0); burst(p.x,p.y-60*V.u,10,STAGES[G.stage].leaf,'leaf'); updateHud();
+      if(++G.leafChatter%6===0) Voice.say(pick(["Great catching!","Wonderful!","Look at you go!"]));
+    } else if(!e.counted&&z<-1.2){ e.counted=true; G.score.leavesTotal++; }
+  }
+  else if(e.type==='sign'){
+    if(!e.resolved&&z<0){
+      e.resolved=true; G.score.signsTotal++;
+      let best=0; e.signs.forEach((s,i)=>{ if(Math.abs(b.x-s.x)<Math.abs(b.x-e.signs[best].x)) best=i; });
+      if(best===e.targetIndex&&Math.abs(b.x-e.signs[best].x)<CFG.SIGN_TOL){ G.score.signs++; Sfx.star(); const p=proj(b.x,0); burst(p.x,p.y-80*V.u,24,'#ffd23f','spark'); Voice.say(pick(["You found it! Bonus star!","Yes! That's the matching sign!","Super! A star for you!"]),true); }
+      else { Sfx.oops(); Voice.say(pick(["Almost! Let's find the next one.","Not that one, but keep going!"]),true); }
+      updateHud();
+      const next=G.ents.find(x=>x.type==='sign'&&!x.resolved); setTarget(next||null);
+    }
+  }
+  else if(e.type==='bell'){
+    e.wave=Math.max(0,e.wave-dt);
+    if(!e.done&&z<-4){ e.done=true; G.score.bellsTotal++; if(!e.rewarded&&Math.random()<0.6) Voice.say("Next time, raise your hand to ring the bell!"); }
+  }
+  else if(e.type==='bridge'){
+    if(!e.crossed&&z<=0){ e.crossed=true; b.bump=1; Sfx.whee(); const p=proj(b.x,0); burst(p.x,p.y-40*V.u,14,STAGES[G.stage].leaf,'leaf'); Voice.say(pick(["Whee! Over the bridge!","Bumpety bump across the bridge!"]),true); }
+  }
+}
+function ringBell(now){
+  G.bellAt=now; Sfx.bell();
+  const tb=$('tBell'); tb.classList.remove('bell-shake'); void tb.offsetWidth; tb.classList.add('bell-shake');
+  const p=proj(G.bike.x,0); burst(p.x+22*V.u,p.y-75*V.u,10,'#fff3a0','spark');
+  const zone=G.ents.find(e=>e.type==='bell'&&!e.rewarded&&e.z>-3&&e.z<14);
+  if(zone){ zone.rewarded=true; zone.wave=1.4; G.score.bells++; Sfx.star(); updateHud();
+    Voice.say(pick(["Ding ding! Hello friend! Bonus star!","The "+STAGES[G.stage].animalName+" waves back! A star for you!"]),true); }
+  else if(Math.random()<0.3) Voice.say("Ding ding!");
+}
+function pedalPuff(){ const p=proj(G.bike.x,0); burst(p.x,p.y-10*V.u,4,STAGES[G.stage].ambient,'leaf'); }
+
+function nextStage(){
+  if(G.stage>=STAGES.length-1){ finishGame(); return; }
+  G.stage++; G.dist=0; G.cursor=30; G.sceneCursor=2; G.seq=0; G.ents=[]; G.scenery=[]; G.flash=1; setTarget(null); spawnEvents(true); updateHud();
+  const st=STAGES[G.stage];
+  Voice.say(st.name+'!',true);
+  showBanner(st.emoji+' '+st.name,2600,()=>Voice.say(st.intro,true));
+}
+function computeStars(){
+  const s=G.score, pts=s.leaves+s.signs*5+s.bells*3, max=Math.max(1,s.leavesTotal+s.signsTotal*5+s.bellsTotal*3), r=pts/max;
+  return r>=0.8?5:r>=0.6?4:r>=0.4?3:r>=0.2?2:1;
+}
+function finishGame(){
+  G.state='results'; $('hud').classList.remove('show'); placeCam(null);
+  const n=computeStars();
+  $('resultStars').innerHTML=[1,2,3,4,5].map(i=>'<span class="'+(i<=n?'on':'off')+'">★</span>').join('');
+  $('rLeaves').textContent=G.score.leaves; $('rSigns').textContent=G.score.signs; $('rBells').textContent=G.score.bells;
+  $('resultMsg').textContent=n>=5?"Perfect ride! You're a Wobblewheel champion!":n>=3?"What a great adventure! Can you catch even more next time?":"You made it all the way to the sea! Well done!";
+  showScreen('sResults'); Sfx.star();
+  // Big celebratory confetti shower and colourful fireworks behind the results panel.
+  G.celebrationAt=performance.now()+650;
+  for(let i=0;i<150;i++) burst(rand(0,W),rand(-H*.2,H*.65),1,pick(['#ffd23f','#ff7bb0','#5ce4cb','#ffb703','#9b5de5','#4cc9f0']),'confetti');
+  for(let i=0;i<5;i++) burst(rand(W*.12,W*.88),rand(H*.08,H*.48),34,pick(['#ffd23f','#ff7bb0','#5ce4cb','#9b5de5','#4cc9f0']),'firework');
+  Voice.say("Hooray! You finished the whole adventure and earned "+n+(n===1?" star":" stars")+"!",true);
+}
+
+/* ------------------------- 5. RENDERING ------------------------- */
+const canvas=$('game'),ctx=canvas.getContext('2d');
+let W=0,H=0,DPR=1; const V={horizonY:0,bottomY:0,trailHalf:0,u:1};
+function resize(){
+  DPR=Math.min(2,window.devicePixelRatio||1); W=window.innerWidth; H=window.innerHeight;
+  canvas.width=Math.round(W*DPR); canvas.height=Math.round(H*DPR); canvas.style.width=W+'px'; canvas.style.height=H+'px';
+  ctx.setTransform(DPR,0,0,DPR,0,0); drawPatternPanel();
+}
+window.addEventListener('resize',resize); window.addEventListener('orientationchange',()=>setTimeout(resize,250)); resize();
+
+// perspective: x in lane units (-1..1 = trail), z in units ahead of the bike
+function proj(x,z){
+  z=Math.max(z,-3); const s=1/(1+z*0.085);
+  const y=V.horizonY+(V.bottomY-V.horizonY)*s;
+  const cx=W/2+G.curve*(1-s)*(1-s)*W*0.45;
+  return {x:cx+x*V.trailHalf*s,y,s};
+}
+function quad(a,b,c,d){ ctx.beginPath(); ctx.moveTo(a.x,a.y); ctx.lineTo(b.x,b.y); ctx.lineTo(c.x,c.y); ctx.lineTo(d.x,d.y); ctx.closePath(); ctx.fill(); }
+function roundRect(x,y,w,h,r,fill,stroke,lw){
+  r=Math.min(r,w/2,h/2); ctx.beginPath(); ctx.moveTo(x+r,y); ctx.arcTo(x+w,y,x+w,y+h,r); ctx.arcTo(x+w,y+h,x,y+h,r); ctx.arcTo(x,y+h,x,y,r); ctx.arcTo(x,y,x+w,y,r); ctx.closePath();
+  if(fill){ ctx.fillStyle=fill; ctx.fill(); } if(stroke){ ctx.strokeStyle=stroke; ctx.lineWidth=lw||2; ctx.stroke(); }
+}
+function blob(x,y,r,c){ ctx.fillStyle=c; ctx.beginPath(); ctx.arc(x,y,r,0,Math.PI*2); ctx.fill(); }
+function tri(x,yBase,w,h){ ctx.beginPath(); ctx.moveTo(x,yBase-h); ctx.lineTo(x+w/2,yBase); ctx.lineTo(x-w/2,yBase); ctx.closePath(); ctx.fill(); }
+function trunk(x,y,w,h){ ctx.fillStyle='#8a5a2b'; ctx.fillRect(x-w/2,y-h,w,h); }
+function drawShape(c,kind,x,y,r,fill){
+  c.save(); c.translate(x,y); c.fillStyle=fill||SHAPE_COLORS[kind]; c.strokeStyle='rgba(60,40,20,0.6)'; c.lineWidth=Math.max(1,r*0.14); c.beginPath();
+  if(kind==='circle') c.arc(0,0,r,0,Math.PI*2);
+  else if(kind==='square') c.rect(-r*0.85,-r*0.85,r*1.7,r*1.7);
+  else if(kind==='triangle'){ c.moveTo(0,-r); c.lineTo(r*0.95,r*0.75); c.lineTo(-r*0.95,r*0.75); c.closePath(); }
+  else { for(let i=0;i<10;i++){ const a=-Math.PI/2+i*Math.PI/5, rr=i%2?r*0.45:r; c.lineTo(Math.cos(a)*rr,Math.sin(a)*rr); } c.closePath(); }
+  c.fill(); c.stroke(); c.restore();
+}
+function cloud(x,y,r){ ctx.beginPath(); ctx.arc(x,y,r,0,Math.PI*2); ctx.arc(x+r*0.9,y-r*0.3,r*0.8,0,Math.PI*2); ctx.arc(x+r*1.8,y,r*0.7,0,Math.PI*2); ctx.arc(x+r*0.9,y+r*0.25,r*0.75,0,Math.PI*2); ctx.fill(); }
+function hills(color,baseY,amp,shift,wl){
+  ctx.fillStyle=color; ctx.beginPath(); ctx.moveTo(0,baseY+2);
+  for(let x=0;x<=W+12;x+=12){ const y=baseY-amp*(0.6+0.4*Math.sin((x+shift)/wl*Math.PI*2))-amp*0.3*Math.sin((x*1.7+shift*0.5)/wl*Math.PI*2); ctx.lineTo(x,y); }
+  ctx.lineTo(W,baseY+2); ctx.closePath(); ctx.fill();
+}
+
+function render(now){
+  const st=STAGES[G.stage], u=V.u=Math.min(W,H)/600;
+  V.horizonY=H*0.40; V.bottomY=H*0.97; V.trailHalf=Math.min(W*0.46,H*0.55);
+  // sky, sun, clouds
+  const g=ctx.createLinearGradient(0,0,0,V.horizonY); g.addColorStop(0,st.skyTop); g.addColorStop(1,st.skyBot); ctx.fillStyle=g; ctx.fillRect(0,0,W,V.horizonY+2);
+  { const sx=W*0.8-G.curve*W*0.1, sy=V.horizonY*0.35, sg=ctx.createRadialGradient(sx,sy,10*u,sx,sy,130*u); sg.addColorStop(0,'rgba(255,245,170,0.85)'); sg.addColorStop(1,'rgba(255,245,170,0)'); ctx.fillStyle=sg; ctx.fillRect(sx-130*u,sy-130*u,260*u,260*u); blob(sx,sy,34*u,'#fff3a0'); }
+  ctx.fillStyle='rgba(255,255,255,0.9)';
+  for(let i=0;i<5;i++){ const span=W+300*u; let x=(i*0.23*span+i*137-G.time*10*u-G.curve*60*u)%span; if(x<0) x+=span; cloud(x-150*u,V.horizonY*(0.18+(i%3)*0.16),(26+(i%2)*10)*u); }
+  // hills (parallax with the curve and distance)
+  hills(st.hillFar,V.horizonY+2,38*u,G.dist*0.6+G.curve*40,220*u);
+  hills(st.hillNear,V.horizonY+16*u,24*u,G.dist*1.4+G.curve*90,140*u);
+  // ground
+  { const gg=ctx.createLinearGradient(0,V.horizonY,0,H); gg.addColorStop(0,st.skyBot); gg.addColorStop(0.1,st.ground); gg.addColorStop(1,st.hillNear); ctx.fillStyle=gg; ctx.fillRect(0,V.horizonY,W,H-V.horizonY); }
+  // water under bridges
+  for(const e of G.ents) if(e.type==='bridge'){
+    const zs=e.d-G.dist, ze=zs+e.len; if(ze<-3||zs>CFG.Z_FAR) continue;
+    const y1=proj(0,zs).y, y2=proj(0,Math.min(ze,CFG.Z_FAR)).y;
+    ctx.fillStyle=st.water; ctx.fillRect(0,y2,W,y1-y2);
+    ctx.strokeStyle='rgba(255,255,255,0.5)'; ctx.lineWidth=2;
+    for(let k=0;k<6;k++){ const yy=lerp(y2,y1,(k+0.5)/6), off=(G.time*30+k*50)%80; for(let x=-80+off;x<W;x+=80){ ctx.beginPath(); ctx.moveTo(x,yy); ctx.quadraticCurveTo(x+10,yy-3,x+20,yy); ctx.stroke(); } }
+  }
+  drawTrail(st);
+  // scenery and entities, far to near
+  const items=[]; for(const s of G.scenery) items.push({z:s.d-G.dist,o:s,scen:true}); for(const e of G.ents) if(e.type!=='bridge') items.push({z:e.d-G.dist,o:e});
+  items.sort((a,b)=>b.z-a.z);
+  for(const it of items){ if(it.z>CFG.Z_FAR||it.z<-3) continue; if(it.scen) drawScenery(it.o,it.z); else drawEntity(it.o,it.z,st); }
+  if(G.state!=='title') drawBike(now);
+  drawAmbient(); drawParticles();
+  if(G.state==='playing'&&G.boost>1.5){ ctx.strokeStyle='rgba(255,255,255,'+Math.min(0.5,G.boost*0.06)+')'; ctx.lineWidth=2*u; ctx.lineCap='round';
+    for(let i=0;i<16;i++){ const a=i*Math.PI/8+(i%3)*0.07, r0=Math.min(W,H)*(0.36+(i%4)*0.04), r1=r0+(50+G.boost*14)*u; ctx.beginPath(); ctx.moveTo(W/2+Math.cos(a)*r0*1.3,H*0.5+Math.sin(a)*r0); ctx.lineTo(W/2+Math.cos(a)*r1*1.3,H*0.5+Math.sin(a)*r1); ctx.stroke(); } }
+  { const vg=ctx.createRadialGradient(W/2,H/2,Math.min(W,H)*0.45,W/2,H/2,Math.max(W,H)*0.75); vg.addColorStop(0,'rgba(0,0,0,0)'); vg.addColorStop(1,'rgba(10,30,50,0.28)'); ctx.fillStyle=vg; ctx.fillRect(0,0,W,H); }
+  if(G.flash>0){ ctx.fillStyle='rgba(255,255,255,'+G.flash+')'; ctx.fillRect(0,0,W,H); }
+}
+function drawTrail(st){
+  const N=40; let prev=null;
+  for(let i=N;i>=0;i--){
+    const z=-2+(CFG.Z_FAR+2)*Math.pow(i/N,2.2);
+    const L=proj(-1,z),R=proj(1,z),Le=proj(-1.1,z),Re=proj(1.1,z);
+    if(prev){
+      const d=G.dist+z, br=bridgeAt(z);
+      ctx.fillStyle=br?'#8a5a2b':st.edge; quad(prev.Le,prev.Re,Re,Le);
+      ctx.fillStyle=br?(Math.floor(d/1.3)%2?'#b8803f':'#c8914b'):(Math.floor(d/3)%2?st.trailAlt:st.trail); quad(prev.L,prev.R,R,L);
+    }
+    prev={L,R,Le,Re};
+  }
+  // bridge railings
+  for(const e of G.ents) if(e.type==='bridge'){
+    const zs=Math.max(e.d-G.dist,-2), ze=Math.min(e.d-G.dist+e.len,CFG.Z_FAR); if(ze<zs) continue;
+    ctx.strokeStyle='#8a5a2b'; ctx.lineCap='round';
+    for(const side of [-1,1]){
+      ctx.lineWidth=3*V.u; ctx.beginPath(); let first=true;
+      for(let z=zs;z<=ze;z+=1.5){ const p=proj(side*1.12,z); const top=p.y-34*p.s*V.u; if(first){ ctx.moveTo(p.x,top); first=false; } else ctx.lineTo(p.x,top); } ctx.stroke();
+      for(let z=zs;z<=ze;z+=3){ const p=proj(side*1.12,z); ctx.lineWidth=4*p.s*V.u+1; ctx.beginPath(); ctx.moveTo(p.x,p.y); ctx.lineTo(p.x,p.y-34*p.s*V.u); ctx.stroke(); }
+    }
+  }
+  // little stones / flowers along the edges give a sense of speed
+  for(let d0=Math.ceil(G.dist/3)*3;d0<G.dist+CFG.Z_FAR;d0+=3){
+    const z=d0-G.dist; if(bridgeAt(z)) continue;
+    if(Math.floor(d0/3)%2===0) for(const lx of [-0.34,0.34]){ const a=proj(lx,z), c2=proj(lx,z+1.4); ctx.strokeStyle='rgba(255,255,255,0.4)'; ctx.lineWidth=Math.max(1,3*a.s*V.u); ctx.lineCap='round'; ctx.beginPath(); ctx.moveTo(a.x,a.y); ctx.lineTo(c2.x,c2.y); ctx.stroke(); }
+    for(const side of [-1,1]){ const p=proj(side*1.2,z); const r=Math.max(1.5,4*p.s*V.u);
+      blob(p.x,p.y,r,st.ambientKind==='petal'?(d0%6?'#ff8fb8':'#fff'):st.ambientKind==='bubble'?'#f5f0d8':'#9aa88a'); }
+  }
+}
+function drawScenery(sc,z){
+  const p=proj(sc.x,z), s=p.s*V.u*sc.size, x=p.x, y=p.y, sway=Math.sin(G.time*1.5+sc.phase)*0.03;
+  switch(sc.kind){
+    case 'pine': trunk(x,y,10*s,26*s); ctx.fillStyle='#2f8f4e'; tri(x,y-20*s,46*s,50*s); ctx.fillStyle='#3aa65c'; tri(x,y-48*s,38*s,42*s); ctx.fillStyle='#4cbd6a'; tri(x,y-74*s,28*s,34*s); break;
+    case 'oak': trunk(x,y,12*s,36*s); blob(x,y-60*s,38*s,'#3f9a55'); blob(x-22*s,y-45*s,26*s,'#49a862'); blob(x+22*s,y-45*s,26*s,'#49a862'); break;
+    case 'bush': blob(x,y-14*s,22*s,'#4faa5e'); blob(x-18*s,y-8*s,16*s,'#5cb86a'); blob(x+18*s,y-8*s,16*s,'#5cb86a'); break;
+    case 'flower':
+      ctx.strokeStyle='#3c9a4c'; ctx.lineWidth=Math.max(1,4*s); ctx.beginPath(); ctx.moveTo(x,y); ctx.quadraticCurveTo(x+sway*300*s,y-30*s,x,y-56*s); ctx.stroke();
+      for(let k=0;k<6;k++){ const a=k*Math.PI/3+G.time*0.2; blob(x+Math.cos(a)*14*s,y-56*s+Math.sin(a)*14*s,10*s,sc.color); } blob(x,y-56*s,8*s,'#ffe066'); break;
+    case 'palm':
+      ctx.strokeStyle='#a0703a'; ctx.lineWidth=Math.max(2,9*s); ctx.lineCap='round'; ctx.beginPath(); ctx.moveTo(x,y); ctx.quadraticCurveTo(x+18*s,y-50*s,x+8*s,y-96*s); ctx.stroke();
+      ctx.strokeStyle='#3fae62'; ctx.lineWidth=Math.max(2,7*s);
+      for(let k=0;k<6;k++){ const a=Math.PI*(0.1+k*0.16)+sway, tx=x+8*s, ty=y-96*s; ctx.beginPath(); ctx.moveTo(tx,ty); ctx.quadraticCurveTo(tx+Math.cos(a)*30*s,ty-Math.sin(a)*30*s-10*s,tx+Math.cos(a)*52*s,ty-Math.sin(a)*52*s+28*s); ctx.stroke(); } break;
+    case 'rock': blob(x,y-10*s,26*s,'#9aa0a8'); blob(x+14*s,y-6*s,16*s,'#b3b9c1'); break;
+  }
+}
+function drawEntity(e,z,st){
+  if(e.type==='leaf'){
+    if(e.taken) return;
+    const p=proj(e.x,z), s=p.s*V.u, y=p.y-26*s+Math.sin(G.time*3+e.phase)*6*s, r=16*s;
+    const gr=ctx.createRadialGradient(p.x,y,r*0.3,p.x,y,r*2.2); gr.addColorStop(0,st.leafGlow+'0.55)'); gr.addColorStop(1,st.leafGlow+'0)');
+    ctx.fillStyle=gr; ctx.beginPath(); ctx.arc(p.x,y,r*2.2,0,Math.PI*2); ctx.fill();
+    ctx.save(); ctx.translate(p.x,y); ctx.rotate(Math.PI/4+Math.sin(G.time*2+e.phase)*0.2);
+    ctx.fillStyle=st.leaf; ctx.beginPath(); ctx.ellipse(0,0,r,r*0.55,0,0,Math.PI*2); ctx.fill();
+    ctx.strokeStyle='rgba(120,80,0,0.5)'; ctx.lineWidth=Math.max(1,2*s); ctx.beginPath(); ctx.moveTo(-r,0); ctx.lineTo(r,0); ctx.stroke(); ctx.restore();
+  }
+  else if(e.type==='sign'){
+    for(const sg of e.signs){
+      const p=proj(sg.x,z), s=p.s*V.u, n=sg.pattern.length, r=13*s, bw=(n*2.3+1)*r, bh=3.2*r;
+      ctx.fillStyle='#8a5a2b'; ctx.fillRect(p.x-4*s,p.y-80*s,8*s,80*s);
+      roundRect(p.x-bw/2,p.y-80*s-bh,bw,bh,10*s,'#fff6d8','#8a5a2b',Math.max(1,3*s));
+      const x0=p.x-(n-1)*r*2.3/2; sg.pattern.forEach((k,i)=>drawShape(ctx,k,x0+i*r*2.3,p.y-80*s-bh/2,r));
+    }
+  }
+  else if(e.type==='bell'){
+    const p=proj(e.x,z), s=p.s*V.u; drawAnimal(e.animal,p.x,p.y,s,e);
+    if(!e.rewarded){ const bx=p.x, by=p.y-78*s-Math.sin(G.time*4)*4*s; blob(bx,by,20*s,'#fff'); ctx.strokeStyle='#ffb703'; ctx.lineWidth=Math.max(1,3*s); ctx.beginPath(); ctx.arc(bx,by,20*s,0,Math.PI*2); ctx.stroke(); drawBellIcon(bx,by,12*s); }
+  }
+}
+function drawBellIcon(x,y,r){ ctx.fillStyle='#ffb703'; ctx.beginPath(); ctx.arc(x,y,r*0.8,Math.PI,0); ctx.lineTo(x+r*0.95,y+r*0.5); ctx.lineTo(x-r*0.95,y+r*0.5); ctx.closePath(); ctx.fill(); blob(x,y+r*0.7,r*0.25,'#8a5a2b'); }
+function drawAnimal(kind,x,y,s,e){
+  y-=e.wave>0?Math.abs(Math.sin(e.wave*12))*12*s:0;
+  if(kind==='bunny'){ blob(x,y-16*s,18*s,'#e9e3dc'); blob(x,y-40*s,14*s,'#e9e3dc');
+    ctx.fillStyle='#e9e3dc'; for(const d of [-7,7]){ ctx.beginPath(); ctx.ellipse(x+d*s,y-62*s,5*s,14*s,0,0,Math.PI*2); ctx.fill(); }
+    blob(x-5*s,y-42*s,2.2*s,'#333'); blob(x+5*s,y-42*s,2.2*s,'#333'); blob(x,y-37*s,2.5*s,'#f29');
+    if(e.wave>0){ ctx.strokeStyle='#e9e3dc'; ctx.lineWidth=5*s; ctx.lineCap='round'; ctx.beginPath(); ctx.moveTo(x+14*s,y-22*s); ctx.lineTo(x+30*s,y-48*s+Math.sin(G.time*20)*4*s); ctx.stroke(); } }
+  else if(kind==='bee'){ const wy=y-40*s+Math.sin(G.time*18)*3*s;
+    ctx.fillStyle='rgba(255,255,255,0.75)'; for(const d of [-10,10]){ ctx.beginPath(); ctx.ellipse(x+d*s,wy-12*s,10*s,6*s,d*0.03,0,Math.PI*2); ctx.fill(); }
+    ctx.fillStyle='#ffd23f'; ctx.beginPath(); ctx.ellipse(x,wy,18*s,13*s,0,0,Math.PI*2); ctx.fill();
+    ctx.fillStyle='#333'; ctx.fillRect(x-6*s,wy-12*s,5*s,24*s); ctx.fillRect(x+4*s,wy-12*s,5*s,24*s);
+    blob(x-18*s,wy,9*s,'#ffd23f'); blob(x-20*s,wy-2*s,2*s,'#333'); }
+  else { ctx.fillStyle='#ff6a3d'; ctx.beginPath(); ctx.ellipse(x,y-14*s,20*s,13*s,0,0,Math.PI*2); ctx.fill();
+    ctx.strokeStyle='#ff6a3d'; ctx.lineWidth=4*s; ctx.lineCap='round';
+    for(const d of [-1,1]) for(let k=0;k<3;k++){ ctx.beginPath(); ctx.moveTo(x+d*12*s,y-12*s+k*4*s); ctx.lineTo(x+d*(26+k*3)*s,y-4*s+k*4*s); ctx.stroke(); }
+    const claw=e.wave>0?Math.sin(G.time*20)*6*s:0; blob(x-26*s,y-24*s-claw,8*s,'#ff6a3d'); blob(x+26*s,y-24*s-claw,8*s,'#ff6a3d');
+    ctx.beginPath(); ctx.moveTo(x-6*s,y-24*s); ctx.lineTo(x-7*s,y-34*s); ctx.moveTo(x+6*s,y-24*s); ctx.lineTo(x+7*s,y-34*s); ctx.lineWidth=2*s; ctx.stroke();
+    blob(x-7*s,y-35*s,3*s,'#fff'); blob(x+7*s,y-35*s,3*s,'#fff'); blob(x-7*s,y-35*s,1.4*s,'#333'); blob(x+7*s,y-35*s,1.4*s,'#333'); }
+}
+function wheel(x,y,rx,ry,angle){
+  ctx.save(); ctx.translate(x,y);
+  ctx.fillStyle='#2a2a2a'; ctx.beginPath(); ctx.ellipse(0,0,rx,ry,0,0,Math.PI*2); ctx.fill();
+  ctx.fillStyle='#d9d9d9'; ctx.beginPath(); ctx.ellipse(0,0,rx*0.72,ry*0.72,0,0,Math.PI*2); ctx.fill();
+  ctx.strokeStyle='#8a8a8a'; ctx.lineWidth=Math.max(1,rx*0.08);
+  for(let k=0;k<8;k++){ const a=angle+k*Math.PI/4; ctx.beginPath(); ctx.moveTo(0,0); ctx.lineTo(Math.cos(a)*rx*0.7,Math.sin(a)*ry*0.7); ctx.stroke(); }
+  ctx.fillStyle='#555'; ctx.beginPath(); ctx.ellipse(0,0,rx*0.18,ry*0.18,0,0,Math.PI*2); ctx.fill(); ctx.restore();
+}
+// The bike seen from behind: front wheel, handlebar, frame, rider, rear wheel
+function drawBike(now){
+  const b=G.bike, u=V.u, S=112*u, p=proj(b.x,0), cx=p.x, cy=p.y-b.bump*12*u;
+  const liftL=Tracking.signals.liftL, liftR=Tracking.signals.liftR, armUp=Tracking.signals.handUp||(now-G.bellAt<450);
+  { const tp=proj(G.aimShown||0,0); ctx.strokeStyle='rgba(255,255,255,0.6)'; ctx.lineWidth=3*u; ctx.beginPath(); ctx.ellipse(tp.x,tp.y+2,S*0.42,S*0.11,0,0,Math.PI*2); ctx.stroke(); }   // where you're steering to
+  ctx.fillStyle='rgba(0,0,0,0.18)'; ctx.beginPath(); ctx.ellipse(cx,p.y+2,S*0.32,S*0.08,0,0,Math.PI*2); ctx.fill();
+  ctx.save(); ctx.translate(cx,cy); ctx.rotate(b.lean);
+  wheel(0,-0.46*S,0.11*S,0.2*S,b.wheel*1.1);
+  ctx.save(); ctx.translate(0,-0.66*S); ctx.rotate(b.lean*0.8); ctx.strokeStyle='#444'; ctx.lineWidth=0.04*S; ctx.lineCap='round';
+  ctx.beginPath(); ctx.moveTo(-0.3*S,0); ctx.lineTo(0.3*S,0); ctx.stroke(); blob(0.22*S,-0.05*S,0.045*S,'#ffb703'); ctx.restore();
+  ctx.strokeStyle='#e63946'; ctx.lineWidth=0.045*S; ctx.beginPath(); ctx.moveTo(0,-0.66*S); ctx.lineTo(0,-0.46*S); ctx.moveTo(0,-0.26*S); ctx.lineTo(0,-0.56*S); ctx.stroke();
+  ctx.fillStyle='#333'; ctx.beginPath(); ctx.ellipse(0,-0.56*S,0.09*S,0.035*S,0,0,Math.PI*2); ctx.fill();
+  roundRect(-0.15*S,-0.98*S,0.3*S,0.46*S,0.08*S,'#4cc9f0');
+  // No legs are drawn: the rider is cropped at the waist. Arms rotate in
+  // alternating circles to visibly mimic pedalling and match the new controls.
+  wheel(0,-0.26*S,0.14*S,0.26*S,b.wheel);
+  ctx.strokeStyle='#f4b183'; ctx.lineWidth=0.075*S; ctx.lineCap='round';
+  for(const sgn of [-1,1]){
+    const ph=b.pedal+(sgn>0?Math.PI:0);
+    const shoulder={x:sgn*0.14*S,y:-0.9*S};
+    const elbow={x:sgn*(0.26+0.045*Math.cos(ph))*S,y:(-0.79+0.09*Math.sin(ph))*S};
+    const hand={x:sgn*(0.32+0.055*Math.cos(ph+0.7))*S,y:(-0.67+0.12*Math.sin(ph+0.7))*S};
+    ctx.beginPath(); ctx.moveTo(shoulder.x,shoulder.y); ctx.lineTo(elbow.x,elbow.y); ctx.lineTo(hand.x,hand.y); ctx.stroke();
+    blob(hand.x,hand.y,0.045*S,'#f4b183');
+  }
+  blob(0,-1.1*S,0.14*S,'#f4b183');
+  { const sw=clamp(-b.vx*0.12,-0.5,0.5)+Math.sin(G.time*10)*0.04; ctx.strokeStyle='#ff4d6d'; ctx.lineWidth=0.07*S; ctx.lineCap='round'; ctx.beginPath(); ctx.moveTo(0,-0.95*S); ctx.quadraticCurveTo(sw*S*0.5,-0.9*S,sw*S,-0.82*S+Math.sin(G.time*12)*0.03*S); ctx.stroke(); }
+  ctx.fillStyle='#ff9f1c'; ctx.beginPath(); ctx.arc(0,-1.13*S,0.16*S,Math.PI,0); ctx.closePath(); ctx.fill();
+  ctx.restore();
+}
+// particles: bursts (leaves/sparks) and ambient falling leaves / petals / bubbles
+function burst(x,y,n,color,kind){
+  for(let i=0;i<n;i++){
+    const a=rand(0,Math.PI*2), speed=kind==='firework'?rand(90,300):rand(50,180);
+    G.parts.push({x,y,vx:Math.cos(a)*speed*V.u,vy:Math.sin(a)*speed*V.u-(kind==='confetti'?rand(20,100)*V.u:0),life:rand(kind==='firework'?0.8:1.4,kind==='firework'?1.8:3),max:3,color:kind==='confetti'?pick(['#ff4d6d','#ffd23f','#5ce4cb','#9b5de5','#4cc9f0','#ff7bb0']):color,kind,rot:rand(0,6),vr:rand(-8,8),size:rand(kind==='firework'?2:5,kind==='firework'?5:11)*V.u});
+  }
+}
+function updateParticles(dt){
+  for(const p of G.parts){ p.vy+=(p.kind==='firework'?90:p.kind==='confetti'?75:p.kind==='leaf'?260:400)*V.u*dt; p.x+=p.vx*dt+(p.kind==='leaf'?Math.sin(p.life*10)*40*V.u*dt:0); p.y+=p.vy*dt; p.rot+=p.vr*dt; p.life-=dt; }
+  G.parts=G.parts.filter(p=>p.life>0&&p.y<H+40);
+}
+function drawParticles(){
+  for(const p of G.parts){ ctx.save(); ctx.globalAlpha=clamp(p.life/0.6,0,1); ctx.translate(p.x,p.y); ctx.rotate(p.rot); ctx.fillStyle=p.color; ctx.beginPath();
+    if(p.kind==='leaf') ctx.ellipse(0,0,p.size,p.size*0.5,0,0,Math.PI*2); else if(p.kind==='firework') ctx.arc(0,0,p.size,0,Math.PI*2); else if(p.kind==='confetti') ctx.fillRect(-p.size*.55,-p.size*.35,p.size*1.1,p.size*.7); else drawShape(ctx,'star',0,0,p.size*0.7,p.color);
+    ctx.fill(); ctx.restore(); }
+}
+function updateAmbient(dt){
+  const st=STAGES[G.stage]; G.ambientT-=dt;
+  if(G.ambientT<=0&&G.ambient.length<30){ G.ambientT=0.35; G.ambient.push({x:rand(0,W),y:-20,vy:rand(25,55)*V.u,phase:rand(0,6),size:rand(4,9)*V.u,kind:st.ambientKind,color:st.ambient}); }
+  for(const a of G.ambient){ a.y+=a.vy*dt*(a.kind==='bubble'?-1.2:1); a.x+=Math.sin(G.time*2+a.phase)*30*V.u*dt; a.phase+=dt; }
+  G.ambient=G.ambient.filter(a=>a.y<H+30&&a.y>-40);
+  if(G.ambient.length&&G.ambient[0].kind==='bubble') for(const a of G.ambient) if(a.y===-20) a.y=H+10;
+}
+function drawAmbient(){
+  for(const a of G.ambient){ ctx.save(); ctx.globalAlpha=0.8; ctx.translate(a.x,a.y); ctx.rotate(a.phase);
+    if(a.kind==='bubble'){ ctx.strokeStyle='rgba(255,255,255,0.8)'; ctx.lineWidth=1.5; ctx.beginPath(); ctx.arc(0,0,a.size*0.6,0,Math.PI*2); ctx.stroke(); }
+    else { ctx.fillStyle=a.color; ctx.beginPath(); ctx.ellipse(0,0,a.size,a.size*(a.kind==='petal'?0.7:0.5),0,0,Math.PI*2); ctx.fill(); }
+    ctx.restore(); }
+}
+
+/* ------------------------- 6. UI & INPUT ------------------------- */
+function showScreen(id){ document.querySelectorAll('.screen').forEach(s=>s.classList.toggle('show',s.id===id)); }
+function placeCam(slot){
+  if(!slot){ camBox.style.display='none'; return; }
+  camBox.style.display='block';
+  if(camBox.parentElement!==slot){ slot.appendChild(camBox); if(Tracking.running) video.play().catch(()=>{}); }
+}
+function updateHud(){
+  const st=STAGES[G.stage];
+  $('stageChip').textContent=st.emoji+' '+st.name; $('leafChip').textContent='🍃 '+G.score.leaves; $('starChip').textContent='⭐ '+(G.score.signs+G.score.bells);
+}
+function drawPatternPanel(){
+  const c=$('patternCanvas'), w=c.clientWidth||160, h=c.clientHeight||50, dpr=Math.min(2,window.devicePixelRatio||1);
+  if(!w||!h) return;
+  c.width=Math.round(w*dpr); c.height=Math.round(h*dpr); const x=c.getContext('2d'); x.setTransform(dpr,0,0,dpr,0,0); x.clearRect(0,0,w,h);
+  if(!G.target){ x.fillStyle='#777'; x.font='bold '+Math.round(h*0.38)+'px '+FONT; x.textAlign='center'; x.textBaseline='middle'; x.fillText('Catch the leaves!',w/2,h/2); return; }
+  const n=G.target.length, r=Math.min(h*0.36,w/(n*2.6)), gap=r*2.3, x0=w/2-(n-1)*gap/2;
+  G.target.forEach((k,i)=>drawShape(x,k,x0+i*gap,h/2,r));
+}
+function showBanner(text,ms,then){
+  const el=$('bannerText'); el.textContent=text; $('banner').classList.add('show');
+  el.style.animation='none'; void el.offsetWidth; el.style.animation='';
+  G.state='banner'; clearTimeout(G.bannerT);
+  G.bannerT=setTimeout(()=>{ $('banner').classList.remove('show'); if(G.state==='banner'){ G.state='playing'; G.lastFrame=performance.now(); } if(then) then(); },ms);
+}
+function hideBanner(){ clearTimeout(G.bannerT); $('banner').classList.remove('show'); }
+
+// ---- flows ----
+async function beginCameraFlow(){
+  Sfx.init(); Sfx.resume(); G.inputMode='camera'; G.state='calib-loading'; G.calibProgress=0;
+  showScreen('sCalib'); placeCam($('calibSlot')); $('calibHint').textContent='Starting the camera...';
+  try{
+    if(!Tracking.running) await Tracking.startCamera();
+    $('calibHint').textContent='Loading the body-tracking helper (this can take a few seconds)...';
+    await Tracking.loadModel();
+    if(G.state!=='calib-loading') return;      // user pressed Back meanwhile
+    G.state='calib'; Voice.say("Stand or sit in the middle so I can see your head, shoulders and arms!",true);
+  }catch(e){ console.error(e); Tracking.stop(); placeCam(null); $('errorText').textContent=cameraErrorMessage(e); showScreen('sError'); G.state='error'; }
+}
+function setCheck(id,ok){ $(id).classList.toggle('ok',!!ok); }
+function updateCalibration(dt){
+  const m=Tracking.m, vis=m?m.vis:{head:0,sh:0,wrists:0};
+  const okHead=vis.head>0.5, okSh=vis.sh>0.5, okArms=vis.wrists>0.4;
+  const centered=!!m&&m.sh.x>0.3&&m.sh.x<0.7;
+  setCheck('ckHead',okHead); setCheck('ckShoulders',okSh); setCheck('ckArms',okArms); setCheck('ckCenter',centered);
+  const ready=okHead&&okSh&&okArms&&centered;
+  G.calibProgress=clamp(G.calibProgress+(ready?dt*1000/CFG.CALIB_HOLD_MS:-dt*1000/800),0,1);
+  $('calibRing').style.setProperty('--p',Math.round(G.calibProgress*100)+'%'); $('calibRingText').textContent=Math.round(G.calibProgress*100)+'%';
+  $('calibHint').textContent=!m?"I can't see you well yet. Keep your head, shoulders and hands in the picture."
+    :!centered?"Move your shoulders to the middle of the picture, between the dashed lines.":!okArms?"Bring both hands into view so you can pedal with your arms.":"Perfect! Hold still for a moment...";
+  if(G.calibProgress>=1){ Tracking.captureCalibration(); Sfx.star(); Voice.say("Perfect! Let's ride!",true); startRide(); }
+}
+function startRide(){
+  showScreen(null); hideBanner(); resetGame(); G.pedalTipAt=0; $('hud').classList.add('show');
+  placeCam(G.inputMode==='camera'&&Tracking.running?$('hudCamSlot'):null);
+  Voice.say("Ready? Three, two, one, go!",true);
+  showBanner('3',800,()=>showBanner('2',800,()=>showBanner('1',800,()=>showBanner('Go! 🚲',700,()=>{ Voice.say(STAGES[0].intro,true); }))));
+}
+function pauseGame(){
+  if(G.state!=='playing'&&G.state!=='banner') return;
+  hideBanner(); G.state='paused'; Voice.stop(); showScreen('sPause');
+}
+function resumeFromPause(){
+  showScreen(null);
+  if(G.inputMode==='camera'&&Tracking.running&&!Tracking.stable){ enterLost(); return; }   // must see you again first
+  resumeGame();
+}
+function resumeGame(){
+  showScreen(null); G.state='playing'; G.lastFrame=performance.now(); G.keySteer={l:false,r:false}; G.touchSteer=0;
+  if(G.inputMode==='camera'&&Tracking.running) placeCam($('hudCamSlot'));
+}
+function enterLost(){
+  hideBanner(); G.state='lost'; Voice.stop(); showScreen('sLost');
+  if(Tracking.running){ placeCam($('lostSlot')); Voice.say("Where did you go? Step back into the picture!",true); } else placeCam(null);
+}
+function lostCheck(now){
+  if(G.inputMode!=='camera') return false;
+  const bad=!Tracking.running||(Tracking.quality<CFG.QUALITY_OK&&Tracking.badSince&&now-Tracking.badSince>CFG.LOST_GRACE_MS);
+  if(bad){ enterLost(); return true; } return false;
+}
+function updateLost(now){
+  const good=Tracking.quality>=CFG.QUALITY_OK;
+  $('lostText').textContent=!Tracking.running?"The camera stopped working. You can keep riding with the keyboard or the touch buttons."
+    :good?"I can see you! Hold still for a moment...":"Step back into the middle of the picture and I'll start again.";
+  const prog=Tracking.running&&good?clamp((now-Tracking.goodSince)/CFG.STABLE_MS,0,1):0;
+  $('lostRing').style.setProperty('--p',Math.round(prog*100)+'%'); $('lostRingText').textContent=Tracking.running?Math.round(prog*100)+'%':'…';
+  if(Tracking.running&&Tracking.stable){ resumeGame(); Voice.say("I see you! Let's keep riding!",true); }
+}
+function goToTitle(){
+  hideBanner(); Voice.stop(); Tracking.stop(); placeCam(null); $('hud').classList.remove('show'); showScreen('sTitle');
+  G.state='title'; G.stage=0; G.ents=[]; G.target=null; G.parts=[];
+}
+function useManual(){ G.inputMode='manual'; Tracking.stop(); placeCam(null); }
+
+// ---- buttons ----
+$('btnStartCam').onclick=beginCameraFlow;
+$('btnStartManual').onclick=()=>{ Sfx.init(); Sfx.resume(); useManual(); startRide(); };
+$('btnCalibSkip').onclick=()=>{ useManual(); startRide(); };
+$('btnCalibBack').onclick=goToTitle;
+$('btnRetry').onclick=beginCameraFlow;
+$('btnErrManual').onclick=()=>{ Sfx.init(); Sfx.resume(); useManual(); startRide(); };
+$('btnErrBack').onclick=goToTitle;
+$('btnPause').onclick=pauseGame;
+$('btnResume').onclick=resumeFromPause;
+$('btnRestart').onclick=()=>{ startRide(); };
+$('btnMenu').onclick=goToTitle;
+$('btnLostManual').onclick=()=>{ useManual(); resumeGame(); Voice.say("Okay! Use the arrows or the buttons to steer.",true); };
+$('btnLostMenu').onclick=goToTitle;
+$('btnAgain').onclick=()=>{ if(G.inputMode==='camera'&&!Tracking.running) G.inputMode='manual'; startRide(); };
+$('btnMenu2').onclick=goToTitle;
+$('voiceToggle').onchange=e=>{ Voice.enabled=e.target.checked; if(!Voice.enabled) Voice.stop(); };
+
+// ---- keyboard ----
+window.addEventListener('keydown',e=>{
+  const k=e.key;
+  if(['ArrowLeft','ArrowRight','ArrowUp',' '].includes(k)) e.preventDefault();
+  if(e.repeat) return;
+  if(k==='ArrowLeft'||k==='a'||k==='A') G.keySteer.l=true;
+  else if(k==='ArrowRight'||k==='d'||k==='D') G.keySteer.r=true;
+  else if(k===' '||k==='ArrowUp'||k==='w'||k==='W') G.manualStrokes++;
+  else if(k==='b'||k==='B') G.manualBells++;
+  else if(k==='p'||k==='P'||k==='Escape'){ if(G.state==='paused') resumeFromPause(); else pauseGame(); }
+  else if(k==='Enter'){ if(G.state==='title') $('btnStartCam').click(); else if(G.state==='results') $('btnAgain').click(); else if(G.state==='paused') resumeFromPause(); }
+});
+window.addEventListener('keyup',e=>{ const k=e.key; if(k==='ArrowLeft'||k==='a'||k==='A') G.keySteer.l=false; if(k==='ArrowRight'||k==='d'||k==='D') G.keySteer.r=false; });
+window.addEventListener('blur',()=>{ G.keySteer={l:false,r:false}; G.touchSteer=0; });
+
+// ---- touch / pointer buttons ----
+function holdButton(el,onDown,onUp){
+  el.addEventListener('pointerdown',e=>{ e.preventDefault(); try{ el.setPointerCapture(e.pointerId); }catch(x){} el.classList.add('on'); onDown(); });
+  const up=()=>{ el.classList.remove('on'); onUp(); };
+  el.addEventListener('pointerup',up); el.addEventListener('pointercancel',up); el.addEventListener('lostpointercapture',up);
+}
+holdButton($('tLeft'),()=>G.touchSteer=-1,()=>{ if(G.touchSteer<0) G.touchSteer=0; });
+holdButton($('tRight'),()=>G.touchSteer=1,()=>{ if(G.touchSteer>0) G.touchSteer=0; });
+$('tPedal').addEventListener('pointerdown',e=>{ e.preventDefault(); G.manualStrokes++; });
+$('tBell').addEventListener('pointerdown',e=>{ e.preventDefault(); G.manualBells++; });
+document.addEventListener('visibilitychange',()=>{ if(document.hidden) pauseGame(); });
+
+/* ------------------------- 7. Main loop ------------------------- */
+function loop(now){
+  requestAnimationFrame(loop);
+  const dt=Math.min(0.05,(now-(G.lastFrame||now))/1000); G.lastFrame=now;
+  if(Tracking.running){ Tracking.update(now); Tracking.drawOverlay(G.state==='calib'||G.state==='calib-loading'?'calib':'play'); }
+  switch(G.state){
+    case 'calib': updateCalibration(dt); break;
+    case 'lost': updateLost(now); break;
+    case 'playing': if(!lostCheck(now)) updateGame(dt,now); break;
+    case 'banner': if(!lostCheck(now)){ G.time+=dt; updateParticles(dt); updateAmbient(dt); G.flash=Math.max(0,G.flash-dt*2); } break;
+    case 'paused': updateParticles(dt); updateAmbient(dt); break;
+    case 'results':
+      updateParticles(dt); updateAmbient(dt);
+      if(now>(G.celebrationAt||0)){ G.celebrationAt=now+850; burst(rand(W*.12,W*.88),rand(H*.08,H*.48),28,pick(['#ffd23f','#ff7bb0','#5ce4cb','#9b5de5','#4cc9f0']),'firework'); for(let i=0;i<12;i++) burst(rand(0,W),-10,1,'#ffd23f','confetti'); }
+      break;
+    default: // title and loading screens: slow idle roll of scenery
+      G.time+=dt; G.dist+=4*dt; spawnEvents(true); G.scenery=G.scenery.filter(s=>s.d-G.dist>-3); updateAmbient(dt); updateParticles(dt);
+  }
+  render(now);
+}
+resetGame(); G.state='title';
+requestAnimationFrame(loop);
+</script>
+</body>
+</html>

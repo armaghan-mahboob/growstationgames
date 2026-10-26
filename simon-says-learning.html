@@ -1,0 +1,2115 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#BFE6FF">
+<title>Simon Says — Learning Edition</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Fredoka:wght@500;600;700&display=swap" rel="stylesheet">
+<style>
+/* =====================================================================
+   UI STYLES
+   Look: cut-paper stickers on a sunny playground. Thick ink outlines,
+   hard offset shadows, one rounded typeface. The bear is the hero.
+   ===================================================================== */
+:root{
+  --sky:#BFE6FF; --grass:#86D47E; --grass-deep:#5FBF63; --sun:#FFC93C;
+  --berry:#FF5C8A; --ink:#2B2D6E; --paper:#FFFFFF; --mint:#43D19A; --mist:#E7F1FF;
+  --font:'Fredoka','Baloo 2','Nunito','Trebuchet MS',system-ui,sans-serif;
+  --ar:1.3333;
+}
+*{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+html,body{margin:0;height:100%;overflow:hidden;background:var(--sky);color:var(--ink);font-family:var(--font);font-weight:500}
+body{position:fixed;inset:0;-webkit-user-select:none;user-select:none;touch-action:manipulation;overscroll-behavior:none}
+button{font-family:inherit}
+
+/* ---------- scenery ---------- */
+#scenery{position:absolute;inset:0;overflow:hidden;pointer-events:none;z-index:0}
+.cloud{position:absolute;width:150px;height:46px;background:#fff;border-radius:46px}
+.cloud::before,.cloud::after{content:"";position:absolute;background:#fff;border-radius:50%}
+.cloud::before{width:64px;height:64px;left:20px;top:-30px}
+.cloud::after{width:84px;height:84px;left:56px;top:-46px}
+.c1{top:18vh;left:5vw;transform:scale(1.1)}
+.c2{top:11vh;left:47vw;transform:scale(.8)}
+.c3{top:33vh;right:3vw;transform:scale(.7)}
+.hill{position:absolute;left:-15%;right:-15%;bottom:-40vh;height:62vh;background:var(--grass);border-radius:50%;border-top:6px solid var(--grass-deep)}
+.hill.back{left:35%;right:-40%;bottom:-34vh;background:#A6E39A;border-top-color:var(--grass)}
+
+/* ---------- buttons ---------- */
+.btn{display:inline-flex;align-items:center;justify-content:center;gap:.4em;font-weight:700;font-size:clamp(1.15rem,2.6vw,1.6rem);line-height:1;color:var(--ink);background:var(--paper);border:4px solid var(--ink);border-radius:999px;padding:.6em 1.2em;min-height:56px;box-shadow:0 6px 0 var(--ink);cursor:pointer;transition:transform .08s ease,box-shadow .08s ease}
+.btn:active{transform:translateY(4px);box-shadow:0 2px 0 var(--ink)}
+.btn:focus-visible,.lp:focus-visible,summary:focus-visible{outline:4px dashed var(--berry);outline-offset:5px}
+.btn.primary{background:var(--berry);color:#fff}
+.btn.go{background:var(--mint)}
+.btn.big{font-size:clamp(1.7rem,4.6vw,2.8rem);padding:.5em 1.4em;min-height:76px}
+.btn.icon{width:56px;height:56px;min-height:0;padding:0;font-size:1.5rem}
+.btn.small{font-size:1rem;min-height:44px;padding:.45em 1em;box-shadow:0 4px 0 var(--ink)}
+
+/* ---------- screens & panels ---------- */
+.screen{position:absolute;inset:0;z-index:30;display:none;flex-direction:column;align-items:center;justify-content:center;padding:max(16px,env(safe-area-inset-top)) 16px max(16px,env(safe-area-inset-bottom));text-align:center}
+.screen.dim{background:rgba(43,45,110,.38)}
+.panel{background:var(--paper);border:5px solid var(--ink);border-radius:32px;box-shadow:0 10px 0 var(--ink);padding:clamp(18px,3vw,34px);width:min(640px,94vw);max-height:92vh;overflow:auto}
+.panel h2{font-size:clamp(1.9rem,5vw,3rem);margin:.1em 0 .25em;font-weight:700;line-height:1.05}
+.panel p{font-size:clamp(1.1rem,2.6vw,1.5rem);margin:.4em 0;line-height:1.35}
+.row{display:flex;gap:14px;justify-content:center;flex-wrap:wrap;margin-top:18px}
+.col{display:flex;flex-direction:column;gap:16px;align-items:center;margin-top:14px}
+.bearSlot{display:flex;justify-content:center;align-items:flex-end}
+.bearSlot svg,#bearBox svg{height:100%;width:auto;max-width:100%;overflow:visible;display:block;aspect-ratio:300/285}
+
+/* which screen shows in which mode */
+body[data-mode="start"] #scrStart,
+body[data-mode="loading"] #scrLoading,
+body[data-mode="error"] #scrError,
+body[data-mode="calib"] #scrCalib,
+body[data-mode="levelDone"] #scrLevel,
+body[data-mode="final"] #scrFinal,
+body[data-overlay="pause"] #scrPause,
+body[data-overlay="lost"] #scrLost{display:flex}
+#hud,#stage,#btnCount,#camWrap{display:none}
+body[data-mode="play"] #hud,body[data-mode="levelDone"] #hud{display:flex}
+body[data-mode="play"] #stage,body[data-mode="levelDone"] #stage{display:grid}
+body[data-mode="play"] #btnCount{display:inline-flex}
+body[data-mode="loading"] #camWrap.live,body[data-mode="calib"] #camWrap,body[data-mode="play"] #camWrap,body[data-mode="levelDone"] #camWrap{display:block}
+
+/* ---------- start screen ---------- */
+ #scrStart{overflow:auto;justify-content:flex-start}
+.startGrid{display:grid;grid-template-columns:minmax(0,1.1fr) minmax(0,.9fr);align-items:center;gap:3vw;width:min(1200px,100%);margin:auto}
+.startText{display:flex;flex-direction:column;align-items:flex-start;text-align:left;gap:18px}
+.title{margin:0;line-height:.92}
+.title .t1{display:block;font-size:clamp(3.1rem,9vw,7.4rem);font-weight:700;color:var(--sun);-webkit-text-stroke:6px var(--ink);paint-order:stroke fill;text-shadow:0 9px 0 var(--ink)}
+.title .t2{display:inline-block;margin-top:.35em;font-size:clamp(1.3rem,3.2vw,2.2rem);font-weight:600;background:var(--paper);border:4px solid var(--ink);border-radius:999px;padding:.1em .7em;box-shadow:0 4px 0 var(--ink);transform:rotate(-2deg)}
+.lead{font-size:clamp(1.15rem,2.4vw,1.6rem);max-width:30ch;margin:0;line-height:1.3}
+.levelPick{display:flex;flex-wrap:wrap;gap:10px;align-items:center}
+.lpLabel{font-weight:600;font-size:1.1rem;margin-right:4px}
+.lp{font:inherit;font-weight:600;font-size:clamp(1rem,2vw,1.2rem);border:3px solid var(--ink);background:var(--paper);color:var(--ink);border-radius:999px;padding:.35em .85em;cursor:pointer;min-height:44px}
+.lp.on{background:var(--sun);box-shadow:0 3px 0 var(--ink)}
+.grownups{font-size:1rem;max-width:46ch;background:rgba(255,255,255,.75);border:3px solid var(--ink);border-radius:18px;padding:.5em .9em}
+.grownups summary{font-weight:700;cursor:pointer}
+.grownups p{margin:.5em 0 .2em;line-height:1.45}
+.startBear{height:min(68vh,560px);width:100%}
+
+/* ---------- HUD ---------- */
+#hud{position:absolute;z-index:14;top:0;left:0;right:0;align-items:center;gap:10px;flex-wrap:wrap;padding:calc(10px + env(safe-area-inset-top)) max(12px,env(safe-area-inset-right)) 10px max(12px,env(safe-area-inset-left))}
+.chip{display:inline-flex;align-items:center;gap:.35em;background:var(--paper);border:4px solid var(--ink);border-radius:999px;box-shadow:0 4px 0 var(--ink);padding:.2em .8em;font-weight:700;font-size:clamp(1.05rem,2.4vw,1.5rem);white-space:nowrap;min-height:48px}
+#dots{flex:1;display:flex;justify-content:center;gap:clamp(4px,1vw,10px);min-width:0}
+.dot{width:clamp(20px,3.2vw,32px);aspect-ratio:1;border-radius:50%;border:3px solid var(--ink);background:var(--paper);display:grid;place-items:center;font-size:clamp(.7rem,1.6vw,1rem);line-height:1}
+.dot.cur{background:var(--sun);animation:pulse 1.1s ease-in-out infinite}
+.dot.win{background:var(--sun)}
+.dot.win::after{content:"★"}
+.dot.half{background:#FFE7A3}
+.dot.half::after{content:"★";opacity:.55}
+.dot.miss{background:#D9DFEC}
+.bump{animation:bump .4s ease}
+
+/* ---------- stage: bear, bubble, action card ---------- */
+#stage{position:absolute;inset:0;z-index:5;padding:calc(84px + env(safe-area-inset-top)) 3vw calc(18px + env(safe-area-inset-bottom));grid-template-columns:1fr 1fr;grid-template-rows:auto minmax(0,1fr);grid-template-areas:"bubble bubble" "bear card";gap:2vh 2vw}
+#bubble{grid-area:bubble;justify-self:center;position:relative;background:var(--paper);border:5px solid var(--ink);border-radius:30px;box-shadow:0 7px 0 var(--ink);padding:.3em .9em .38em;max-width:min(92vw,1100px);font-size:clamp(1.5rem,4.2vw,3.2rem);font-weight:700;line-height:1.1;min-height:1.9em;display:flex;align-items:center;justify-content:center;text-align:center}
+#bubble::after{content:"";position:absolute;left:22%;bottom:-19px;width:28px;height:28px;background:var(--paper);border-right:5px solid var(--ink);border-bottom:5px solid var(--ink);transform:rotate(45deg)}
+#bubble.empty{visibility:hidden}
+#bearBox{grid-area:bear;min-height:0;width:100%;height:100%;max-height:62vh;align-self:center;display:flex;justify-content:center;align-items:flex-end}
+#cardBox{grid-area:card;min-height:0;display:flex;flex-direction:column;align-items:center;justify-content:flex-start;gap:16px;padding-top:1vh}
+#card{container-type:inline-size;position:relative;width:min(30vw,38vh,360px);aspect-ratio:4/5;background:var(--paper);border:5px solid var(--ink);border-radius:30px;box-shadow:10px 10px 0 var(--ink);display:flex;flex-direction:column;align-items:center;justify-content:center;padding:6% 6% 15%;transform:rotate(2.5deg) scale(.4);opacity:0}
+#card.show{animation:cardIn .45s cubic-bezier(.2,1.5,.4,1) forwards}
+#card.done{background:#DFFBEA}
+#card.done::after{content:"✓";position:absolute;top:-24px;right:-24px;width:68px;height:68px;border-radius:50%;background:var(--mint);border:4px solid var(--ink);display:grid;place-items:center;font-size:2.4rem;font-weight:700;color:var(--ink);animation:stamp .35s ease-out}
+.cardBody{display:flex;flex-direction:column;align-items:center;justify-content:center;width:100%;height:100%}
+.art{position:relative;display:flex;align-items:center;justify-content:center;height:60cqw;width:100%}
+.emoji{font-size:48cqw;line-height:1}
+.bodymap{height:60cqw;width:auto;overflow:visible}
+.bodymap .spot{fill:rgba(255,201,60,.6);stroke:var(--berry);stroke-width:3;transform-box:fill-box;transform-origin:center;animation:spot 1s ease-in-out infinite}
+.word{font-size:13cqw;font-weight:700;line-height:1;margin-top:4cqw;text-align:center}
+.arrow{position:absolute;bottom:-2cqw;width:36cqw;height:auto}
+.arrow.L{left:-8cqw;animation:nudgeL 1s ease-in-out infinite}
+.arrow.R{right:-8cqw;animation:nudgeR 1s ease-in-out infinite}
+.timer{position:absolute;left:10%;right:10%;bottom:5%;height:14px;border:3px solid var(--ink);border-radius:99px;overflow:hidden;background:#fff}
+.timer i{display:block;height:100%;width:100%;background:var(--sun);transform-origin:left center}
+.combo{display:flex;flex-direction:column;align-items:stretch;gap:2cqw;width:100%}
+.step{display:flex;align-items:center;gap:4cqw;padding:2cqw 4cqw;border:4px solid transparent;border-radius:22px}
+.step .art{height:28cqw;width:28cqw;flex:none}
+.step .emoji{font-size:22cqw}
+.step .bodymap{height:28cqw}
+.step .arrow{width:16cqw;bottom:-3cqw}
+.step .word{font-size:10cqw;margin:0;text-align:left}
+.step.on{border-color:var(--ink);background:#FFF4CC}
+.step.ok{opacity:.5}
+.step.ok .word::after{content:" ✓"}
+.then{font-size:7cqw;font-weight:600;text-align:center;opacity:.75}
+#hint{background:var(--paper);border:4px solid var(--ink);border-radius:999px;padding:.3em .9em;font-size:clamp(1.1rem,2.6vw,1.6rem);font-weight:700;box-shadow:0 4px 0 var(--ink);opacity:0;transform:translateY(-6px);transition:opacity .25s,transform .25s;text-align:center;max-width:90%}
+#hint.show{opacity:1;transform:none}
+
+/* ---------- camera preview ---------- */
+#camWrap{position:absolute;z-index:12;right:max(14px,env(safe-area-inset-right));bottom:max(14px,env(safe-area-inset-bottom));width:clamp(150px,22vw,330px);aspect-ratio:var(--ar);background:#1d1f4a;border:5px solid var(--ink);border-radius:22px;overflow:hidden;box-shadow:0 7px 0 var(--ink);transition:width .45s ease,right .45s ease,bottom .45s ease,transform .45s ease,border-color .3s}
+#camWrap video{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;transform:scaleX(-1)}
+#camWrap canvas{position:absolute;inset:0;width:100%;height:100%}
+#camWrap .tag{position:absolute;left:8px;top:8px;background:#fff;border:3px solid var(--ink);border-radius:99px;padding:0 10px;font-weight:700;font-size:.95rem}
+#camWrap .cbar{position:absolute;left:12px;right:12px;bottom:12px;height:16px;border:3px solid var(--ink);border-radius:99px;background:#fff;overflow:hidden;display:none}
+#camWrap .cbar i{display:block;height:100%;width:0;background:var(--mint)}
+#camWrap.good{border-color:var(--mint)}
+body[data-mode="loading"] #camWrap,body[data-mode="calib"] #camWrap{right:50%;bottom:50%;transform:translate(50%,50%);width:min(86vw,calc(54vh * var(--ar)));z-index:25;border-width:6px}
+body[data-mode="calib"] #camWrap .cbar{display:block}
+body[data-overlay="lost"] #camWrap{right:50%;bottom:40%;transform:translate(50%,50%);width:min(80vw,calc(44vh * var(--ar)));z-index:31;border-width:6px}
+
+#btnCount{position:absolute;z-index:13;left:max(14px,env(safe-area-inset-left));bottom:max(14px,env(safe-area-inset-bottom));font-size:1rem;min-height:46px;padding:.4em .9em;box-shadow:0 4px 0 var(--ink)}
+
+/* ---------- feedback, banners, effects ---------- */
+#fb{position:absolute;inset:0;z-index:16;display:flex;flex-direction:column;align-items:center;justify-content:center;pointer-events:none}
+#fb .big{font-size:clamp(3rem,11vw,8.5rem);font-weight:700;line-height:1;color:var(--sun);-webkit-text-stroke:5px var(--ink);paint-order:stroke fill;text-shadow:0 8px 0 var(--ink);opacity:0;text-align:center;padding:0 4vw}
+#fb .sub{margin-top:.5em;font-size:clamp(1.2rem,3.6vw,2.2rem);font-weight:700;background:var(--paper);border:4px solid var(--ink);border-radius:999px;padding:.2em .9em;box-shadow:0 5px 0 var(--ink);opacity:0}
+#fb .sub:empty{display:none}
+#fb.show .big{animation:fbPop .55s cubic-bezier(.2,1.6,.4,1) forwards}
+#fb.show .sub{animation:fadeUp .4s .15s ease-out forwards}
+#fb.mood-try .big{color:#9ED8FF}
+#fb.mood-oops .big{color:#FFB8CB}
+#streakBanner{position:absolute;z-index:17;top:calc(92px + env(safe-area-inset-top));left:50%;transform:translate(-50%,-30px);opacity:0;background:var(--sun);border:4px solid var(--ink);border-radius:999px;padding:.25em 1em;font-size:clamp(1.3rem,3.2vw,2rem);font-weight:700;box-shadow:0 5px 0 var(--ink);pointer-events:none;transition:opacity .35s,transform .35s;white-space:nowrap}
+#streakBanner.show{opacity:1;transform:translate(-50%,0)}
+#levelBanner{position:absolute;z-index:17;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:12px;pointer-events:none;opacity:0}
+#levelBanner.show{animation:banner 2.6s ease forwards}
+.lb-num{font-size:clamp(3rem,12vw,9rem);font-weight:700;color:var(--paper);-webkit-text-stroke:5px var(--ink);paint-order:stroke fill;text-shadow:0 8px 0 var(--ink);line-height:1}
+.lb-name{font-size:clamp(1.5rem,5vw,3.4rem);font-weight:700;background:var(--sun);border:4px solid var(--ink);border-radius:999px;padding:.1em .8em;box-shadow:0 6px 0 var(--ink)}
+#fx{position:absolute;inset:0;z-index:40;pointer-events:none;width:100%;height:100%}
+.flystar{position:fixed;z-index:41;left:0;top:0;font-size:3rem;line-height:1;pointer-events:none}
+
+/* ---------- loading / error ---------- */
+body[data-mode="loading"] #scrLoading{justify-content:flex-end}
+.loadPanel{display:flex;align-items:center;gap:18px;text-align:left}
+.loadPanel .bearSlot{height:130px;width:130px;flex:none}
+.loadPanel p{margin:.2em 0}
+.bar{height:20px;border:4px solid var(--ink);border-radius:99px;overflow:hidden;background:var(--mist);margin:.6em 0}
+.bar i{display:block;height:100%;width:0;background:var(--mint);transition:width .4s}
+.muted{opacity:.75;font-size:1rem!important}
+.errPanel .bearSlot{height:150px}
+.errPanel ul{text-align:left;font-size:clamp(1rem,2.3vw,1.25rem);line-height:1.45;margin:.6em auto;max-width:44ch;padding-left:1.2em}
+
+/* ---------- calibration ---------- */
+#scrCalib{justify-content:space-between;pointer-events:none;z-index:26}
+#scrCalib .calibTop,#scrCalib .calibBottom{pointer-events:auto}
+.calibBubble{background:var(--paper);border:5px solid var(--ink);border-radius:28px;box-shadow:0 6px 0 var(--ink);padding:.3em .9em;font-size:clamp(1.3rem,3.6vw,2.5rem);font-weight:700;line-height:1.1;max-width:94vw}
+.calibBottom{display:flex;flex-direction:column;align-items:center;gap:12px}
+.checks{list-style:none;display:flex;flex-wrap:wrap;gap:10px;justify-content:center;margin:0;padding:0}
+.checks li{display:flex;align-items:center;gap:.4em;background:var(--paper);border:4px solid var(--ink);border-radius:999px;padding:.2em .8em .2em .3em;font-weight:700;font-size:clamp(1rem,2.2vw,1.35rem);box-shadow:0 4px 0 var(--ink)}
+.checks .ck{width:30px;height:30px;border-radius:50%;border:3px solid var(--ink);background:#E3E8F2;display:grid;place-items:center;font-size:1rem}
+.checks li.ok .ck{background:var(--mint)}
+.checks li.ok .ck::after{content:"✓"}
+.checks li.opt{opacity:.8}
+.calibBear{position:absolute;left:2vw;bottom:2vh;height:min(34vh,300px);width:min(24vw,280px);pointer-events:none}
+.calibArrow{position:absolute;top:50%;z-index:27;width:clamp(90px,14vw,170px);transform:translateY(-50%);display:none}
+.calibArrow.L{display:block;left:3vw}
+.calibArrow.R{display:block;right:3vw}
+.calibArrow.L svg{animation:nudgeL 1s ease-in-out infinite}
+.calibArrow.R svg{animation:nudgeR 1s ease-in-out infinite}
+.calibArrow svg{width:100%;height:auto;display:block}
+
+/* ---------- lost, pause, level done, final ---------- */
+#scrLost{justify-content:flex-start;padding-top:calc(14px + env(safe-area-inset-top))}
+.lostPanel{display:flex;align-items:center;gap:14px;text-align:left;width:min(720px,94vw)}
+.lostPanel .bearSlot{height:120px;width:120px;flex:none}
+.lostPanel h2{margin:0}
+.levelPanel .bearSlot,.finalPanel .bearSlot{height:min(24vh,190px)}
+.starRow{font-size:clamp(1.8rem,5.5vw,3rem);line-height:1.15;min-height:1.2em;letter-spacing:.04em}
+.holdBar{height:18px;border:4px solid var(--ink);border-radius:99px;overflow:hidden;background:var(--mist);width:min(320px,70%);margin:.4em auto 0}
+.holdBar i{display:block;height:100%;width:0;background:var(--sun)}
+.stats{display:flex;gap:12px;justify-content:center;flex-wrap:wrap;margin-top:8px}
+.badge{font-size:clamp(3.6rem,12vw,7rem);line-height:1;display:inline-block;animation:float 2.2s ease-in-out infinite}
+
+/* ---------- motion ---------- */
+@keyframes cardIn{0%{transform:rotate(2.5deg) scale(.4);opacity:0}100%{transform:rotate(2.5deg) scale(1);opacity:1}}
+@keyframes fbPop{0%{opacity:0;transform:scale(.3) rotate(-8deg)}100%{opacity:1;transform:scale(1) rotate(-3deg)}}
+@keyframes fadeUp{from{opacity:0;transform:translateY(12px)}to{opacity:1;transform:none}}
+@keyframes pulse{50%{transform:scale(1.18)}}
+@keyframes bump{40%{transform:scale(1.22)}}
+@keyframes stamp{0%{transform:scale(2);opacity:0}100%{transform:scale(1);opacity:1}}
+@keyframes spot{50%{transform:scale(1.25)}}
+@keyframes nudgeL{50%{transform:translateX(-14%)}}
+@keyframes nudgeR{50%{transform:translateX(14%)}}
+@keyframes banner{0%{opacity:0;transform:scale(.6)}15%{opacity:1;transform:scale(1.05)}25%{transform:scale(1)}80%{opacity:1}100%{opacity:0}}
+@keyframes float{50%{transform:translateY(-10px) rotate(4deg)}}
+@media (prefers-reduced-motion:reduce){
+  .dot.cur,.arrow,.badge,.calibArrow svg,.bodymap .spot{animation:none!important}
+}
+
+/* ---------- responsive ---------- */
+@media (max-width:480px){
+  #hud{gap:6px}
+  .chip{font-size:1rem;padding:.15em .55em;min-height:42px}
+  .btn.icon{width:46px;height:46px;font-size:1.2rem}
+}
+@media (max-aspect-ratio:1/1){
+  .startGrid{grid-template-columns:1fr;grid-template-rows:auto auto;align-content:center;gap:2vh}
+  .startText{align-items:center;text-align:center}
+  .startBear{height:28vh;order:-1}
+  .lead{max-width:none}
+  .levelPick{justify-content:center}
+  .calibBear{display:none}
+}
+@media (max-aspect-ratio:4/5){
+  #dots{order:5;flex-basis:100%}
+  #stage{padding-top:calc(124px + env(safe-area-inset-top));padding-bottom:calc(30vw / var(--ar) + 40px);grid-template-rows:auto minmax(0,1fr);gap:2.5vh 3vw}
+  #bubble{font-size:clamp(1.3rem,6.2vw,2.3rem)}
+  #bearBox{max-height:40vh}
+  #card{width:min(44vw,32vh)}
+  #camWrap{width:30vw}
+  .lostPanel .bearSlot{height:90px;width:90px}
+}
+@media (max-height:520px) and (min-aspect-ratio:1/1){
+  .chip{min-height:38px;font-size:1rem;padding:.1em .6em;border-width:3px}
+  .btn.icon{width:42px;height:42px;font-size:1.15rem}
+  .dot{width:20px}
+  #stage{padding-top:58px;gap:8px 2vw}
+  #bubble{font-size:clamp(1.1rem,3.4vw,1.8rem);border-width:4px;padding:.2em .7em}
+  #card{width:min(26vw,50vh)}
+  #camWrap{width:clamp(130px,20vw,240px)}
+  #btnCount{min-height:38px;font-size:.9rem}
+  .startBear{height:70vh}
+  .startText{gap:10px}
+  .lp{min-height:38px;padding:.25em .7em}
+  .title .t1{font-size:clamp(2.4rem,8vw,4.5rem)}
+  .btn.big{min-height:60px}
+}
+</style>
+</head>
+<body data-mode="start" data-overlay="">
+<!-- =====================================================================
+     UI MARKUP
+     ===================================================================== -->
+<div id="scenery" aria-hidden="true">
+  <div class="cloud c1"></div><div class="cloud c2"></div><div class="cloud c3"></div>
+  <div class="hill back"></div><div class="hill"></div>
+</div>
+
+<!-- Top bar: level, progress, stars, streak, sound, pause -->
+<header id="hud">
+  <div class="chip"><span id="lvlEmoji">🧸</span><span id="lvlText">Level 1</span></div>
+  <div id="dots" aria-label="Round progress"></div>
+  <div class="chip" id="scoreChip" aria-label="Stars">⭐ <span id="score">0</span></div>
+  <div class="chip" id="streakChip" aria-label="Streak">🌈 <span id="streak">0</span></div>
+  <button class="btn icon" id="btnSound" aria-label="Sound on or off">🔊</button>
+  <button class="btn icon" id="btnPause" aria-label="Pause">⏸</button>
+</header>
+
+<!-- Game stage: Simon talks on the left, the move card sits on the right -->
+<main id="stage">
+  <div id="bubble" class="empty" aria-live="polite"><span id="bubbleText"></span></div>
+  <div id="bearBox">
+    <!-- Simon the bear. Arms are posed every frame by the Avatar code. -->
+    <svg id="bear" viewBox="-50 -10 300 285" role="img" aria-label="Simon the bear">
+      <ellipse id="shadow" cx="100" cy="262" rx="62" ry="9" fill="#2B2D6E" opacity=".15"/>
+      <g id="bAll">
+        <g id="legL"><ellipse cx="76" cy="238" rx="23" ry="20" fill="#C27C46" stroke="#2B2D6E" stroke-width="4"/><ellipse cx="76" cy="244" rx="12" ry="8" fill="#F6D7A7"/></g>
+        <g id="legR"><ellipse cx="124" cy="238" rx="23" ry="20" fill="#C27C46" stroke="#2B2D6E" stroke-width="4"/><ellipse cx="124" cy="244" rx="12" ry="8" fill="#F6D7A7"/></g>
+        <g id="bUpper">
+          <ellipse cx="100" cy="178" rx="55" ry="58" fill="#C27C46" stroke="#2B2D6E" stroke-width="4"/>
+          <ellipse cx="100" cy="192" rx="34" ry="36" fill="#F6D7A7"/>
+          <path d="M100 131 L84 122 L84 140 Z M100 131 L116 122 L116 140 Z" fill="#FF5C8A" stroke="#2B2D6E" stroke-width="3" stroke-linejoin="round"/>
+          <circle cx="100" cy="131" r="5" fill="#FF5C8A" stroke="#2B2D6E" stroke-width="3"/>
+          <g id="bHead">
+            <circle cx="58" cy="42" r="20" fill="#C27C46" stroke="#2B2D6E" stroke-width="4"/>
+            <circle cx="58" cy="42" r="10" fill="#F59BB0"/>
+            <circle cx="142" cy="42" r="20" fill="#C27C46" stroke="#2B2D6E" stroke-width="4"/>
+            <circle cx="142" cy="42" r="10" fill="#F59BB0"/>
+            <circle cx="100" cy="82" r="48" fill="#C27C46" stroke="#2B2D6E" stroke-width="4"/>
+            <ellipse cx="100" cy="104" rx="26" ry="19" fill="#F6D7A7"/>
+            <circle cx="68" cy="100" r="8" fill="#F59BB0" opacity=".75"/>
+            <circle cx="132" cy="100" r="8" fill="#F59BB0" opacity=".75"/>
+            <g id="eyesOpen">
+              <circle cx="82" cy="78" r="7" fill="#2B2D6E"/><circle cx="84.5" cy="75.5" r="2.4" fill="#fff"/>
+              <circle cx="118" cy="78" r="7" fill="#2B2D6E"/><circle cx="120.5" cy="75.5" r="2.4" fill="#fff"/>
+            </g>
+            <g id="eyesShut" opacity="0">
+              <path d="M75 79 Q82 85 89 79 M111 79 Q118 85 125 79" fill="none" stroke="#2B2D6E" stroke-width="3.5" stroke-linecap="round"/>
+            </g>
+            <ellipse cx="100" cy="95" rx="9" ry="6.5" fill="#2B2D6E"/>
+            <path id="mSmile" d="M90 106 Q100 116 110 106" fill="none" stroke="#2B2D6E" stroke-width="3.5" stroke-linecap="round"/>
+            <path id="mBig" d="M86 105 Q100 125 114 105 Z" fill="#7A2E4A" stroke="#2B2D6E" stroke-width="3.5" stroke-linejoin="round" opacity="0"/>
+            <ellipse id="mOpen" cx="100" cy="111" rx="8.5" ry="6" fill="#7A2E4A" stroke="#2B2D6E" stroke-width="3.5" opacity="0"/>
+          </g>
+          <g id="armL">
+            <path id="armLo" d="M66 140L58 174L52 208" fill="none" stroke="#2B2D6E" stroke-width="23" stroke-linecap="round" stroke-linejoin="round"/>
+            <path id="armLi" d="M66 140L58 174L52 208" fill="none" stroke="#C27C46" stroke-width="15" stroke-linecap="round" stroke-linejoin="round"/>
+            <circle id="pawL" cx="52" cy="208" r="12" fill="#C27C46" stroke="#2B2D6E" stroke-width="4"/>
+            <circle id="padL" cx="52" cy="209" r="5.5" fill="#F6D7A7"/>
+          </g>
+          <g id="armR">
+            <path id="armRo" d="M134 140L142 174L148 208" fill="none" stroke="#2B2D6E" stroke-width="23" stroke-linecap="round" stroke-linejoin="round"/>
+            <path id="armRi" d="M134 140L142 174L148 208" fill="none" stroke="#C27C46" stroke-width="15" stroke-linecap="round" stroke-linejoin="round"/>
+            <circle id="pawR" cx="148" cy="208" r="12" fill="#C27C46" stroke="#2B2D6E" stroke-width="4"/>
+            <circle id="padR" cx="148" cy="209" r="5.5" fill="#F6D7A7"/>
+          </g>
+        </g>
+      </g>
+    </svg>
+  </div>
+  <div id="cardBox">
+    <div id="card"><div class="cardBody"></div><div class="timer"><i id="timerBar"></i></div></div>
+    <div id="hint" role="status"></div>
+  </div>
+</main>
+
+<!-- Live camera preview with the tracked skeleton drawn on top -->
+<div id="camWrap">
+  <video id="video" playsinline muted autoplay></video>
+  <canvas id="overlay"></canvas>
+  <span class="tag">You</span>
+  <div class="cbar"><i id="calibBar"></i></div>
+</div>
+
+<button class="btn" id="btnCount" title="For grown-ups: give the point if the move was done">👍 Count it</button>
+
+<div id="fb" aria-live="assertive"><div class="big"></div><div class="sub"></div></div>
+<div id="streakBanner"></div>
+<div id="levelBanner"><div class="lb-num"></div><div class="lb-name"></div></div>
+<canvas id="fx"></canvas>
+
+<!-- ---------- Start ---------- -->
+<section class="screen" id="scrStart">
+  <div class="startGrid">
+    <div class="startText">
+      <h1 class="title"><span class="t1">Simon Says</span><span class="t2">Learning Edition</span></h1>
+      <p class="lead">Listen to Simon the bear and copy his moves. Only move when he says “Simon says”!</p>
+      <button class="btn primary big" id="btnStart">▶ Play</button>
+      <div class="levelPick" role="group" aria-label="Choose a starting level">
+        <span class="lpLabel">Start at</span>
+        <button class="lp on" data-l="0">🧸 Body parts</button>
+        <button class="lp" data-l="1">🤸 Moving</button>
+        <button class="lp" data-l="2">🧭 Left and right</button>
+        <button class="lp" data-l="3">🎉 Two in a row</button>
+      </div>
+      <details class="grownups">
+        <summary>For grown-ups</summary>
+        <p>Put the phone or laptop at your child's chest height, about 2 metres away, with the light in front of them. Landscape works best on a phone.</p>
+        <p>The video is processed on this device and is not uploaded. The first start downloads the tracking files, so it needs internet.</p>
+        <p>If a move was clearly done but not spotted, tap <b>👍 Count it</b>. Space bar pauses.</p>
+      </details>
+    </div>
+    <div class="bearSlot startBear"></div>
+  </div>
+</section>
+
+<!-- ---------- Loading ---------- -->
+<section class="screen" id="scrLoading">
+  <div class="panel loadPanel">
+    <div class="bearSlot"></div>
+    <div style="flex:1">
+      <p id="loadText" style="font-weight:700">Starting the camera…</p>
+      <div class="bar"><i id="loadBar"></i></div>
+      <p class="muted">Tap “Allow” when the browser asks for the camera.</p>
+    </div>
+  </div>
+</section>
+
+<!-- ---------- Error ---------- -->
+<section class="screen dim" id="scrError">
+  <div class="panel errPanel">
+    <div class="bearSlot"></div>
+    <h2 id="errTitle">The camera is blocked</h2>
+    <p id="errMsg"></p>
+    <ul id="errTips"></ul>
+    <div class="row">
+      <button class="btn primary" id="btnRetry">Try again</button>
+      <button class="btn" id="btnErrHome">Back</button>
+    </div>
+  </div>
+</section>
+
+<!-- ---------- Calibration ---------- -->
+<section class="screen" id="scrCalib">
+  <div class="calibTop"><div class="calibBubble" id="calibText">Stand where I can see you!</div></div>
+  <div class="calibArrow" id="calibArrow" aria-hidden="true"></div>
+  <div class="calibBottom">
+    <ul class="checks">
+      <li id="ckSee"><span class="ck"></span>I see you</li>
+      <li id="ckMid"><span class="ck"></span>In the middle</li>
+      <li id="ckBody"><span class="ck"></span>Whole body</li>
+      <li id="ckLegs" class="opt"><span class="ck"></span>Legs too</li>
+    </ul>
+    <button class="btn small" id="btnSkipCalib">Start anyway</button>
+  </div>
+  <div class="bearSlot calibBear"></div>
+</section>
+
+<!-- ---------- Pause ---------- -->
+<section class="screen dim" id="scrPause">
+  <div class="panel">
+    <h2>Paused</h2>
+    <div class="col">
+      <button class="btn go big" id="btnResume">▶ Keep playing</button>
+      <button class="btn" id="btnRestart">🔄 Restart level</button>
+      <button class="btn" id="btnHome">🏠 Home</button>
+    </div>
+  </div>
+</section>
+
+<!-- ---------- Tracking lost ---------- -->
+<section class="screen dim" id="scrLost">
+  <div class="panel lostPanel">
+    <div class="bearSlot"></div>
+    <div>
+      <h2>I can't see you!</h2>
+      <p>Step back so I can see you 👀</p>
+    </div>
+  </div>
+</section>
+
+<!-- ---------- Level complete ---------- -->
+<section class="screen dim" id="scrLevel">
+  <div class="panel levelPanel">
+    <div class="bearSlot"></div>
+    <h2 id="ldTitle">Level 1 done!</h2>
+    <div class="starRow" id="ldStars"></div>
+    <p id="ldCount"></p>
+    <p><b>Raise both hands to keep playing 🙌</b></p>
+    <div class="holdBar"><i id="ldHold"></i></div>
+    <div class="row"><button class="btn go big" id="btnNext">Next level</button></div>
+  </div>
+</section>
+
+<!-- ---------- Final celebration ---------- -->
+<section class="screen dim" id="scrFinal">
+  <div class="panel finalPanel">
+    <div class="badge">🏆</div>
+    <h2>Super listener!</h2>
+    <div class="stats">
+      <div class="chip">⭐ <span id="finScore">0</span> stars</div>
+      <div class="chip">🌈 best streak <span id="finStreak">0</span></div>
+    </div>
+    <div class="bearSlot"></div>
+    <div class="row">
+      <button class="btn primary big" id="btnAgain">▶ Play again</button>
+      <button class="btn" id="btnFinalHome">🏠 Home</button>
+    </div>
+  </div>
+</section>
+<script type="module">
+'use strict';
+/* =========================================================================
+   SIMON SAYS — LEARNING EDITION
+   One file, no build step. Sections:
+     1. Config & helpers
+     2. TRACKING SYSTEM   camera, MediaPipe Pose + Hand + Face, smoothing
+     3. TRACKING SYSTEM   gesture detectors (what counts as "touch your nose")
+     4. GAME CONTENT      moves, levels, tutorial script
+     5. UI                sound effects and voice
+     6. UI                Simon the bear (animated SVG avatar)
+     7. UI                screens, HUD, cards, camera overlay, confetti
+     8. GAME LOGIC        calibration, tutorial, rounds, scoring, pause
+     9. Boot & main loop
+   ========================================================================= */
+
+/* =========================================================================
+   1. CONFIG & HELPERS
+   ========================================================================= */
+const MP_VERSION = '0.10.14';
+const MP_BASE = 'https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@' + MP_VERSION;
+const MODEL_URLS = {
+  pose: 'https://storage.googleapis.com/mediapipe-models/pose_landmarker/pose_landmarker_lite/float16/1/pose_landmarker_lite.task',
+  hand: 'https://storage.googleapis.com/mediapipe-models/hand_landmarker/hand_landmarker/float16/1/hand_landmarker.task',
+  face: 'https://storage.googleapis.com/mediapipe-models/face_landmarker/face_landmarker/float16/1/face_landmarker.task',
+};
+const REDUCED_MOTION = window.matchMedia && matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+const $ = (sel, root = document) => root.querySelector(sel);
+const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
+const lerp = (a, b, t) => a + (b - a) * t;
+const dist = (a, b) => Math.hypot(a.x - b.x, a.y - b.y);
+const mid = (a, b) => ({ x: (a.x + b.x) / 2, y: (a.y + b.y) / 2, v: Math.min(a.v ?? 1, b.v ?? 1) });
+const pick = arr => arr[Math.floor(Math.random() * arr.length)];
+const shuffle = arr => { const a = arr.slice(); for (let i = a.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [a[i], a[j]] = [a[j], a[i]]; } return a; };
+
+/* =========================================================================
+   2. TRACKING SYSTEM — camera, MediaPipe landmarkers, smoothing
+   -------------------------------------------------------------------------
+   Coordinates used everywhere in the game ("body space"):
+     x: 0..A  (A = video width / height), already MIRRORED, so a child moving
+        to their own left moves to the screen's left, like a mirror.
+     y: 0..1  top to bottom.
+   Using height as the unit keeps distances honest on any camera shape.
+   ========================================================================= */
+
+// One Euro filter: smooths jitter when still, stays quick during fast moves.
+class OneEuro {
+  constructor(minCutoff = 1.7, beta = 1.2, dCutoff = 1.0) {
+    this.minCutoff = minCutoff; this.beta = beta; this.dCutoff = dCutoff;
+    this.x = null; this.dx = 0; this.t = null;
+  }
+  static alpha(cutoff, dt) { const tau = 1 / (2 * Math.PI * cutoff); return 1 / (1 + tau / dt); }
+  filter(x, t) {
+    if (this.x === null) { this.x = x; this.t = t; this.dx = 0; return x; }
+    const dt = Math.max(1e-3, t - this.t); this.t = t;
+    const dx = (x - this.x) / dt;
+    this.dx += OneEuro.alpha(this.dCutoff, dt) * (dx - this.dx);
+    const cutoff = this.minCutoff + this.beta * Math.abs(this.dx);
+    this.x += OneEuro.alpha(cutoff, dt) * (x - this.x);
+    return this.x;
+  }
+}
+
+// MediaPipe pose landmark indices we use
+const LM = { nose: 0, lEar: 7, rEar: 8, mouthL: 9, mouthR: 10, lSh: 11, rSh: 12, lEl: 13, rEl: 14, lWr: 15, rWr: 16,
+  lPinky: 17, rPinky: 18, lIdx: 19, rIdx: 20, lThumb: 21, rThumb: 22, lHip: 23, rHip: 24, lKn: 25, rKn: 26, lAn: 27, rAn: 28 };
+const BONES = [[11, 12], [11, 13], [13, 15], [12, 14], [14, 16], [11, 23], [12, 24], [23, 24], [23, 25], [25, 27], [24, 26], [26, 28]];
+
+const Tracker = {
+  video: null, stream: null, mp: null, fileset: null,
+  pose: null, hand: null, face: null,
+  ready: false, faceReady: false,
+  A: 4 / 3, lastVideoTime: -1, lastTs: 0, frameNo: 0,
+  filters: [], vis: [], lastSeen: 0,
+  body: null, history: [], hands: [], handsTime: 0, blendEma: {},
+  need: { hand: false, face: false },   // which extra trackers the current move needs
+  procMs: 0, slow: false,
+  faceCanvas: null, faceCtx: null,
+
+  /* ---- camera ---- */
+  async startCamera() {
+    if (!window.isSecureContext && location.protocol !== 'file:') {
+      throw Object.assign(new Error('Camera needs https'), { name: 'InsecureContext' });
+    }
+    if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+      throw Object.assign(new Error('No camera API'), { name: 'NoCameraApi' });
+    }
+    this.stopCamera();
+    const attempts = [
+      { audio: false, video: { facingMode: 'user', width: { ideal: 1280 }, height: { ideal: 720 }, frameRate: { ideal: 30, max: 30 } } },
+      { audio: false, video: { facingMode: 'user' } },
+      { audio: false, video: true },
+    ];
+    let lastErr = null;
+    for (const c of attempts) {
+      try { this.stream = await navigator.mediaDevices.getUserMedia(c); break; }
+      catch (e) {
+        lastErr = e;
+        if (['NotAllowedError', 'PermissionDeniedError', 'SecurityError'].includes(e.name)) throw e;
+      }
+    }
+    if (!this.stream) throw lastErr || Object.assign(new Error('Camera failed'), { name: 'NotReadableError' });
+
+    const v = this.video;
+    v.muted = true; v.setAttribute('playsinline', ''); v.setAttribute('muted', '');
+    v.srcObject = this.stream;
+    v.play().catch(() => { /* retried on the next tap, see boot() */ });
+    await new Promise((resolve, reject) => {
+      let settled = false;
+      const ok = () => { if (!settled && v.videoWidth > 0) { settled = true; resolve(); } };
+      v.addEventListener('loadedmetadata', ok); v.addEventListener('loadeddata', ok); v.addEventListener('playing', ok);
+      ok();
+      setTimeout(() => { if (!settled) { settled = true; v.videoWidth ? resolve() : reject(Object.assign(new Error('Camera did not start'), { name: 'NotReadableError' })); } }, 9000);
+    });
+    const track = this.stream.getVideoTracks()[0];
+    if (track) track.addEventListener('ended', () => Game.onCameraEnded());
+    this.updateAspect();
+  },
+  stopCamera() {
+    if (this.stream) { this.stream.getTracks().forEach(t => t.stop()); this.stream = null; }
+    if (this.video) this.video.srcObject = null;
+    this.lastVideoTime = -1; this.body = null; this.history = [];
+  },
+  cameraLive() {
+    return !!(this.stream && this.stream.active && this.stream.getVideoTracks().some(t => t.readyState === 'live'));
+  },
+  updateAspect() {
+    const v = this.video;
+    if (!v.videoWidth || !v.videoHeight) return;
+    this.A = v.videoWidth / v.videoHeight;
+    document.documentElement.style.setProperty('--ar', this.A.toFixed(4));
+    this.filters = []; this.vis = []; this.history = [];   // fresh start after a rotation
+  },
+
+  /* ---- models ---- */
+  async loadModels(onStep) {
+    onStep('Waking up the body tracker…', 0.15);
+    this.mp = await import(MP_BASE + '/vision_bundle.mjs');
+    this.fileset = await this.mp.FilesetResolver.forVisionTasks(MP_BASE + '/wasm');
+    onStep('Learning to see bodies…', 0.4);
+    this.pose = await this.create(this.mp.PoseLandmarker, {
+      baseOptions: { modelAssetPath: MODEL_URLS.pose }, runningMode: 'VIDEO', numPoses: 1,
+      minPoseDetectionConfidence: 0.45, minPosePresenceConfidence: 0.45, minTrackingConfidence: 0.45,
+    });
+    onStep('Learning to see hands…', 0.75);
+    try {
+      this.hand = await this.create(this.mp.HandLandmarker, {
+        baseOptions: { modelAssetPath: MODEL_URLS.hand }, runningMode: 'VIDEO', numHands: 2,
+        minHandDetectionConfidence: 0.4, minHandPresenceConfidence: 0.4, minTrackingConfidence: 0.4,
+      });
+    } catch (e) { console.warn('Hand tracker unavailable, using the body tracker only.', e); this.hand = null; }
+    onStep('Almost ready…', 1);
+    this.ready = true;
+    this.loadFace();   // in the background; face moves are only used when this finishes
+  },
+  async create(Cls, opts) {
+    try { return await Cls.createFromOptions(this.fileset, { ...opts, baseOptions: { ...opts.baseOptions, delegate: 'GPU' } }); }
+    catch (e) {
+      console.warn('GPU not available for a tracker, falling back to CPU.', e);
+      return await Cls.createFromOptions(this.fileset, { ...opts, baseOptions: { ...opts.baseOptions, delegate: 'CPU' } });
+    }
+  },
+  async loadFace() {
+    try {
+      this.face = await this.create(this.mp.FaceLandmarker, {
+        baseOptions: { modelAssetPath: MODEL_URLS.face }, runningMode: 'VIDEO', numFaces: 1, outputFaceBlendshapes: true,
+        minFaceDetectionConfidence: 0.4, minFacePresenceConfidence: 0.4, minTrackingConfidence: 0.4,
+      });
+      this.faceCanvas = document.createElement('canvas');
+      this.faceCanvas.width = this.faceCanvas.height = 256;
+      this.faceCtx = this.faceCanvas.getContext('2d', { willReadFrequently: false });
+      this.faceReady = true;
+    } catch (e) { console.warn('Face tracker unavailable, face moves are skipped.', e); }
+  },
+
+  /* ---- per-frame processing ---- */
+  process(nowMs) {
+    const v = this.video;
+    if (!this.ready || !v || v.readyState < 2 || !v.videoWidth) return this.body;
+    if (v.currentTime === this.lastVideoTime) return this.body;   // no new camera frame yet
+    this.lastVideoTime = v.currentTime;
+    if (Math.abs(v.videoWidth / v.videoHeight - this.A) > 0.01) this.updateAspect();
+
+    let ts = Math.floor(nowMs); if (ts <= this.lastTs) ts = this.lastTs + 1; this.lastTs = ts;
+    const t0 = performance.now();
+    let pr = null;
+    try { pr = this.pose.detectForVideo(v, ts); } catch (e) { console.warn('Pose error', e); return this.body; }
+    this.frameNo++;
+
+    // Hands only when the current move needs them. On slow devices, every other frame.
+    if (this.hand && this.need.hand) {
+      if (!this.slow || this.frameNo % 2 === 0) {
+        try { this.hands = this.convertHands(this.hand.detectForVideo(v, ts)); this.handsTime = nowMs; } catch (e) { /* skip frame */ }
+      }
+      if (nowMs - this.handsTime > 300) this.hands = [];
+    } else this.hands = [];
+
+    const body = this.buildBody(pr, nowMs / 1000);
+    body.face = (this.faceReady && this.need.face) ? this.runFace(body, ts) : null;
+    this.body = body;
+
+    const ms = performance.now() - t0;
+    this.procMs = this.procMs * 0.9 + ms * 0.1;
+    this.slow = this.procMs > 38;
+    return body;
+  },
+
+  // Turn raw pose landmarks into smoothed, mirrored body measurements.
+  buildBody(pr, t) {
+    const lms = pr && pr.landmarks && pr.landmarks[0];
+    if (!lms) {
+      if (t - this.lastSeen > 0.5) { this.filters = []; this.vis = []; }
+      return { ok: false, present: false, t, A: this.A, hands: [], handPts: [] };
+    }
+    this.lastSeen = t;
+    const A = this.A, P = new Array(33);
+    for (let i = 0; i < 33; i++) {
+      const l = lms[i];
+      const f = this.filters[i] || (this.filters[i] = { x: new OneEuro(), y: new OneEuro() });
+      const vis = l.visibility == null ? 1 : l.visibility;
+      this.vis[i] = this.vis[i] == null ? vis : this.vis[i] * 0.55 + vis * 0.45;
+      P[i] = { x: f.x.filter((1 - l.x) * A, t), y: f.y.filter(l.y, t), v: this.vis[i] };
+    }
+    const inFrame = p => p.x > -0.02 && p.x < A + 0.02 && p.y > -0.02 && p.y < 1.02;
+    const seen = (p, th = 0.5) => p.v > th && inFrame(p);
+
+    const b = { present: true, t, A, P, seen };
+    for (const k in LM) b[k] = P[LM[k]];
+    b.shMid = mid(b.lSh, b.rSh);
+    b.sw = Math.max(dist(b.lSh, b.rSh), 0.02);
+    b.hipsVis = seen(b.lHip) && seen(b.rHip);
+    b.kneesVis = seen(b.lKn) && seen(b.rKn);
+    b.anklesVis = seen(b.lAn) && seen(b.rAn);
+    b.hipMid = b.hipsVis ? mid(b.lHip, b.rHip) : { x: b.shMid.x, y: b.shMid.y + b.sw * 1.35, v: 0 };
+    b.torso = b.hipsVis ? Math.max(dist(b.shMid, b.hipMid), 0.03) : b.sw * 1.35;
+    b.u = Math.max(b.sw, b.torso * 0.72);   // body unit: about one shoulder width, robust to turning sideways
+    b.cx = b.hipsVis ? (b.shMid.x + b.hipMid.x) / 2 : b.shMid.x;
+    b.ok = seen(b.lSh) && seen(b.rSh) && (seen(b.nose, 0.35) || seen(b.lEar, 0.35) || seen(b.rEar, 0.35));
+
+    // Every point that belongs to a hand: pose wrist/finger points + hand tracker fingertips
+    b.hands = this.hands;
+    b.handPts = [];
+    for (const k of ['lWr', 'lPinky', 'lIdx', 'lThumb', 'rWr', 'rPinky', 'rIdx', 'rThumb']) if (b[k].v > 0.15) b.handPts.push(b[k]);
+    for (const h of b.hands) { b.handPts.push(h.palm); for (const tip of h.tips) b.handPts.push(tip); }
+
+    if (b.ok) {
+      this.history.push({ t, shY: b.shMid.y, hipY: b.hipMid.y, cx: b.cx, u: b.u, torso: b.torso, hipsVis: b.hipsVis });
+      while (this.history.length && t - this.history[0].t > 2) this.history.shift();
+    }
+    return b;
+  },
+
+  convertHands(hr) {
+    const out = [];
+    if (!hr || !hr.landmarks) return out;
+    const A = this.A;
+    const avg = pts => ({ x: pts.reduce((s, p) => s + p.x, 0) / pts.length, y: pts.reduce((s, p) => s + p.y, 0) / pts.length, v: 1 });
+    for (const lm of hr.landmarks) {
+      const pts = lm.map(p => ({ x: (1 - p.x) * A, y: p.y, v: 1 }));
+      let palm = avg([pts[0], pts[5], pts[9], pts[13], pts[17]]);
+      const prev = this.hands.find(h => dist(h.palm, palm) < 0.12);   // light smoothing per hand
+      if (prev) {
+        for (let i = 0; i < 21; i++) { pts[i].x = lerp(prev.pts[i].x, pts[i].x, 0.6); pts[i].y = lerp(prev.pts[i].y, pts[i].y, 0.6); }
+        palm = avg([pts[0], pts[5], pts[9], pts[13], pts[17]]);
+      }
+      out.push({ pts, palm, tips: [pts[4], pts[8], pts[12], pts[16], pts[20]], indexTip: pts[8] });
+    }
+    return out;
+  },
+
+  // The face is tiny at 2 metres, so we cut out the head area and zoom in before looking for it.
+  runFace(b, ts) {
+    const v = this.video, W = v.videoWidth, H = v.videoHeight;
+    let sx = 0, sy = 0, size = Math.min(W, H);
+    if (b.ok) {
+      const cx = (1 - b.nose.x / this.A) * W, cy = b.nose.y * H;
+      size = clamp(b.u * 2.0 * H, 80, Math.min(W, H));
+      sx = clamp(cx - size / 2, 0, W - size); sy = clamp(cy - size / 2, 0, H - size);
+    } else { sx = (W - size) / 2; sy = (H - size) / 2; }
+    const c = this.faceCanvas;
+    try {
+      this.faceCtx.drawImage(v, sx, sy, size, size, 0, 0, c.width, c.height);
+      const fr = this.face.detectForVideo(c, ts);
+      if (fr && fr.faceBlendshapes && fr.faceBlendshapes[0]) {
+        const blend = {};
+        for (const cat of fr.faceBlendshapes[0].categories) {
+          const prev = this.blendEma[cat.categoryName];
+          blend[cat.categoryName] = this.blendEma[cat.categoryName] = prev == null ? cat.score : prev * 0.5 + cat.score * 0.5;
+        }
+        return { found: true, blend };
+      }
+    } catch (e) { /* skip this frame */ }
+    return { found: false, blend: {} };
+  },
+
+  // Average body position over the last ~0.6 s. Used as "where were you standing" for steps, jumps, crouches.
+  baseline() {
+    const b = this.body, h = this.history;
+    if (!b) return null;
+    const rec = h.filter(e => b.t - e.t < 0.6);
+    if (!rec.length) return b.ok ? snapshot(b) : null;
+    const avg = k => rec.reduce((s, e) => s + e[k], 0) / rec.length;
+    return { shY: avg('shY'), hipY: avg('hipY'), cx: avg('cx'), u: avg('u'), torso: avg('torso'), hipsVis: rec.every(e => e.hipsVis) };
+  },
+};
+const snapshot = b => ({ shY: b.shMid.y, hipY: b.hipMid.y, cx: b.cx, u: b.u, torso: b.torso, hipsVis: b.hipsVis });
+
+/* =========================================================================
+   3. TRACKING SYSTEM — gesture detectors
+   -------------------------------------------------------------------------
+   All thresholds are in body units (b.u, about one shoulder width), so they
+   work for small children, big children, near and far. They are generous on
+   purpose: a 4-year-old's "touch your nose" may land on the cheek, and that
+   should still count.
+   ========================================================================= */
+const Gest = {
+  near(b, target, r) { return b.handPts.some(p => dist(p, target) < r); },
+
+  // Wrists that are raised (up to neck height, or elbow well above shoulder)
+  raised(b) {
+    const out = [], u = b.u;
+    for (const [w, e, s] of [[b.lWr, b.lEl, b.lSh], [b.rWr, b.rEl, b.rSh]]) {
+      const wristUp = w.v > 0.12 && w.y < b.shMid.y + 0.05 * u;   // neck height
+      const elbowUp = e.v > 0.2 && e.y < s.y - 0.5 * u;
+      if (wristUp) out.push(w);
+      else if (elbowUp) out.push({ x: e.x, y: e.y - 0.6 * u, v: e.v });
+    }
+    return out;
+  },
+
+  // Wrists up to neck height (good enough for waving)
+  overShoulder(b) {
+    return [[b.lWr, b.lSh], [b.rWr, b.rSh]].filter(([w, s]) => w.v > 0.12 && w.y < s.y + 0.05 * b.u).map(([w]) => w);
+  },
+
+  // Distance between the two hands, or null if we can't tell
+  handGap(b) {
+    let g = null;
+    if (b.lWr.v > 0.12 && b.rWr.v > 0.12) g = dist(mid(b.lWr, b.lIdx), mid(b.rWr, b.rIdx));
+    if (b.hands.length >= 2) { const h = dist(b.hands[0].palm, b.hands[1].palm) * 0.9; g = g == null ? h : Math.min(g, h); }
+    return g;
+  },
+
+  // Is a hand stretched out to the screen-left ('L') or screen-right ('R')?
+  pointSide(b, side) {
+    const lim = 1.2 * b.u, top = b.shMid.y - 1.4 * b.u, bot = b.hipMid.y + 0.3 * b.u;
+    const pts = [b.lWr, b.rWr, b.lIdx, b.rIdx];
+    for (const h of b.hands) pts.push(h.indexTip);
+    return pts.some(p => p.v > 0.12 && p.y > top && p.y < bot && (side === 'L' ? p.x < b.cx - lim : p.x > b.cx + lim));
+  },
+};
+
+const earPts = b => [
+  b.seen(b.lEar, 0.2) ? b.lEar : { x: b.nose.x - 0.38 * b.u, y: b.nose.y - 0.05 * b.u },
+  b.seen(b.rEar, 0.2) ? b.rEar : { x: b.nose.x + 0.38 * b.u, y: b.nose.y - 0.05 * b.u },
+];
+const tummyPt = b => ({ x: lerp(b.shMid.x, b.hipMid.x, 0.55), y: lerp(b.shMid.y, b.hipMid.y, 0.55) });
+const mouthPt = b => (b.mouthL.v > 0.2 && b.mouthR.v > 0.2) ? mid(b.mouthL, b.mouthR) : { x: b.nose.x, y: b.nose.y + 0.15 * b.u };
+const neckY = b => b.shMid.y - 0.1 * b.u;   // neck height
+const upTargets = b => [{ x: b.lSh.x - 0.15 * b.u, y: neckY(b) }, { x: b.rSh.x + 0.15 * b.u, y: neckY(b) }];
+
+// Jump: hips (or shoulders) rise quickly above where they were a moment ago
+function jumpUpdate(b, st, dt) {
+  const useHips = b.hipsVis;
+  const y = useHips ? b.hipMid.y : b.shMid.y;
+  const scale = useHips ? b.torso : b.u * 1.3;
+  if (st.ref == null || st.useHips !== useHips) { st.ref = y; st.useHips = useHips; st.up = 0; }
+  let hit = false;
+  if (st.ref - y > 0.13 * scale) { st.up = (st.up || 0) + 1; if (st.up >= 2) hit = true; }
+  else { st.up = 0; st.ref += (y - st.ref) * (1 - Math.exp(-dt / 0.45)); }
+  if (b.anklesVis) {
+    const ay = (b.lAn.y + b.rAn.y) / 2;
+    if (st.aref == null) st.aref = ay;
+    if (st.aref - ay > 0.1 * b.torso) { st.aup = (st.aup || 0) + 1; if (st.aup >= 2) hit = true; }
+    else { st.aup = 0; st.aref += (ay - st.aref) * (1 - Math.exp(-dt / 0.45)); }
+  } else st.aref = null;
+  return hit;
+}
+
+// Wave: a raised hand that swings side to side (or simply stays up a while)
+function waveUpdate(b, st, dt) {
+  const hs = Gest.overShoulder(b);
+  if (!hs.length) { st.anchor = null; st.dir = 0; st.upT = Math.max(0, st.upT - dt * 0.5); return false; }
+  const w = hs.length > 1 ? (hs[0].y < hs[1].y ? hs[0] : hs[1]) : hs[0];
+  st.upT += dt;
+  const thr = 0.16 * b.u;
+  if (st.anchor == null) { st.anchor = w.x; st.dir = 0; }
+  const d = w.x - st.anchor;
+  if (st.dir >= 0 && d < -thr) { if (st.dir > 0) st.rev++; st.dir = -1; st.anchor = w.x; }
+  else if (st.dir <= 0 && d > thr) { if (st.dir < 0) st.rev++; st.dir = 1; st.anchor = w.x; }
+  else if ((st.dir > 0 && w.x > st.anchor) || (st.dir < 0 && w.x < st.anchor)) st.anchor = w.x;
+  return st.rev >= 2 || (st.rev >= 1 && st.upT > 0.8) || st.upT > 1.8;
+}
+
+// A detector follows one move during one round.
+//  - "hold" moves count once the pose is held for a short moment
+//  - "event" moves (jump, clap, wave) count when the motion happens
+//  - near-misses are remembered so the child still gets credit
+function makeDetector(key, base, opts = {}) {
+  const A = ACTIONS[key];
+  const hold = A.hold || 0.22;
+  const st = { key, base, acc: 0, best: 0, wrongT: 0, nearT: 0, done: false, faceSeen: false,
+    data: null, lastT: null, armed: !opts.trap, offT: 0 };
+  return {
+    st,
+    update(b, dt) {
+      if (st.done || !b || !b.ok) return st;
+      if (!st.base) st.base = snapshot(b);
+      if (A.needs === 'face' && b.face && b.face.found) st.faceSeen = true;
+      if (A.event) {
+        if (b.t === st.lastT) return st;   // same camera frame as last time
+        st.lastT = b.t;
+        if (!st.data) st.data = A.init ? A.init(b) : {};
+        if (A.update(b, st.data, dt, st.base)) st.done = true;
+      } else {
+        const ok = !!A.check(b, st.base);
+        // In "no Simon says" rounds, a pose still held from the round before doesn't count:
+        // the child must relax first.
+        if (!st.armed) { st.offT = ok ? 0 : st.offT + dt; if (st.offT > 0.15) st.armed = true; }
+        else {
+          st.acc = ok ? st.acc + dt : Math.max(0, st.acc - dt * 0.6);
+          st.best = Math.max(st.best, st.acc / hold);
+          if (st.acc >= hold) st.done = true;
+        }
+      }
+      if (A.wrong && A.wrong(b, st.base)) st.wrongT += dt;
+      if (A.near && A.near(b, st.base)) st.nearT += dt;
+      return st;
+    },
+    isNear() {
+      return st.wrongT > 0.35 || st.nearT > 0.3 || st.best > 0.5 || (A.needs === 'face' && !st.faceSeen);
+    },
+  };
+}
+const needsFor = key => ({ hand: ACTIONS[key].needs === 'hand', face: ACTIONS[key].needs === 'face' });
+
+/* =========================================================================
+   4. GAME CONTENT — moves, levels, tutorial
+   -------------------------------------------------------------------------
+   say      words Simon speaks after "Simon says"
+   word     big label on the card
+   part     body part to light up on the little body picture (else emoji)
+   pose     how Simon the bear demonstrates it
+   needs    'hand' or 'face' to switch on the extra tracker
+   trap     safe to use in a "no Simon says" round (rarely done by accident)
+   fam      moves that look alike, so a trap never follows its twin
+   ========================================================================= */
+const ACTIONS = {
+  /* ---- Level 1: body parts ---- */
+  head: {
+    say: 'touch your head', word: 'Head', part: 'head', pose: 'head', needs: 'hand', trap: true, fam: 'head',
+    check: b => b.handPts.some(p => p.y < b.nose.y - 0.12 * b.u && p.y > b.nose.y - 1.8 * b.u && Math.abs(p.x - b.nose.x) < 1.05 * b.u),
+    target: b => [{ x: b.nose.x, y: b.nose.y - 0.8 * b.u }],
+  },
+  nose: {
+    say: 'touch your nose', word: 'Nose', part: 'nose', pose: 'nose', needs: 'hand', trap: true,
+    check: b => Gest.near(b, b.nose, 0.42 * b.u),
+    target: b => [b.nose],
+  },
+  ears: {
+    say: 'touch your ears', word: 'Ears', part: 'ears', pose: 'ears', needs: 'hand', trap: true, fam: 'head',
+    check: b => earPts(b).some(e => Gest.near(b, e, 0.5 * b.u)),
+    target: b => earPts(b),
+  },
+  tummy: {
+    say: 'touch your tummy', word: 'Tummy', part: 'tummy', pose: 'tummy', needs: 'hand', trap: false,
+    check: b => { const c = tummyPt(b); return b.handPts.some(p => Math.abs(p.x - c.x) < 0.4 * b.u && Math.abs(p.y - c.y) < 0.42 * b.u); },
+    target: b => [tummyPt(b)],
+  },
+  shoulders: {
+    say: 'touch your shoulders', word: 'Shoulders', part: 'shoulders', pose: 'shoulders', needs: 'hand', trap: true,
+    check: b => Gest.near(b, b.lSh, 0.48 * b.u) || Gest.near(b, b.rSh, 0.48 * b.u),
+    target: b => [b.lSh, b.rSh],
+  },
+  knees: {
+    say: 'touch your knees', word: 'Knees', part: 'knees', pose: 'knees', needs: null, trap: false,
+    check: (b, base) => {
+      if (b.kneesVis) {
+        const ky = (b.lKn.y + b.rKn.y) / 2, lvl = b.hipMid.y + 0.45 * (ky - b.hipMid.y);
+        if ((b.lWr.v > 0.12 && b.lWr.y > lvl) || (b.rWr.v > 0.12 && b.rWr.y > lvl)) return true;
+      }
+      return !!base && b.shMid.y - base.shY > 0.45 * base.u;   // bending down also counts
+    },
+    target: b => b.kneesVis ? [b.lKn, b.rKn] : null,
+  },
+  mouthOpen: {
+    say: 'open your mouth wide', word: 'Mouth', part: 'mouth', pose: 'mouthOpen', needs: 'face', trap: false, hold: 0.3,
+    check: b => !!(b.face && b.face.found) && (b.face.blend.jawOpen || 0) > 0.3,
+    target: b => [mouthPt(b)],
+  },
+  smile: {
+    say: 'show me a big smile', word: 'Smile', emoji: '😁', pose: 'smile', needs: 'face', trap: false, hold: 0.3,
+    check: b => !!(b.face && b.face.found) && ((b.face.blend.mouthSmileLeft || 0) + (b.face.blend.mouthSmileRight || 0)) / 2 > 0.4,
+    target: b => [mouthPt(b)],
+  },
+
+  /* ---- Level 2: moving ---- */
+  handsUp: {
+    say: 'raise both hands', word: 'Hands up', emoji: '🙌', pose: 'handsUp', trap: true, fam: 'up',
+    check: b => Gest.raised(b).length >= 2,
+    near: b => Gest.raised(b).length === 1,
+    target: upTargets,
+  },
+  oneHandUp: {
+    say: 'raise one hand', word: 'One hand up', emoji: '🙋', pose: 'oneHandUp', trap: true, fam: 'up',
+    check: b => Gest.raised(b).length >= 1,
+    target: upTargets,
+  },
+  jump: {
+    say: 'jump', word: 'Jump', emoji: '🦘', pose: 'jump', trap: true, event: true,
+    init: () => ({}), update: jumpUpdate,
+    target: b => ({ arrow: 'U', at: { x: b.nose.x, y: b.nose.y - 0.7 * b.u } }),
+  },
+  clap: {
+    say: 'clap your hands', word: 'Clap', emoji: '👏', pose: 'clap', needs: 'hand', trap: true, event: true,
+    init: b => { const g = Gest.handGap(b); return { apart: g == null || g > 0.85 * b.u }; },
+    update: (b, st) => {
+      const g = Gest.handGap(b);
+      if (g == null) return false;
+      if (g > 0.85 * b.u) st.apart = true;
+      return st.apart && g < 0.5 * b.u;
+    },
+    target: b => [{ x: b.shMid.x, y: b.shMid.y + 0.6 * b.u }],
+  },
+  crouch: {
+    say: 'crouch down small like a mouse', word: 'Crouch', emoji: '🐭', pose: 'crouch', trap: true,
+    check: (b, base) => !!base && ((b.shMid.y - base.shY) > 0.6 * base.u || (b.hipsVis && base.hipsVis && (b.hipMid.y - base.hipY) > 0.4 * base.u)),
+    target: b => ({ arrow: 'D', at: { x: b.cx, y: b.shMid.y } }),
+  },
+  wave: {
+    say: 'wave hello', word: 'Wave', emoji: '👋', pose: 'wave', trap: true, event: true, fam: 'up',
+    init: () => ({ upT: 0, anchor: null, dir: 0, rev: 0 }), update: waveUpdate,
+    target: b => [{ x: b.rSh.x + 0.5 * b.u, y: neckY(b) }],
+  },
+  airplane: {
+    say: 'stretch your arms out like an airplane', word: 'Airplane', emoji: '✈️', pose: 'airplane', trap: true, fam: 'side',
+    check: b => {
+      if (b.lWr.v < 0.12 || b.rWr.v < 0.12) return false;
+      const okY = w => w.y > b.shMid.y - 1.1 * b.u && w.y < b.shMid.y + 0.9 * b.u;
+      return Math.abs(b.lWr.x - b.rWr.x) > 2.3 * b.u && okY(b.lWr) && okY(b.rWr);
+    },
+    target: b => ({ arrow: 'LR', at: b.shMid }),
+  },
+  flamingo: {
+    say: 'stand on one foot like a flamingo', word: 'One foot', emoji: '🦩', pose: 'flamingo', legs: true, trap: false, hold: 0.45,
+    check: b => (b.anklesVis && Math.abs(b.lAn.y - b.rAn.y) > 0.2 * b.torso) || (b.kneesVis && Math.abs(b.lKn.y - b.rKn.y) > 0.22 * b.torso),
+    target: b => b.kneesVis ? [b.lKn, b.rKn] : null,
+  },
+
+  /* ---- Level 3: directions (left = the child's own left, shown mirrored) ---- */
+  pointUp: {
+    say: 'point up to the sky', word: 'Up', emoji: '☝️', pose: 'pointUp', trap: true, fam: 'up',
+    check: b => Gest.raised(b).length >= 1,
+    target: b => ({ arrow: 'U', at: { x: b.rSh.x + 0.15 * b.u, y: neckY(b) + 1.4 * b.u } }),
+  },
+  pointLeft: {
+    say: 'point to the left', word: 'Left', emoji: '👈', dir: 'L', pose: 'pointLeft', needs: 'hand', trap: true, fam: 'side',
+    check: b => Gest.pointSide(b, 'L'),
+    wrong: b => Gest.pointSide(b, 'R') && !Gest.pointSide(b, 'L'), wrongHint: 'Other way! 👈',
+    target: b => ({ arrow: 'L', at: b.shMid }),
+  },
+  pointRight: {
+    say: 'point to the right', word: 'Right', emoji: '👉', dir: 'R', pose: 'pointRight', needs: 'hand', trap: true, fam: 'side',
+    check: b => Gest.pointSide(b, 'R'),
+    wrong: b => Gest.pointSide(b, 'L') && !Gest.pointSide(b, 'R'), wrongHint: 'Other way! 👉',
+    target: b => ({ arrow: 'R', at: b.shMid }),
+  },
+  stepLeft: {
+    say: 'take a step to the left', word: 'Step left', emoji: '👣', dir: 'L', pose: 'stepLeft', trap: false,
+    check: (b, base) => !!base && base.cx - b.cx > 0.55 * base.u,
+    wrong: (b, base) => !!base && b.cx - base.cx > 0.55 * base.u, wrongHint: 'Other way! 👈',
+    target: b => ({ arrow: 'L', at: { x: b.cx, y: b.hipMid.y } }),
+  },
+  stepRight: {
+    say: 'take a step to the right', word: 'Step right', emoji: '👣', dir: 'R', pose: 'stepRight', trap: false,
+    check: (b, base) => !!base && b.cx - base.cx > 0.55 * base.u,
+    wrong: (b, base) => !!base && base.cx - b.cx > 0.55 * base.u, wrongHint: 'Other way! 👉',
+    target: b => ({ arrow: 'R', at: { x: b.cx, y: b.hipMid.y } }),
+  },
+  leftHandUp: {
+    say: 'raise your left hand', word: 'Left hand', emoji: '✋', dir: 'L', pose: 'leftHandUp', trap: true, fam: 'up',
+    check: b => Gest.raised(b).some(w => w.x < b.shMid.x),
+    wrong: b => { const r = Gest.raised(b); return r.length > 0 && r.every(w => w.x >= b.shMid.x); }, wrongHint: 'Other hand! 👈',
+    target: b => [{ x: b.lSh.x - 0.2 * b.u, y: neckY(b) }],
+  },
+  rightHandUp: {
+    say: 'raise your right hand', word: 'Right hand', emoji: '✋', dir: 'R', pose: 'rightHandUp', trap: true, fam: 'up',
+    check: b => Gest.raised(b).some(w => w.x > b.shMid.x),
+    wrong: b => { const r = Gest.raised(b); return r.length > 0 && r.every(w => w.x <= b.shMid.x); }, wrongHint: 'Other hand! 👉',
+    target: b => [{ x: b.rSh.x + 0.2 * b.u, y: neckY(b) }],
+  },
+};
+
+const LEVELS = [
+  { name: 'Body parts', emoji: '🧸', say: 'Level one. Body parts!', rounds: 6, time: 8, faceMax: 1,
+    pool: ['head', 'nose', 'ears', 'tummy', 'shoulders', 'knees', 'mouthOpen', 'smile'] },
+  { name: 'Moving', emoji: '🤸', say: "Level two. Let's move!", rounds: 6, time: 8, must: ['jump', 'clap'],
+    pool: ['handsUp', 'oneHandUp', 'jump', 'clap', 'crouch', 'wave', 'airplane', 'flamingo'] },
+  { name: 'Left and right', emoji: '🧭', say: 'Level three. Left and right!', rounds: 6, time: 9, must: ['pointLeft', 'pointRight'],
+    pool: ['pointLeft', 'pointRight', 'pointUp', 'stepLeft', 'stepRight', 'leftHandUp', 'rightHandUp'] },
+  { name: 'Two in a row', emoji: '🎉', say: 'Level four. Two moves in a row!', rounds: 5, time: 14, combos: true },
+];
+
+const COMBOS = [
+  ['head', 'jump'], ['handsUp', 'crouch'], ['nose', 'clap'], ['pointLeft', 'pointRight'], ['shoulders', 'knees'],
+  ['clap', 'jump'], ['airplane', 'crouch'], ['tummy', 'handsUp'], ['wave', 'jump'], ['ears', 'clap'], ['pointRight', 'pointLeft'],
+];
+
+const TUTORIAL = [
+  { type: 'talk', text: "Hi! I'm Simon the bear. Let's play Simon says!", pose: 'wave' },
+  { type: 'talk', text: 'When I say Simon says, you copy me!', pose: 'cheer' },
+  { type: 'simon', acts: ['shoulders'], tutorial: true },
+  { type: 'talk', text: "If I don't say Simon says, freeze like a statue!", pose: 'statue' },
+  { type: 'trap', acts: ['nose'], tutorial: true },
+  { type: 'talk', text: "You've got it! Let's play!", pose: 'cheer' },
+];
+
+const capFirst = s => s.charAt(0).toUpperCase() + s.slice(1);
+function phraseFor(r) {
+  const parts = r.acts.map(k => ACTIONS[k].say);
+  const core = parts.length === 2 ? `${parts[0]}, then ${parts[1]}` : parts[0];
+  return r.type === 'trap' ? capFirst(core) + '!' : 'Simon says, ' + core + '!';
+}
+
+/* =========================================================================
+   5. UI — sound effects (Web Audio, no files) and Simon's voice
+   ========================================================================= */
+const Sfx = {
+  ctx: null, master: null, on: true,
+  unlock() {
+    try {
+      if (!this.ctx) {
+        const AC = window.AudioContext || window.webkitAudioContext;
+        if (!AC) return;
+        this.ctx = new AC();
+        this.master = this.ctx.createGain(); this.master.gain.value = 0.55;
+        this.master.connect(this.ctx.destination);
+      }
+      if (this.ctx.state === 'suspended') this.ctx.resume();
+    } catch (e) { /* sound is optional */ }
+  },
+  note(freq, start, dur, type = 'triangle', vol = 0.25, slideTo = null) {
+    if (!this.on || !this.ctx) return;
+    const t = this.ctx.currentTime + start;
+    const o = this.ctx.createOscillator(), g = this.ctx.createGain();
+    o.type = type; o.frequency.setValueAtTime(freq, t);
+    if (slideTo) o.frequency.exponentialRampToValueAtTime(slideTo, t + dur);
+    g.gain.setValueAtTime(0.0001, t);
+    g.gain.exponentialRampToValueAtTime(vol, t + 0.015);
+    g.gain.exponentialRampToValueAtTime(0.0001, t + dur);
+    o.connect(g); g.connect(this.master); o.start(t); o.stop(t + dur + 0.05);
+  },
+  success() { [523.25, 659.25, 783.99, 1046.5].forEach((f, i) => this.note(f, i * 0.08, 0.28, 'triangle', 0.26)); this.note(1568, 0.34, 0.35, 'sine', 0.1); },
+  star() { this.note(1318.5, 0, 0.16, 'sine', 0.16); this.note(1760, 0.06, 0.25, 'sine', 0.12); },
+  soft() { this.note(523.25, 0, 0.2, 'sine', 0.2); this.note(659.25, 0.12, 0.3, 'sine', 0.2); },
+  oops() { this.note(392, 0, 0.22, 'triangle', 0.2, 330); this.note(330, 0.2, 0.32, 'triangle', 0.18, 262); },
+  pop() { this.note(660, 0, 0.09, 'sine', 0.22, 990); },
+  streak() { this.note(523, 0, 0.45, 'sine', 0.12, 1568); [784, 988, 1175].forEach((f, i) => this.note(f, 0.1 + i * 0.07, 0.2, 'triangle', 0.15)); },
+  levelUp() { [523, 659, 784, 659, 784, 1047].forEach((f, i) => { this.note(f, i * 0.11, 0.3, 'triangle', 0.2); this.note(f * 2, i * 0.11, 0.12, 'sine', 0.05); }); },
+  fanfare() { [392, 523, 659, 784, 659, 784, 1047, 1047].forEach((f, i) => this.note(f, i * 0.13, i === 7 ? 0.8 : 0.28, 'triangle', 0.22)); },
+  lost() { this.note(587, 0, 0.18, 'sine', 0.18); this.note(494, 0.2, 0.3, 'sine', 0.18); },
+};
+
+const Voice = {
+  on: true, supported: false, voice: null, cur: 0, seq: 0, speaking: false, timer: null, keep: null,
+  init() {
+    this.supported = 'speechSynthesis' in window && 'SpeechSynthesisUtterance' in window;
+    if (!this.supported) return;
+    const choose = () => this.pickVoice();
+    choose();
+    if (speechSynthesis.addEventListener) speechSynthesis.addEventListener('voiceschanged', choose);
+    else speechSynthesis.onvoiceschanged = choose;
+  },
+  pickVoice() {
+    const vs = speechSynthesis.getVoices();
+    if (!vs.length) return;
+    const en = vs.filter(v => /^en([-_]|$)/i.test(v.lang));
+    const prefs = ['Samantha', 'Google US English', 'Microsoft Aria', 'Microsoft Jenny', 'Karen', 'Moira', 'Tessa', 'Zira', 'Google UK English Female', 'Female'];
+    for (const p of prefs) { const v = en.find(x => x.name.includes(p)); if (v) { this.voice = v; return; } }
+    this.voice = en.find(v => v.localService) || en[0] || null;
+  },
+  est(text) { return 0.7 + text.length * 0.07; },   // rough seconds, used when speech is off or silent
+  // Speak a line. onEnd fires once when the line is finished (or replaced, never twice).
+  speak(text, onEnd) {
+    const id = ++this.seq; this.cur = id;
+    clearTimeout(this.timer);
+    const finish = () => {
+      if (this.cur !== id) return;
+      this.cur = 0; this.speaking = false; clearTimeout(this.timer);
+      Avatar.talking(false);
+      if (onEnd) onEnd();
+    };
+    this.speaking = true; Avatar.talking(true);
+    const est = this.est(text);
+    if (!text || !this.on || !this.supported) { this.timer = setTimeout(finish, (text ? est : 0.2) * 1000); return; }
+    try {
+      speechSynthesis.cancel();
+      const u = new SpeechSynthesisUtterance(text);
+      if (this.voice) { u.voice = this.voice; u.lang = this.voice.lang; } else u.lang = 'en-US';
+      u.rate = 0.92; u.pitch = 1.15; u.volume = 1;
+      u.onend = finish; u.onerror = finish;
+      this.keep = u;   // keeps Chrome from dropping the 'end' event
+      setTimeout(() => { if (this.cur === id) speechSynthesis.speak(u); }, 60);
+      this.timer = setTimeout(finish, (est + 2.5) * 1000);   // safety net if 'end' never arrives
+    } catch (e) { this.timer = setTimeout(finish, est * 1000); }
+  },
+  stop() {
+    this.cur = 0; this.speaking = false; clearTimeout(this.timer); Avatar.talking(false);
+    if (this.supported) { try { speechSynthesis.cancel(); } catch (e) { /* ignore */ } }
+  },
+  // Must run inside a tap/click so mobile browsers allow speech later on.
+  prime() {
+    if (!this.supported) return;
+    try { const u = new SpeechSynthesisUtterance(' '); u.volume = 0; speechSynthesis.speak(u); } catch (e) { /* ignore */ }
+  },
+};
+
+/* =========================================================================
+   6. UI — Simon the bear
+   -------------------------------------------------------------------------
+   Each pose is a set of paw targets. A tiny two-bone IK bends the arms so
+   the paws reach them, and everything eases toward the target every frame.
+   Simon mirrors the child: "point left" points to the screen's left.
+   ========================================================================= */
+const SHOULDER = { L: { x: 66, y: 140 }, R: { x: 134, y: 140 } };
+const ARM_A = 36, ARM_B = 36;
+const IDLE_L = { x: 52, y: 208 }, IDLE_R = { x: 148, y: 208 };
+
+function armIK(S, T, side) {
+  const dx = T.x - S.x, dy = T.y - S.y, d = Math.hypot(dx, dy) || 1;
+  const ux = dx / d, uy = dy / d, dc = clamp(d, 4, ARM_A + ARM_B - 0.5);
+  const ang = Math.acos(clamp((ARM_A * ARM_A + dc * dc - ARM_B * ARM_B) / (2 * ARM_A * dc), -1, 1));
+  let best = null, bestScore = -1e9;
+  for (const s of [1, -1]) {   // pick the elbow that points outward and down
+    const ex = S.x + ARM_A * (ux * Math.cos(ang) - uy * Math.sin(ang) * s);
+    const ey = S.y + ARM_A * (ux * Math.sin(ang) * s + uy * Math.cos(ang));
+    const score = (side === 'L' ? S.x - ex : ex - S.x) + 0.6 * (ey - S.y);
+    if (score > bestScore) { bestScore = score; best = { x: ex, y: ey }; }
+  }
+  return { E: best, P: { x: S.x + ux * dc, y: S.y + uy * dc } };
+}
+
+const Avatar = {
+  el: {}, pose: 'idle', talkingOn: false, blinkT: 2, blinkLeft: 0, cur: null,
+  init() {
+    for (const id of ['bear', 'bAll', 'bUpper', 'legL', 'legR', 'armLo', 'armLi', 'pawL', 'padL', 'armRo', 'armRi', 'pawR', 'padR',
+      'eyesOpen', 'eyesShut', 'mSmile', 'mBig', 'mOpen', 'shadow']) this.el[id] = document.getElementById(id);
+    this.cur = { L: { ...IDLE_L }, R: { ...IDLE_R }, upY: 0, allY: 0, allX: 0, tilt: 0, lift: 0 };
+  },
+  setPose(name) { this.pose = name || 'idle'; },
+  talking(on) { this.talkingOn = on; },
+
+  targetFor(name, t) {
+    const s = { L: IDLE_L, R: IDLE_R, upY: 0, allY: 0, allX: 0, tilt: 0, lift: 0, face: 'smile' };
+    const osc = (speed) => Math.sin(t * speed);
+    switch (name) {
+      case 'handsUp': s.L = { x: 50, y: 72 }; s.R = { x: 150, y: 72 }; break;
+      case 'oneHandUp': case 'pointUp': case 'rightHandUp': s.R = { x: 150, y: 70 }; break;
+      case 'leftHandUp': s.L = { x: 50, y: 70 }; break;
+      case 'head': s.L = { x: 60, y: 64 }; s.R = { x: 140, y: 64 }; break;
+      case 'ears': s.L = { x: 56, y: 58 }; s.R = { x: 144, y: 58 }; break;
+      case 'nose': s.R = { x: 108, y: 98 }; break;
+      case 'tummy': s.L = { x: 88, y: 186 }; s.R = { x: 112, y: 186 }; break;
+      case 'shoulders': s.L = { x: 126, y: 142 }; s.R = { x: 74, y: 142 }; break;
+      case 'knees': s.upY = 16; s.L = { x: 76, y: 228 }; s.R = { x: 124, y: 228 }; break;
+      case 'crouch': s.upY = 30; s.L = { x: 70, y: 222 }; s.R = { x: 130, y: 222 }; break;
+      case 'mouthOpen': s.face = 'open'; break;
+      case 'smile': s.face = 'big'; break;
+      case 'clap': { const g = 3 + 16 * Math.abs(osc(6)); s.L = { x: 100 - g, y: 160 }; s.R = { x: 100 + g, y: 160 }; break; }
+      case 'jump': s.allY = -Math.abs(osc(5)) * 26; s.L = { x: 44, y: 96 }; s.R = { x: 156, y: 96 }; break;
+      case 'wave': s.R = { x: 158 + osc(9) * 12, y: 74 }; s.face = 'big'; break;
+      case 'airplane': s.L = { x: -16, y: 136 }; s.R = { x: 216, y: 136 }; s.tilt = osc(2.4) * 6; break;
+      case 'flamingo': s.lift = 1; s.L = { x: -6, y: 120 }; s.R = { x: 206, y: 120 }; s.tilt = osc(3) * 3; break;
+      case 'pointLeft': s.L = { x: -16, y: 128 }; s.tilt = -3; break;
+      case 'pointRight': s.R = { x: 216, y: 128 }; s.tilt = 3; break;
+      case 'stepLeft': s.allX = -34; s.allY = -Math.abs(osc(7)) * 4; break;
+      case 'stepRight': s.allX = 34; s.allY = -Math.abs(osc(7)) * 4; break;
+      case 'cheer': s.L = { x: 46, y: 80 }; s.R = { x: 154, y: 80 }; s.allY = -Math.abs(osc(7)) * 14; s.face = 'big'; break;
+      case 'giggle': s.R = { x: 106, y: 112 }; s.tilt = osc(14) * 4; break;
+      case 'think': s.R = { x: 140, y: 64 }; s.tilt = 5; break;
+      case 'statue': break;
+      case 'peek': { const hide = osc(2.2) > -0.2; if (hide) { s.L = { x: 84, y: 80 }; s.R = { x: 116, y: 80 }; } else { s.L = { x: 40, y: 110 }; s.R = { x: 160, y: 110 }; s.face = 'big'; } break; }
+      default: break;
+    }
+    return s;
+  },
+
+  applyArm(side, T, upY) {
+    const S = SHOULDER[side];
+    const { E, P } = armIK(S, { x: T.x, y: T.y - upY }, side);
+    const d = `M${S.x} ${S.y}L${E.x.toFixed(1)} ${E.y.toFixed(1)}L${P.x.toFixed(1)} ${P.y.toFixed(1)}`;
+    this.el['arm' + side + 'o'].setAttribute('d', d);
+    this.el['arm' + side + 'i'].setAttribute('d', d);
+    const paw = this.el['paw' + side], pad = this.el['pad' + side];
+    paw.setAttribute('cx', P.x.toFixed(1)); paw.setAttribute('cy', P.y.toFixed(1));
+    pad.setAttribute('cx', P.x.toFixed(1)); pad.setAttribute('cy', (P.y + 1).toFixed(1));
+  },
+
+  update(dt, t) {
+    if (!this.el.bAll) return;
+    const s = this.targetFor(this.pose, t), c = this.cur;
+    const kArm = 1 - Math.exp(-dt * 16), kBody = 1 - Math.exp(-dt * 10), kJump = 1 - Math.exp(-dt * 22);
+    for (const side of ['L', 'R']) { c[side].x = lerp(c[side].x, s[side].x, kArm); c[side].y = lerp(c[side].y, s[side].y, kArm); }
+    c.upY = lerp(c.upY, s.upY, kBody); c.allX = lerp(c.allX, s.allX, kBody); c.tilt = lerp(c.tilt, s.tilt, kBody);
+    c.lift = lerp(c.lift, s.lift, kBody); c.allY = lerp(c.allY, s.allY, kJump);
+    const breathe = REDUCED_MOTION ? 0 : Math.sin(t * 2.2) * 0.8;
+    const up = c.upY + breathe;
+    this.el.bAll.setAttribute('transform', `translate(${c.allX.toFixed(1)} ${c.allY.toFixed(1)}) rotate(${c.tilt.toFixed(2)} 100 250)`);
+    this.el.bUpper.setAttribute('transform', `translate(0 ${up.toFixed(1)})`);
+    this.el.legR.setAttribute('transform', `translate(0 ${(-20 * c.lift).toFixed(1)}) rotate(${(-22 * c.lift).toFixed(1)} 124 238)`);
+    this.el.shadow.setAttribute('rx', (62 * clamp(1 + c.allY / 140, 0.6, 1.05)).toFixed(1));
+    this.el.shadow.setAttribute('cx', (100 + c.allX).toFixed(1));
+    this.applyArm('L', c.L, up);
+    this.applyArm('R', c.R, up);
+
+    // face: blinking, talking mouth, expressions
+    this.blinkT -= dt;
+    if (this.blinkT <= 0) { this.blinkLeft = 0.13; this.blinkT = 2.2 + Math.random() * 3; }
+    this.blinkLeft = Math.max(0, this.blinkLeft - dt);
+    const shut = this.blinkLeft > 0;
+    this.el.eyesOpen.setAttribute('opacity', shut ? 0 : 1);
+    this.el.eyesShut.setAttribute('opacity', shut ? 1 : 0);
+    let open = 0;
+    if (this.talkingOn) open = 0.25 + 0.75 * Math.abs(Math.sin(t * 13)) * (0.6 + 0.4 * Math.sin(t * 3.1));
+    if (s.face === 'open') open = 1;
+    const showOpen = open > 0.15;
+    this.el.mOpen.setAttribute('opacity', showOpen ? 1 : 0);
+    this.el.mOpen.setAttribute('ry', (2.5 + 7.5 * open).toFixed(1));
+    this.el.mBig.setAttribute('opacity', !showOpen && s.face === 'big' ? 1 : 0);
+    this.el.mSmile.setAttribute('opacity', !showOpen && s.face !== 'big' ? 1 : 0);
+  },
+};
+
+/* =========================================================================
+   7. UI — screens, HUD, move card, camera overlay, confetti
+   ========================================================================= */
+const PART_SPOTS = {
+  head: [[60, 11, 13]], nose: [[60, 37, 7]], ears: [[37, 32, 8], [83, 32, 8]], mouth: [[60, 45, 8]],
+  tummy: [[60, 86, 15]], shoulders: [[42, 61, 9], [78, 61, 9]], knees: [[49, 128, 9], [71, 128, 9]],
+};
+// A little child figure with the body part glowing
+function bodyMapSVG(part) {
+  const spots = (PART_SPOTS[part] || []).map(([x, y, r]) => `<circle class="spot" cx="${x}" cy="${y}" r="${r}"/>`).join('');
+  const limbs = 'M50 106 L48 150 M70 106 L72 150 M42 62 L26 104 M78 62 L94 104';
+  return `<svg class="bodymap" viewBox="0 0 120 160" aria-hidden="true">
+    <path d="${limbs}" stroke="#2B2D6E" stroke-width="14" stroke-linecap="round" fill="none"/>
+    <path d="${limbs}" stroke="#FFE2C4" stroke-width="7" stroke-linecap="round" fill="none"/>
+    <rect x="36" y="54" width="48" height="56" rx="18" fill="#7FC8FF" stroke="#2B2D6E" stroke-width="3.5"/>
+    <circle cx="37" cy="32" r="6" fill="#FFE2C4" stroke="#2B2D6E" stroke-width="3"/>
+    <circle cx="83" cy="32" r="6" fill="#FFE2C4" stroke="#2B2D6E" stroke-width="3"/>
+    <circle cx="60" cy="32" r="22" fill="#FFE2C4" stroke="#2B2D6E" stroke-width="3.5"/>
+    <path d="M39 27 Q44 8 60 9 Q77 8 81 27 Q71 18 60 20 Q49 18 39 27 Z" fill="#8A5A3B" stroke="#2B2D6E" stroke-width="3" stroke-linejoin="round"/>
+    <circle cx="52" cy="31" r="2.6" fill="#2B2D6E"/><circle cx="68" cy="31" r="2.6" fill="#2B2D6E"/>
+    <ellipse cx="60" cy="37.5" rx="2.6" ry="2" fill="#E9A07A"/>
+    <path d="M54 44 Q60 49 66 44" stroke="#2B2D6E" stroke-width="2.5" fill="none" stroke-linecap="round"/>
+    ${spots}
+  </svg>`;
+}
+const arrowSVG = dir => `<svg class="arrow ${dir}" viewBox="0 0 100 64" aria-hidden="true"><path d="M8 32 L44 6 L44 21 L92 21 L92 43 L44 43 L44 58 Z" fill="#FFC93C" stroke="#2B2D6E" stroke-width="6" stroke-linejoin="round" ${dir === 'R' ? 'transform="translate(100 0) scale(-1 1)"' : ''}/></svg>`;
+
+const CALIB_LINES = {
+  nobody: { text: 'Come and stand where I can see you! 👀', say: 'Come and stand in front of the camera so I can see you!' },
+  partial: { text: 'Step back so I can see you!', say: 'Step back so I can see you!' },
+  goLeft: { text: 'Move a little this way', say: 'Move a little bit to the middle!', arrow: 'L' },
+  goRight: { text: 'Move a little this way', say: 'Move a little bit to the middle!', arrow: 'R' },
+  back: { text: 'Step back so I can see your whole body', say: 'Take a step back so I can see your body!' },
+  closer: { text: 'Come a little closer!', say: 'Come a little bit closer!' },
+  good: { text: 'Perfect! Stay right there…', say: '' },
+  done: { text: 'Great! I can see you! 🎉', say: '' },
+};
+
+const UI = {
+  init() {
+    this.bear = $('#bear');
+    this.cam = $('#camWrap'); this.ov = $('#overlay'); this.ovCtx = this.ov.getContext('2d');
+    this.card = $('#card'); this.fb = $('#fb');
+  },
+  setMode(m) { document.body.dataset.mode = m; },
+  overlay(name) { document.body.dataset.overlay = name || ''; },
+  placeBear(sel) { const slot = $(sel); if (slot && this.bear.parentNode !== slot) slot.appendChild(this.bear); },
+
+  bubble(text) {
+    $('#bubbleText').textContent = text || '';
+    $('#bubble').classList.toggle('empty', !text);
+  },
+
+  artFor(key) {
+    const A = ACTIONS[key];
+    const art = A.part ? bodyMapSVG(A.part) : `<span class="emoji" aria-hidden="true">${A.emoji}</span>`;
+    return `<div class="art">${art}${A.dir ? arrowSVG(A.dir) : ''}</div><div class="word">${A.word}</div>`;
+  },
+  showCard(r) {
+    const el = this.card;
+    el.classList.remove('show', 'done');
+    if (!r) { el.style.visibility = 'hidden'; return; }
+    el.style.visibility = 'visible';
+    const body = el.querySelector('.cardBody');
+    if (r.acts.length === 1) body.innerHTML = this.artFor(r.acts[0]);
+    else body.innerHTML = `<div class="combo"><div class="step on">${this.artFor(r.acts[0])}</div><div class="then">then</div><div class="step">${this.artFor(r.acts[1])}</div></div>`;
+    void el.offsetWidth;   // restart the pop-in animation
+    el.classList.add('show');
+    this.timer(1);
+  },
+  comboStep(i) {
+    const steps = this.card.querySelectorAll('.step');
+    steps.forEach((s, j) => { s.classList.toggle('on', j === i); s.classList.toggle('ok', j < i); });
+  },
+  cardDone() { this.card.classList.add('done'); },
+  timer(frac) { $('#timerBar').style.transform = `scaleX(${clamp(frac, 0, 1).toFixed(3)})`; },
+
+  hint(text, ms = 2600) {
+    const h = $('#hint'); h.textContent = text; h.classList.add('show');
+    clearTimeout(this.hintTimer); this.hintTimer = setTimeout(() => h.classList.remove('show'), ms);
+  },
+  hideHint() { clearTimeout(this.hintTimer); $('#hint').classList.remove('show'); },
+
+  feedback(big, sub, mood) {
+    const f = this.fb;
+    f.querySelector('.big').textContent = big;
+    f.querySelector('.sub').textContent = sub || '';
+    f.className = 'mood-' + mood;
+    void f.offsetWidth; f.classList.add('show');
+  },
+  hideFeedback() { this.fb.className = ''; },
+
+  hud() {
+    const G = Game;
+    $('#lvlEmoji').textContent = G.tutorial ? '🐻' : LEVELS[G.levelIdx].emoji;
+    $('#lvlText').textContent = G.tutorial ? 'Practice' : `Level ${G.levelIdx + 1}`;
+    $('#score').textContent = G.score;
+    $('#streak').textContent = G.streak;
+  },
+  dots() {
+    const G = Game; let html = '';
+    G.rounds.forEach((r, i) => {
+      if (r.type === 'talk') return;
+      const res = G.results[i];
+      html += `<span class="dot ${res || (i === G.ri ? 'cur' : '')}"></span>`;
+    });
+    $('#dots').innerHTML = html;
+  },
+  bump(sel) { const el = $(sel); el.classList.remove('bump'); void el.offsetWidth; el.classList.add('bump'); },
+  flyStars(n) {
+    const target = $('#scoreChip').getBoundingClientRect();
+    const r = this.card.getBoundingClientRect();
+    const x0 = (r.width ? r.left + r.width / 2 : innerWidth / 2) - 24, y0 = (r.height ? r.top + r.height / 2 : innerHeight / 2) - 24;
+    const x1 = target.left + 4, y1 = target.top;
+    for (let i = 0; i < n; i++) {
+      const s = document.createElement('div'); s.className = 'flystar'; s.textContent = '⭐';
+      document.body.appendChild(s);
+      const anim = s.animate([
+        { transform: `translate(${x0}px,${y0}px) scale(1.6)` },
+        { transform: `translate(${(x0 + x1) / 2}px,${Math.min(y0, y1) - 60}px) scale(1.3)`, offset: 0.5 },
+        { transform: `translate(${x1}px,${y1}px) scale(.6)` },
+      ], { duration: 850, delay: 250 + i * 170, easing: 'ease-in-out', fill: 'both' });
+      anim.onfinish = () => { s.remove(); this.bump('#scoreChip'); Sfx.star(); };
+    }
+  },
+  streakBanner(n) {
+    const el = $('#streakBanner'); el.textContent = `${n} in a row! 🌈`;
+    el.classList.add('show'); clearTimeout(this.stTimer);
+    this.stTimer = setTimeout(() => el.classList.remove('show'), 1900);
+    this.bump('#streakChip');
+  },
+  levelBanner(i) {
+    const el = $('#levelBanner');
+    el.querySelector('.lb-num').textContent = `Level ${i + 1}`;
+    el.querySelector('.lb-name').textContent = `${LEVELS[i].emoji} ${LEVELS[i].name}`;
+    el.classList.remove('show'); void el.offsetWidth; el.classList.add('show');
+  },
+
+  loading(text, frac) { $('#loadText').textContent = text; $('#loadBar').style.width = Math.round(frac * 100) + '%'; },
+  error(title, msg, tips) {
+    $('#errTitle').textContent = title; $('#errMsg').textContent = msg;
+    $('#errTips').innerHTML = (tips || []).map(t => `<li>${t}</li>`).join('');
+  },
+
+  calibChecks(ck) {
+    $('#ckSee').classList.toggle('ok', ck.see); $('#ckMid').classList.toggle('ok', ck.mid);
+    $('#ckBody').classList.toggle('ok', ck.body); $('#ckLegs').classList.toggle('ok', ck.legs);
+  },
+  calibProgress(f, good) { $('#calibBar').style.width = Math.round(clamp(f, 0, 1) * 100) + '%'; this.cam.classList.toggle('good', !!good); },
+  calibHint(h) {
+    const line = CALIB_LINES[h] || CALIB_LINES.nobody;
+    $('#calibText').textContent = line.text;
+    const a = $('#calibArrow');
+    a.className = 'calibArrow' + (line.arrow ? ' ' + line.arrow : '');
+    a.innerHTML = line.arrow ? arrowSVG(line.arrow).replace('class="arrow ' + line.arrow + '"', '') : '';
+  },
+
+  levelDone(i, stars, max) {
+    $('#ldTitle').textContent = `Level ${i + 1} done!`;
+    $('#ldStars').textContent = stars > 0 ? '⭐'.repeat(Math.min(stars, 12)) : '🌟';
+    $('#ldCount').textContent = stars === 1 ? 'You got 1 star!' : `You got ${stars} stars!`;
+    $('#ldHold').style.width = '0%';
+  },
+  final(score, best) { $('#finScore').textContent = score; $('#finStreak').textContent = best; },
+
+  /* ---- camera preview overlay: skeleton, hands, target hints ---- */
+  drawPreview(b) {
+    const wrap = this.cam;
+    const w = wrap.clientWidth, h = wrap.clientHeight;   // 0 while the preview is hidden
+    if (!w || !h) return;
+    const dpr = Math.min(2, window.devicePixelRatio || 1), cv = this.ov;
+    if (cv.width !== Math.round(w * dpr) || cv.height !== Math.round(h * dpr)) { cv.width = Math.round(w * dpr); cv.height = Math.round(h * dpr); }
+    const ctx = this.ovCtx;
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0); ctx.clearRect(0, 0, w, h);
+    // body space -> pixels (the video uses object-fit: cover)
+    const A = Tracker.A, sc = Math.max(w / A, h), ox = (w - A * sc) / 2, oy = (h - sc) / 2;
+    const X = p => ox + p.x * sc, Y = p => oy + p.y * sc;
+    const T = performance.now() / 1000;
+    const lw = clamp(w / 70, 2.5, 7);
+    ctx.lineCap = 'round'; ctx.lineJoin = 'round';
+
+    if (Game.mode === 'calib') this.drawZone(ctx, w, h, X, A, Game.calib && Game.calib.good > 0);
+    if (!b || !b.present) return;
+
+    const col = b.ok ? '#FFC93C' : '#C9CFDD';
+    const seg = (p, q) => { ctx.beginPath(); ctx.moveTo(X(p), Y(p)); ctx.lineTo(X(q), Y(q)); ctx.strokeStyle = '#2B2D6E'; ctx.lineWidth = lw + 4; ctx.stroke(); ctx.strokeStyle = col; ctx.lineWidth = lw; ctx.stroke(); };
+    for (const [i, j] of BONES) { const p = b.P[i], q = b.P[j]; if (p.v > 0.3 && q.v > 0.3) seg(p, q); }
+    if (b.nose.v > 0.3) {
+      ctx.beginPath(); ctx.arc(X(b.nose), Y(b.nose), Math.max(6, b.u * sc * 0.42), 0, Math.PI * 2);
+      ctx.strokeStyle = '#2B2D6E'; ctx.lineWidth = lw + 4; ctx.stroke(); ctx.strokeStyle = col; ctx.lineWidth = lw; ctx.stroke();
+    }
+    const dot = (p, r, c) => { ctx.beginPath(); ctx.arc(X(p), Y(p), r, 0, Math.PI * 2); ctx.fillStyle = c; ctx.fill(); ctx.lineWidth = 2; ctx.strokeStyle = '#2B2D6E'; ctx.stroke(); };
+    for (const p of [b.lWr, b.rWr]) if (p.v > 0.3) dot(p, lw * 1.5, '#FF5C8A');
+    for (const hd of b.hands) for (const p of hd.tips) dot(p, Math.max(2.5, lw * 0.7), '#FFFFFF');
+
+    // Where to put your hands for this move
+    const tg = Game.currentTarget(b);
+    if (!tg || !tg.t) return;
+    const c = tg.on ? '#43D19A' : '#FF5C8A';
+    if (Array.isArray(tg.t)) {
+      for (const p of tg.t) {
+        const r = Math.max(9, b.u * sc * 0.28) * (1 + 0.15 * Math.sin(T * 6));
+        ctx.beginPath(); ctx.arc(X(p), Y(p), r, 0, Math.PI * 2);
+        ctx.fillStyle = tg.on ? 'rgba(67,209,154,.4)' : 'rgba(255,201,60,.4)'; ctx.fill();
+        ctx.setLineDash([lw * 1.6, lw * 1.2]); ctx.lineWidth = lw; ctx.strokeStyle = c; ctx.stroke(); ctx.setLineDash([]);
+      }
+    } else if (tg.t.arrow) {
+      const at = tg.t.at, len = b.u * sc * 0.9, wob = Math.sin(T * 5) * b.u * sc * 0.08;
+      const dirs = { L: [[-1, 0]], R: [[1, 0]], U: [[0, -1]], D: [[0, 1]], LR: [[-1, 0], [1, 0]] }[tg.t.arrow] || [];
+      for (const [dx, dy] of dirs) {
+        const start = b.u * sc * (dx ? 0.9 : 0.5);
+        const x0 = X(at) + dx * (start + wob), y0 = Y(at) + dy * (start + wob);
+        this.arrowLine(ctx, x0, y0, dx, dy, len, c, lw * 1.3);
+      }
+    }
+  },
+  arrowLine(ctx, x, y, dx, dy, len, col, lw) {
+    const ex = x + dx * len, ey = y + dy * len, ah = len * 0.38, ang = Math.atan2(dy, dx);
+    ctx.beginPath(); ctx.moveTo(x, y); ctx.lineTo(ex, ey);
+    ctx.moveTo(ex, ey); ctx.lineTo(ex - ah * Math.cos(ang - 0.6), ey - ah * Math.sin(ang - 0.6));
+    ctx.moveTo(ex, ey); ctx.lineTo(ex - ah * Math.cos(ang + 0.6), ey - ah * Math.sin(ang + 0.6));
+    ctx.strokeStyle = '#2B2D6E'; ctx.lineWidth = lw + 4; ctx.stroke();
+    ctx.strokeStyle = col; ctx.lineWidth = lw; ctx.stroke();
+  },
+  drawZone(ctx, w, h, X, A, good) {
+    const x0 = clamp(X({ x: 0.28 * A }), 6, w - 6), x1 = clamp(X({ x: 0.72 * A }), 6, w - 6);
+    ctx.save();
+    ctx.setLineDash([14, 10]); ctx.lineWidth = 5;
+    ctx.strokeStyle = good ? '#43D19A' : 'rgba(255,255,255,.9)';
+    ctx.beginPath();
+    if (ctx.roundRect) ctx.roundRect(x0, 8, x1 - x0, h - 40, 24); else ctx.rect(x0, 8, x1 - x0, h - 40);
+    ctx.stroke(); ctx.setLineDash([]);
+    ctx.font = `${Math.round(clamp((x1 - x0) * 0.22, 18, 52))}px system-ui, sans-serif`;
+    ctx.textAlign = 'center'; ctx.textBaseline = 'bottom';
+    ctx.fillText('👣', (x0 + x1) / 2, h - 34);
+    ctx.restore();
+  },
+};
+
+/* ---- confetti and star bursts (canvas) ---- */
+const Fx = {
+  cv: null, ctx: null, parts: [], rainT: 0, w: 0, h: 0, dpr: 1, dirty: false,
+  COLORS: ['#FFC93C', '#FF5C8A', '#43D19A', '#7FC8FF', '#B48CFF', '#FFFFFF'],
+  init() { this.cv = $('#fx'); this.ctx = this.cv.getContext('2d'); this.resize(); window.addEventListener('resize', () => this.resize()); },
+  resize() {
+    this.dpr = Math.min(2, window.devicePixelRatio || 1); this.w = window.innerWidth; this.h = window.innerHeight;
+    this.cv.width = Math.round(this.w * this.dpr); this.cv.height = Math.round(this.h * this.dpr);
+  },
+  spawn(x, y, vx, vy) {
+    const r = Math.random();
+    this.parts.push({ x, y, vx, vy, life: 0, max: 1.5 + Math.random() * 1.2, size: 7 + Math.random() * 9, rot: Math.random() * 6,
+      vr: (Math.random() - 0.5) * 10, color: pick(this.COLORS), shape: r < 0.3 ? 'star' : r < 0.6 ? 'circle' : 'rect' });
+  },
+  burst(x, y, n = 40) {
+    if (REDUCED_MOTION) n = Math.min(n, 12);
+    for (let i = 0; i < n; i++) { const a = Math.random() * Math.PI * 2, sp = 200 + Math.random() * 420; this.spawn(x, y, Math.cos(a) * sp, Math.sin(a) * sp - 260); }
+  },
+  burstAt(el, n) { const r = el.getBoundingClientRect(); this.burst(r.width ? r.left + r.width / 2 : this.w / 2, r.height ? r.top + r.height / 2 : this.h / 2, n); },
+  rain(sec) { this.rainT = REDUCED_MOTION ? 0 : sec; },
+  star(ctx, r) {
+    ctx.beginPath();
+    for (let i = 0; i < 10; i++) { const a = -Math.PI / 2 + i * Math.PI / 5, rr = i % 2 ? r * 0.45 : r; ctx.lineTo(Math.cos(a) * rr, Math.sin(a) * rr); }
+    ctx.closePath();
+  },
+  update(dt) {
+    if (this.rainT > 0) { this.rainT -= dt; for (let i = 0; i < 3; i++) this.spawn(Math.random() * this.w, -20, (Math.random() - 0.5) * 80, 120 + Math.random() * 160); }
+    const ctx = this.ctx;
+    if (!this.parts.length) {
+      if (this.dirty) { ctx.setTransform(1, 0, 0, 1, 0, 0); ctx.clearRect(0, 0, this.cv.width, this.cv.height); this.dirty = false; }
+      return;
+    }
+    this.dirty = true;
+    ctx.setTransform(this.dpr, 0, 0, this.dpr, 0, 0); ctx.clearRect(0, 0, this.w, this.h);
+    for (let i = this.parts.length - 1; i >= 0; i--) {
+      const p = this.parts[i]; p.life += dt;
+      if (p.life > p.max || p.y > this.h + 40) { this.parts.splice(i, 1); continue; }
+      p.vy = Math.min(p.vy + 650 * dt, 380); p.vx *= Math.exp(-dt * 1.2);
+      p.x += p.vx * dt; p.y += p.vy * dt; p.rot += p.vr * dt;
+      ctx.save(); ctx.globalAlpha = Math.min(1, (p.max - p.life) * 2);
+      ctx.translate(p.x, p.y); ctx.rotate(p.rot);
+      ctx.fillStyle = p.color; ctx.strokeStyle = '#2B2D6E'; ctx.lineWidth = 2;
+      if (p.shape === 'star') { this.star(ctx, p.size); ctx.fill(); ctx.stroke(); }
+      else if (p.shape === 'circle') { ctx.beginPath(); ctx.arc(0, 0, p.size * 0.5, 0, Math.PI * 2); ctx.fill(); ctx.stroke(); }
+      else { ctx.fillRect(-p.size / 2, -p.size / 4, p.size, p.size / 2); ctx.strokeRect(-p.size / 2, -p.size / 4, p.size, p.size / 2); }
+      ctx.restore();
+    }
+  },
+};
+
+/* =========================================================================
+   8. GAME LOGIC
+   -------------------------------------------------------------------------
+   Modes:  start → loading → calib → play (tutorial, then levels)
+           → levelDone → play … → final.   error can appear at any start.
+   A round: intro (short breath) → say (Simon speaks) → listen → feedback.
+   "talk" rounds are Simon just chatting (level intros, tutorial lines).
+   Timers only run while not paused, so pausing never costs a round.
+   ========================================================================= */
+function buildLevel(li) {
+  const L = LEVELS[li];
+  const ok = k => {
+    const a = ACTIONS[k];
+    if (a.needs === 'face' && !Tracker.faceReady) return false;
+    if (a.legs && !Game.legsSeen) return false;
+    return true;
+  };
+  const n = L.rounds - 1;
+  let main = [];
+  if (L.combos) {
+    main = shuffle(COMBOS.filter(c => c.every(ok))).slice(0, n).map(c => ({ type: 'combo', acts: c }));
+  } else {
+    const chosen = (L.must || []).filter(ok);
+    let faces = 0;
+    for (const k of shuffle(L.pool.filter(ok))) {
+      if (chosen.length >= n) break;
+      if (chosen.includes(k)) continue;
+      if (ACTIONS[k].needs === 'face') { if (faces >= (L.faceMax ?? 9)) continue; faces++; }
+      chosen.push(k);
+    }
+    main = shuffle(chosen).map(k => ({ type: 'simon', acts: [k] }));
+  }
+  // One "no Simon says" round, never first, never right after its look-alike
+  const fam = k => ACTIONS[k].fam || k;
+  const pos = 1 + Math.floor(Math.random() * main.length);
+  const prev = main[pos - 1], next = main[pos];
+  const clash = k => (prev && fam(prev.acts[prev.acts.length - 1]) === fam(k)) || (next && fam(next.acts[0]) === fam(k));
+  let trapActs;
+  if (L.combos) {
+    const c = COMBOS.filter(cb => cb.every(ok) && ACTIONS[cb[0]].trap && !clash(cb[0]));
+    trapActs = c.length ? pick(c) : ['head', 'jump'];
+  } else {
+    const c = L.pool.filter(k => ok(k) && ACTIONS[k].trap && !clash(k));
+    trapActs = [c.length ? pick(c) : 'nose'];
+  }
+  main.splice(pos, 0, { type: 'trap', acts: trapActs });
+  return [{ type: 'talk', text: L.say, pose: 'cheer', banner: li }].concat(main);
+}
+
+const Game = {
+  mode: 'start', busy: false,
+  paused: false, lost: false, interrupted: false,
+  levelIdx: 0, startLevel: 0, tutorial: false, tutorialDone: false,
+  rounds: [], ri: 0, results: [],
+  phase: 'idle', pt: 0, lt: 0, step: 0, det: null, speechDone: false, sayEst: 0, fbDur: 2,
+  score: 0, streak: 0, bestStreak: 0, levelStars: 0,
+  lostT: 0, backT: 0, legsSeen: false, calib: null, ldT: 0, upHold: 0, hintsShown: {},
+
+  /* ---------- starting up ---------- */
+  async start() {
+    Sfx.unlock(); Voice.prime(); Sfx.pop();
+    if (this.busy) return;
+    this.busy = true;
+    try {
+      this.mode = 'loading'; UI.setMode('loading'); UI.placeBear('#scrLoading .bearSlot'); Avatar.setPose('wave');
+      if (!Tracker.cameraLive()) {
+        UI.loading('Starting the camera…', 0.05);
+        await Tracker.startCamera();
+      }
+      UI.cam.classList.add('live');
+      if (!Tracker.ready) {
+        try { await Tracker.loadModels((t, f) => UI.loading(t, f)); }
+        catch (e) { console.error(e); throw Object.assign(new Error('Model load failed'), { name: 'ModelError' }); }
+      }
+      this.enterCalib();
+    } catch (e) {
+      console.error(e);
+      this.showError(e);
+    } finally { this.busy = false; }
+  },
+
+  showError(e) {
+    Voice.stop();
+    const name = (e && e.name) || '';
+    let title, msg, tips;
+    if (['NotAllowedError', 'PermissionDeniedError', 'SecurityError'].includes(name)) {
+      title = 'The camera is blocked'; msg = 'Simon needs the camera to see your moves.';
+      tips = ['Tap the camera or lock icon next to the web address and choose Allow.',
+        'On a phone, check that the browser is allowed to use the camera in the phone settings.', 'Then tap Try again.'];
+    } else if (['NotFoundError', 'DevicesNotFoundError', 'OverconstrainedError'].includes(name)) {
+      title = 'No camera found'; msg = 'This device does not seem to have a camera we can use.';
+      tips = ['Plug in a webcam, or open the game on a phone or tablet with a front camera.'];
+    } else if (['NotReadableError', 'TrackStartError', 'AbortError'].includes(name)) {
+      title = 'The camera is busy'; msg = 'Another app may be using the camera right now.';
+      tips = ['Close video calls or other tabs that use the camera.', 'Then tap Try again.'];
+    } else if (['InsecureContext', 'NoCameraApi'].includes(name)) {
+      title = 'The camera is not available here'; msg = 'Browsers only allow the camera on secure pages.';
+      tips = ['Open the game from an https:// address, from localhost, or as a file on this computer.',
+        'Apps like Facebook or Instagram open links in a mini browser that blocks the camera. Open the link in Chrome or Safari instead.'];
+    } else if (name === 'ModelError') {
+      title = "Simon's eyes didn't load"; msg = 'The body tracking files could not be downloaded.';
+      tips = ['Check the internet connection.', 'Then tap Try again. After the first time, it loads faster.'];
+    } else if (name === 'CameraEnded') {
+      title = 'The camera stopped'; msg = 'The camera was switched off or unplugged.';
+      tips = ['Tap Try again to turn it back on.'];
+    } else {
+      title = 'Something went wrong'; msg = 'The game could not start the camera.';
+      tips = ['Reload the page and try again.', 'Chrome, Edge or Safari work best.'];
+    }
+    UI.error(title, msg, tips);
+    this.mode = 'error'; UI.setMode('error'); UI.overlay(''); UI.placeBear('#scrError .bearSlot'); Avatar.setPose('think');
+  },
+
+  onCameraEnded() {
+    if (this.mode === 'start' || this.mode === 'error') return;
+    this.paused = false; this.lost = false;
+    this.showError({ name: 'CameraEnded' });
+  },
+
+  /* ---------- calibration ---------- */
+  enterCalib() {
+    this.mode = 'calib'; UI.setMode('calib'); UI.overlay('');
+    UI.placeBear('#scrCalib .bearSlot'); Avatar.setPose('wave');
+    Tracker.need = { hand: false, face: false };
+    this.calib = { t: 0, good: 0, legsT: 0, hint: '', hintT: 0, spoken: false, spokeAt: -99, done: false, doneT: 0 };
+    UI.calibHint('nobody'); UI.calibProgress(0, false);
+    Voice.speak("Let's get ready! Stand where I can see you.");
+  },
+
+  calibUpdate(dt, b) {
+    const c = this.calib; c.t += dt;
+    if (c.done) { c.doneT += dt; if (c.doneT > 1.7) this.finishCalib(false); return; }
+    const ck = { see: false, mid: false, body: false, legs: false };
+    let hint = 'nobody';
+    if (b && b.present && b.ok) {
+      ck.see = true;
+      const xn = b.cx / b.A;
+      ck.mid = xn > 0.28 && xn < 0.72;
+      const tooClose = !b.hipsVis || b.u > 0.42;
+      const tooFar = b.u < 0.055;
+      ck.body = !tooClose && !tooFar;
+      ck.legs = b.kneesVis;
+      if (b.kneesVis) c.legsT += dt;
+      hint = !ck.mid ? (xn > 0.5 ? 'goLeft' : 'goRight') : tooClose ? 'back' : tooFar ? 'closer' : 'good';
+    } else if (b && b.present) hint = 'partial';
+    UI.calibChecks(ck);
+    const good = ck.see && ck.mid && ck.body;
+    c.good = good ? c.good + dt : Math.max(0, c.good - dt * 0.7);
+    UI.calibProgress(c.good / 1.6, good);
+    if (hint !== c.hint) { c.hint = hint; c.hintT = 0; c.spoken = false; UI.calibHint(hint); }
+    c.hintT += dt;
+    const line = CALIB_LINES[hint];
+    if (line.say && c.t > 2.5 && !Voice.speaking && ((!c.spoken && c.hintT > 0.9) || c.t - c.spokeAt > 7)) {
+      Voice.speak(line.say); c.spoken = true; c.spokeAt = c.t;
+    }
+    if (c.good >= 1.6) {
+      c.done = true; c.doneT = 0;
+      this.legsSeen = this.legsSeen || c.legsT > 0.25;
+      UI.calibHint('done'); Sfx.success(); Avatar.setPose('cheer');
+      Voice.speak('Great! I can see you!');
+    }
+  },
+
+  finishCalib(skipped) {
+    if (this.mode !== 'calib') return;
+    if (skipped) { Voice.stop(); const b = Tracker.body; this.legsSeen = this.legsSeen || !!(b && b.kneesVis); }
+    if (!this.tutorialDone) this.beginTutorial(); else this.beginLevel(this.startLevel);
+  },
+
+  /* ---------- levels ---------- */
+  enterPlay() {
+    this.mode = 'play'; UI.setMode('play'); UI.overlay(''); UI.placeBear('#bearBox');
+    this.paused = false; this.lost = false; this.lostT = 0; this.interrupted = false;
+  },
+  beginTutorial() {
+    this.enterPlay();
+    this.tutorial = true;
+    this.rounds = TUTORIAL.map(r => ({ ...r }));
+    this.ri = 0; this.results = [];
+    UI.hud(); this.startRound();
+  },
+  beginLevel(i) {
+    this.enterPlay();
+    this.tutorial = false;
+    this.levelIdx = i; this.rounds = buildLevel(i); this.ri = 0;
+    this.levelStars = 0; this.results = [];
+    UI.hud(); this.startRound();
+  },
+  levelTime(r) { return r.tutorial ? 12 : LEVELS[this.levelIdx].time; },
+
+  startRound() {
+    this.phase = 'intro'; this.pt = 0; this.step = 0; this.det = null; this.hintsShown = {};
+    Tracker.need = { hand: false, face: false };
+    UI.showCard(null); UI.hideFeedback(); UI.hideHint();
+    Avatar.setPose('idle');
+    UI.dots();
+  },
+
+  beginSay() {
+    const r = this.rounds[this.ri];
+    this.pt = 0; this.lt = 0; this.step = 0; this.speechDone = false;
+    if (r.type === 'talk') {
+      this.phase = 'talk';
+      UI.bubble(r.text); UI.showCard(null); Avatar.setPose(r.pose || 'idle');
+      if (r.banner != null) { UI.levelBanner(r.banner); Sfx.levelUp(); }
+      this.sayEst = Voice.est(r.text);
+      Voice.speak(r.text, () => { this.speechDone = true; });
+      return;
+    }
+    this.phase = 'say';
+    const text = phraseFor(r);
+    const key = r.acts[0];
+    this.det = makeDetector(key, Tracker.baseline(), { trap: r.type === 'trap' });
+    Tracker.need = needsFor(key);
+    UI.bubble(text); UI.showCard(r); Avatar.setPose(ACTIONS[key].pose);
+    this.sayEst = Voice.est(text);
+    Voice.speak(text, () => { this.speechDone = true; });
+  },
+
+  update(dt, b) {
+    if (this.mode === 'calib') return this.calibUpdate(dt, b);
+    if (this.mode === 'levelDone') return this.levelDoneUpdate(dt, b);
+    if (this.mode !== 'play') return;
+
+    const visible = !!(b && b.ok);
+    if (this.lost) {   // waiting for the child to come back
+      this.backT = visible ? this.backT + dt : 0;
+      if (this.backT > 0.7) this.exitLost();
+      return;
+    }
+    if (this.paused) return;
+    this.lostT = visible ? 0 : this.lostT + dt;
+    if (this.lostT > 1.3 && this.phase !== 'feedback') { this.enterLost(); return; }
+    if (b && b.kneesVis) this.legsSeen = true;
+
+    this.pt += dt;
+    const r = this.rounds[this.ri];
+    switch (this.phase) {
+      case 'intro': if (this.pt > (r.type === 'talk' ? 0.3 : 0.9)) this.beginSay(); break;
+      case 'talk': if ((this.speechDone && this.pt > 0.6) || this.pt > this.sayEst + 3) this.nextRound(); break;
+      case 'say': case 'listen': this.listenUpdate(dt, b, r); break;
+      case 'feedback': if ((this.speechDone && this.pt > 1.5) || this.pt > this.fbDur + 1.5) this.nextRound(); break;
+      default: break;
+    }
+  },
+
+  listenUpdate(dt, b, r) {
+    if (this.phase === 'say') {
+      if (this.speechDone || this.pt > this.sayEst + 2.5) { this.phase = 'listen'; this.lt = 0; }
+    } else this.lt += dt;
+    const isTrap = r.type === 'trap';
+    const win = isTrap ? (r.tutorial ? 4 : 3.5) : this.levelTime(r);
+    if (this.pt > 0.45 && b && b.ok) this.det.update(b, dt);
+    const st = this.det.st, A = ACTIONS[st.key];
+    UI.timer(this.phase === 'listen' ? 1 - this.lt / win : 1);
+
+    if (isTrap) {
+      if (st.done) return this.finish('trapFail');
+      if (this.phase === 'listen' && this.lt >= win) return this.finish('trapPass');
+      return;
+    }
+
+    // Friendly hints while the child is trying
+    if (A.wrongHint && st.wrongT > 0.3 && !this.hintsShown.wrong) { this.hintsShown.wrong = true; UI.hint(A.wrongHint); Sfx.pop(); }
+    if (A.needs === 'face' && !st.faceSeen && this.lt > 2.5 && !this.hintsShown.face) { this.hintsShown.face = true; UI.hint('Come a little closer so I can see your face 😊', 3500); }
+    if ((A.legs || st.key === 'knees') && b && b.ok && !b.kneesVis && this.lt > 2 && !this.hintsShown.legs) { this.hintsShown.legs = true; UI.hint('Step back so I can see your legs 🦵', 3500); }
+
+    if (st.done) {
+      if (r.type === 'combo' && this.step === 0) return this.advanceCombo(b, win);
+      return this.finish('success');
+    }
+    if (this.phase === 'listen' && this.lt >= win) {
+      if (r.type === 'combo' && this.step === 1) return this.finish('partial');
+      return this.finish(this.det.isNear() ? 'near' : 'miss');
+    }
+  },
+
+  advanceCombo(b, win) {
+    const r = this.rounds[this.ri], key = r.acts[1];
+    this.step = 1;
+    this.det = makeDetector(key, b && b.ok ? snapshot(b) : Tracker.baseline());
+    Tracker.need = needsFor(key);
+    UI.comboStep(1); Sfx.pop(); Avatar.setPose(ACTIONS[key].pose);
+    if (this.phase === 'listen') Voice.speak('Now ' + ACTIONS[key].say + '!');
+    this.lt = Math.min(this.lt, Math.max(0, win - 8));   // at least 8 seconds for part two
+  },
+
+  finish(kind) {
+    const r = this.rounds[this.ri];
+    Voice.stop();
+    this.phase = 'feedback'; this.pt = 0; this.speechDone = false;
+    Tracker.need = { hand: false, face: false };
+    UI.hideHint();
+    const maxStars = r.type === 'combo' ? 2 : 1;
+    let stars = 0, big = '', sub = '', say = '', mood = 'good';
+    switch (kind) {
+      case 'success': stars = maxStars; big = pick(['Great!', 'Super!', 'You did it!', 'Nice listening!', 'Awesome!', 'Wow!']); say = big; break;
+      case 'near': stars = 1; big = 'Great try!'; sub = 'Almost!'; say = 'Great try! Almost!'; break;
+      case 'partial': stars = 1; big = 'Good job!'; sub = 'One move done'; say = 'Good job!'; break;
+      case 'trapPass': stars = 1; big = 'Nice listening!'; sub = "Simon didn't say it"; say = pick(["Nice listening! I didn't say Simon says!", "You froze! Simon didn't say it!"]); break;
+      case 'trapFail': big = 'Oops!'; sub = "Simon didn't say it"; mood = 'oops'; say = pick(["Oops! Simon didn't say! That was a tricky one.", "Hee hee, I tricked you! Simon didn't say."]); break;
+      default: big = 'Good try!'; sub = "Let's do the next one"; mood = 'try'; say = "Good try! Let's do the next one."; break;
+    }
+    if (r.tutorial && kind === 'trapFail') say = "Oops! I didn't say Simon says, so we freeze like a statue.";
+    if (r.tutorial && kind === 'trapPass') say = "Yes! I didn't say Simon says, so you froze. Well done!";
+
+    this.results[this.ri] = stars >= maxStars ? 'win' : stars > 0 ? 'half' : 'miss';
+    if (!r.tutorial) {
+      this.score += stars; this.levelStars += stars;
+      if (stars > 0) { this.streak++; this.bestStreak = Math.max(this.bestStreak, this.streak); }
+      else this.streak = 0;
+    }
+    UI.hud(); UI.dots();
+    UI.feedback(big, sub, mood);
+    if (stars > 0) {
+      if (kind !== 'trapPass') UI.cardDone();
+      kind === 'near' ? Sfx.soft() : Sfx.success();
+      Avatar.setPose('cheer');
+      Fx.burstAt(UI.card, kind === 'success' ? 36 : 18);
+      if (!r.tutorial) UI.flyStars(stars);
+      if (!r.tutorial && this.streak >= 3 && this.streak % 3 === 0) setTimeout(() => { UI.streakBanner(this.streak); Sfx.streak(); }, 700);
+    } else {
+      mood === 'oops' ? Sfx.oops() : Sfx.soft();
+      Avatar.setPose(mood === 'oops' ? 'giggle' : 'think');
+    }
+    this.fbDur = clamp(Voice.est(say) + 0.6, 1.8, 4.5);
+    Voice.speak(say, () => { this.speechDone = true; });
+  },
+
+  nextRound() {
+    UI.hideFeedback(); UI.hideHint();
+    this.ri++;
+    if (this.ri >= this.rounds.length) {
+      if (this.tutorial) { this.tutorial = false; this.tutorialDone = true; return this.beginLevel(this.startLevel); }
+      return this.levelComplete();
+    }
+    this.startRound();
+  },
+
+  levelComplete() {
+    Tracker.need = { hand: false, face: false };
+    UI.bubble(''); UI.showCard(null);
+    if (this.levelIdx >= LEVELS.length - 1) return this.showFinal();
+    this.mode = 'levelDone'; UI.setMode('levelDone'); UI.placeBear('#scrLevel .bearSlot'); Avatar.setPose('cheer');
+    UI.levelDone(this.levelIdx, this.levelStars);
+    Sfx.levelUp(); Fx.burst(innerWidth / 2, innerHeight / 3, 60);
+    const words = ['one', 'two', 'three', 'four'][this.levelIdx];
+    Voice.speak(`Hooray! Level ${words} is done! Raise both hands to keep playing!`);
+    this.ldT = 0; this.upHold = 0;
+  },
+  levelDoneUpdate(dt, b) {
+    this.ldT += dt;
+    if (this.ldT > 2.5 && b && b.ok && Gest.raised(b).length >= 2) this.upHold += dt;
+    else this.upHold = Math.max(0, this.upHold - dt);
+    $('#ldHold').style.width = Math.round(clamp(this.upHold / 0.6, 0, 1) * 100) + '%';
+    if (this.upHold > 0.6) this.nextLevel();
+  },
+  nextLevel() {
+    if (this.mode !== 'levelDone') return;
+    Sfx.pop(); Voice.stop();
+    this.beginLevel(this.levelIdx + 1);
+  },
+
+  showFinal() {
+    this.mode = 'final'; UI.setMode('final'); UI.overlay(''); UI.placeBear('#scrFinal .bearSlot'); Avatar.setPose('cheer');
+    UI.final(this.score, this.bestStreak);
+    Sfx.fanfare(); Fx.rain(4); Fx.burst(innerWidth / 2, innerHeight / 2, 70);
+    Voice.speak(`You did it! You got ${this.score} stars! You are a super listener!`);
+  },
+
+  /* ---------- pause, lost tracking, restart ---------- */
+  pause(showMenu = true) {
+    if (this.mode !== 'play' || this.paused) return;
+    this.paused = true;
+    this.interrupted = ['say', 'listen', 'talk'].includes(this.phase);
+    Voice.stop();
+    if (showMenu) UI.overlay('pause');
+  },
+  resume() {
+    if (!this.paused) return;
+    this.paused = false; this.lost = false; this.lostT = 0;
+    UI.overlay(''); UI.placeBear('#bearBox');
+    if (this.interrupted) {   // replay the interrupted instruction from the start
+      this.phase = 'intro'; this.pt = 0; this.step = 0; this.det = null;
+      UI.showCard(null); Avatar.setPose('idle');
+    }
+    this.interrupted = false;
+  },
+  enterLost() {
+    this.pause(false);
+    this.lost = true; this.backT = 0;
+    UI.overlay('lost'); UI.placeBear('#scrLost .bearSlot'); Avatar.setPose('peek');
+    Sfx.lost();
+    Voice.speak("I can't see you! Step back so I can see you!");
+  },
+  exitLost() {
+    this.resume();
+    Avatar.setPose('cheer');
+    if (this.phase === 'intro') this.pt = -0.8;   // time for "There you are!"
+    Voice.speak('There you are!');
+  },
+  restartLevel() {
+    Voice.stop();
+    if (this.tutorial) return this.beginTutorial();
+    this.score = Math.max(0, this.score - this.levelStars);
+    this.streak = 0;
+    this.beginLevel(this.levelIdx);
+  },
+  home() {
+    Voice.stop();
+    Tracker.need = { hand: false, face: false };
+    this.mode = 'start'; this.paused = false; this.lost = false;
+    UI.overlay(''); UI.setMode('start'); UI.placeBear('#scrStart .bearSlot'); Avatar.setPose('wave');
+    this.score = 0; this.streak = 0; this.bestStreak = 0; this.levelStars = 0;
+    Tracker.stopCamera(); UI.cam.classList.remove('live');   // camera off while on the home screen
+  },
+  playAgain() {
+    Sfx.unlock(); Voice.stop();
+    this.score = 0; this.streak = 0; this.bestStreak = 0;
+    this.startLevel = 0;
+    if (!Tracker.cameraLive()) return this.start();
+    this.beginLevel(0);
+  },
+  // Grown-up button: the move was done, the camera just missed it
+  countIt() {
+    if (this.mode !== 'play' || this.paused) return;
+    const r = this.rounds[this.ri];
+    if (!r || !(this.phase === 'say' || this.phase === 'listen')) return;
+    this.finish(r.type === 'trap' ? 'trapPass' : 'success');
+  },
+
+  // Target spots drawn on the camera preview (not shown in "no Simon says" rounds)
+  currentTarget(b) {
+    if (this.mode !== 'play' || this.paused || !this.det || !(this.phase === 'say' || this.phase === 'listen')) return null;
+    const r = this.rounds[this.ri];
+    if (!r || r.type === 'trap' || !b || !b.ok) return null;
+    const A = ACTIONS[this.det.st.key];
+    if (!A.target) return null;
+    try { return { t: A.target(b), on: this.det.st.acc > 0 || this.det.st.done }; } catch (e) { return null; }
+  },
+};
+
+/* =========================================================================
+   9. BOOT & MAIN LOOP
+   ========================================================================= */
+let lastFrame = performance.now();
+function loop(now) {
+  const dt = clamp((now - lastFrame) / 1000, 0, 0.1);
+  lastFrame = now;
+  let b = null;
+  if (Tracker.ready && ['calib', 'play', 'levelDone'].includes(Game.mode)) b = Tracker.process(now);
+  try { Game.update(dt, b); } catch (e) { console.error(e); }
+  try { UI.drawPreview(b); } catch (e) { console.error(e); }
+  Avatar.update(dt, now / 1000);
+  Fx.update(dt);
+  requestAnimationFrame(loop);
+}
+
+function boot() {
+  Tracker.video = $('#video');
+  Voice.init(); Avatar.init(); UI.init(); Fx.init();
+  UI.showCard(null);
+
+  const on = (sel, fn) => $(sel).addEventListener('click', fn);
+  on('#btnStart', () => Game.start());
+  on('#btnRetry', () => Game.start());
+  on('#btnErrHome', () => Game.home());
+  on('#btnSkipCalib', () => Game.finishCalib(true));
+  on('#btnPause', () => Game.pause(true));
+  on('#btnResume', () => { Sfx.pop(); Game.resume(); });
+  on('#btnRestart', () => { Sfx.pop(); Game.restartLevel(); });
+  on('#btnHome', () => Game.home());
+  on('#btnNext', () => Game.nextLevel());
+  on('#btnAgain', () => Game.playAgain());
+  on('#btnFinalHome', () => Game.home());
+  on('#btnCount', () => Game.countIt());
+  on('#btnSound', () => {
+    const v = !Sfx.on; Sfx.on = v; Voice.on = v;
+    if (!v) Voice.stop();
+    $('#btnSound').textContent = v ? '🔊' : '🔈';
+  });
+  document.querySelectorAll('.lp').forEach(btn => btn.addEventListener('click', () => {
+    document.querySelectorAll('.lp').forEach(x => x.classList.toggle('on', x === btn));
+    Game.startLevel = +btn.dataset.l;
+    Sfx.unlock(); Sfx.pop();
+  }));
+
+  // Any tap: keep audio and the camera running (mobile browsers can pause them)
+  const wake = () => { Sfx.unlock(); const v = Tracker.video; if (v.srcObject && v.paused) v.play().catch(() => {}); };
+  document.addEventListener('pointerdown', wake, { passive: true });
+
+  document.addEventListener('keydown', e => {
+    if (e.code === 'Space' || e.code === 'Escape') {
+      if (Game.mode !== 'play') return;
+      e.preventDefault();
+      if (Game.paused && !Game.lost) Game.resume(); else if (!Game.paused) Game.pause(true);
+    }
+  });
+  document.addEventListener('visibilitychange', () => {
+    if (document.hidden) { if (Game.mode === 'play' && !Game.paused) Game.pause(true); Voice.stop(); }
+    else { const v = Tracker.video; if (v.srcObject && v.paused) v.play().catch(() => {}); }
+  });
+
+  UI.setMode('start'); UI.placeBear('#scrStart .bearSlot'); Avatar.setPose('wave');
+  requestAnimationFrame(loop);
+}
+boot();
+</script>
+</body>
+</html>

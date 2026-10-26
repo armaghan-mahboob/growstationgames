@@ -1,0 +1,1413 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Rhythm Rocket Band</title>
+<style>
+:root{
+  --bg1:#0d0a2e; --bg2:#2a1d7a; --panel:rgba(24,17,78,.88);
+  --cyan:#3fe0ff; --orange:#ffa53f; --yellow:#ffd54a; --pink:#ff7eb6; --green:#7ef29a;
+  --radius:22px;
+  font-family:"Arial Rounded MT Bold","Nunito","Trebuchet MS",system-ui,sans-serif;
+}
+*{box-sizing:border-box}
+[hidden]{display:none !important}
+html,body{margin:0;height:100%;overflow:hidden;color:#fff;background:linear-gradient(180deg,var(--bg1),var(--bg2));
+  -webkit-tap-highlight-color:transparent;user-select:none;-webkit-user-select:none;touch-action:manipulation}
+#sky{position:fixed;inset:0;pointer-events:none;z-index:0}
+#sky i{position:absolute;border-radius:50%;background:#fff;opacity:.5;animation:twinkle 3s ease-in-out infinite alternate}
+@keyframes twinkle{from{opacity:.15}to{opacity:.85}}
+
+#app{position:relative;z-index:1;height:100%;height:100dvh;display:grid;grid-template-rows:auto 1fr auto;
+  gap:clamp(4px,1vh,10px);padding:clamp(6px,1.2vmin,14px);padding-top:max(env(safe-area-inset-top),clamp(6px,1.2vmin,14px));
+  padding-bottom:max(env(safe-area-inset-bottom),clamp(6px,1.2vmin,14px))}
+
+/* Top bar */
+#topbar{display:flex;align-items:center;gap:clamp(6px,1.5vw,16px);flex-wrap:wrap;background:var(--panel);border-radius:var(--radius);padding:6px 12px}
+.brand{font-size:clamp(14px,2.2vw,22px);white-space:nowrap;font-weight:bold}
+#songBox{flex:1 1 200px;min-width:150px}
+#songName{font-size:clamp(13px,1.8vw,18px);opacity:.9;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+#progress{position:relative;height:clamp(14px,2.4vh,22px);border-radius:999px;background:rgba(255,255,255,.14);margin:4px 18px 2px 4px}
+#progressFill{position:absolute;inset:0 auto 0 0;width:0;border-radius:999px;background:linear-gradient(90deg,var(--cyan),var(--pink),var(--yellow))}
+#progressRocket{position:absolute;top:50%;left:0;transform:translate(-50%,-50%) rotate(45deg);font-size:clamp(18px,3vh,28px)}
+#progressPlanet{position:absolute;right:0;top:50%;transform:translate(70%,-50%);font-size:clamp(18px,3vh,28px)}
+#stars{display:flex;gap:2px;font-size:clamp(24px,3.8vh,36px)}
+.star{color:rgba(255,255,255,.22);transition:color .3s}
+.star.on{color:var(--yellow);text-shadow:0 0 14px #ffd54acc;animation:starPop .5s ease-out}
+@keyframes starPop{0%{transform:scale(.4)}60%{transform:scale(1.4)}100%{transform:scale(1)}}
+#controls{display:flex;align-items:center;gap:6px}
+.icon-btn{width:clamp(42px,6vh,54px);height:clamp(42px,6vh,54px);border-radius:50%;border:0;background:rgba(255,255,255,.16);color:#fff;
+  font-size:clamp(18px,2.8vh,24px);cursor:pointer;display:grid;place-items:center;padding:0}
+.icon-btn:disabled{opacity:.3;cursor:default}
+#volume{width:clamp(60px,10vw,120px);accent-color:var(--yellow)}
+
+/* Stage */
+#stage{position:relative;min-height:0;display:flex;align-items:center;justify-content:center}
+#camWrap{position:relative;flex:none;width:320px;height:240px;border-radius:28px;overflow:hidden;
+  background:radial-gradient(circle at 50% 40%,#3a2b9a,#150f45);box-shadow:0 0 0 4px rgba(255,255,255,.12),0 10px 40px #0008}
+#camWrap.pulse{animation:pulse .3s ease-out}
+@keyframes pulse{0%{box-shadow:0 0 0 4px rgba(255,255,255,.12)}40%{box-shadow:0 0 0 12px rgba(255,213,74,.55)}100%{box-shadow:0 0 0 4px rgba(255,255,255,.12)}}
+#mirror{position:absolute;inset:0;transform:scaleX(-1)}
+#video{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;opacity:0;transition:opacity .5s}
+#video.live{opacity:1}
+#overlay{position:absolute;inset:0;width:100%;height:100%}
+#noCam{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;padding:1em;font-size:clamp(18px,3.4vmin,30px)}
+#noCam .planet{font-size:clamp(70px,22vmin,200px);animation:float 3s ease-in-out infinite alternate}
+@keyframes float{from{transform:translateY(-6%)}to{transform:translateY(6%)}}
+
+/* Cues */
+#cue{position:absolute;left:0;right:0;top:3%;display:flex;justify-content:center;pointer-events:none;z-index:5}
+#cue .bubble{display:flex;align-items:center;gap:.4em;background:rgba(20,14,70,.88);border:4px solid var(--ring,#ffd54a);border-radius:999px;
+  padding:.22em .9em .22em .22em;font-size:clamp(22px,5.2vmin,54px);font-weight:bold;transition:transform .12s;box-shadow:0 0 28px rgba(0,0,0,.4)}
+#cue.now .bubble{transform:scale(1.14)}
+#cue.enter .bubble{animation:cueIn .35s ease-out}
+@keyframes cueIn{from{transform:scale(.5);opacity:0}to{transform:scale(1);opacity:1}}
+#cueRing{width:2.2em;height:2.2em;border-radius:50%;display:grid;place-items:center;
+  background:conic-gradient(var(--ring,#ffd54a) calc(var(--p,0) * 360deg),rgba(255,255,255,.15) 0)}
+#cueIcon{width:80%;height:80%;border-radius:50%;background:#1d1558;display:grid;place-items:center;font-size:1.1em}
+.sideCue{position:absolute;top:22%;display:flex;flex-direction:column;align-items:center;font-size:clamp(48px,14vmin,140px);
+  opacity:0;transform:scale(.6);transition:opacity .2s,transform .2s;pointer-events:none;z-index:4}
+.sideCue.L{left:3%;--c:var(--cyan)} .sideCue.R{right:3%;--c:var(--orange)}
+.sideCue.on{opacity:1;transform:scale(1);animation:wave .45s ease-in-out infinite alternate}
+.sideCue .arrow{font-size:.55em;color:var(--c);text-shadow:0 0 18px var(--c);line-height:1}
+.sideCue .hand{filter:drop-shadow(0 0 16px var(--c)) drop-shadow(0 0 6px var(--c))}
+.sideCue.R .hand{display:inline-block;transform:scaleX(-1)}
+@keyframes wave{from{rotate:-9deg}to{rotate:9deg}}
+#countBig{position:absolute;inset:0;display:grid;place-items:center;font-size:clamp(80px,26vmin,260px);font-weight:900;
+  text-shadow:0 0 30px #ff7eb6,0 6px 0 #6b2bd1;pointer-events:none;opacity:0;z-index:6}
+#countBig.pop{animation:countPop .7s ease-out forwards}
+@keyframes countPop{0%{opacity:0;transform:scale(.3)}25%{opacity:1;transform:scale(1.1)}70%{opacity:1;transform:scale(1)}100%{opacity:0;transform:scale(1.3)}}
+#feedback{position:absolute;left:0;right:0;top:42%;text-align:center;font-weight:900;pointer-events:none;opacity:0;z-index:6}
+#feedback.show{animation:fbPop .9s ease-out forwards}
+#feedback.good{font-size:clamp(34px,9vmin,92px);color:#ffe066;text-shadow:0 0 24px #ff9f1c,0 5px 0 #b5179e}
+#feedback.soft{font-size:clamp(22px,5vmin,46px);color:#d8ecff;text-shadow:0 3px 0 #3a2b9a}
+@keyframes fbPop{0%{opacity:0;transform:scale(.5) translateY(20%)}25%{opacity:1;transform:scale(1.15)}75%{opacity:1;transform:scale(1)}100%{opacity:0;transform:translateY(-30%)}}
+
+.inpanel{position:absolute;left:4%;right:4%;bottom:4%;background:rgba(20,14,70,.88);border-radius:24px;padding:12px 16px;text-align:center;
+  z-index:7;font-size:clamp(18px,3.6vmin,34px);font-weight:bold}
+.inpanel.center{top:50%;bottom:auto;transform:translateY(-50%)}
+.bigemoji{font-size:clamp(48px,12vmin,110px);line-height:1.1}
+.spin{display:inline-block;animation:spin 2s linear infinite}
+@keyframes spin{to{transform:rotate(360deg)}}
+.meter{height:16px;border-radius:999px;background:rgba(255,255,255,.15);margin:10px auto 4px;max-width:420px;overflow:hidden}
+#calMeter{height:100%;width:0;background:linear-gradient(90deg,var(--green),var(--yellow));transition:width .15s}
+#calIcon{font-size:clamp(40px,10vmin,90px);line-height:1.1}
+
+/* Band */
+#band{display:flex;align-items:flex-end;justify-content:center;gap:clamp(6px,3vw,40px);min-height:0}
+.char{display:flex;flex-direction:column;align-items:center;width:clamp(62px,13vh,130px);transform-origin:50% 100%}
+.char svg{width:100%;height:auto;display:block;overflow:visible;transform-origin:50% 100%}
+.char .name{font-size:clamp(11px,1.6vh,16px);opacity:.85;margin-top:2px}
+.char.bA{animation:bopA .32s ease-out} .char.bB{animation:bopB .32s ease-out}
+@keyframes bopA{0%{transform:none}35%{transform:translateY(-8%) scale(1.04,.96)}100%{transform:none}}
+@keyframes bopB{0%{transform:none}35%{transform:translateY(-8%) scale(1.04,.96)}100%{transform:none}}
+.char.cheer svg{animation:cheer .6s ease-out}
+@keyframes cheer{0%{transform:none}40%{transform:translateY(-22%) rotate(-6deg) scale(1.1)}100%{transform:none}}
+.char.dance{animation:dance .45s ease-in-out infinite alternate !important}
+@keyframes dance{from{transform:rotate(-8deg)}to{transform:rotate(8deg) translateY(-10%)}}
+.char.mini{width:clamp(60px,14vmin,110px);animation:float 2.4s ease-in-out infinite alternate}
+.char.mini:nth-child(2){animation-delay:.4s}.char.mini:nth-child(3){animation-delay:.8s}
+#beatBtn{width:clamp(84px,17vh,150px);height:clamp(84px,17vh,150px);flex:none;border-radius:50%;border:6px solid #fff;cursor:pointer;
+  background:radial-gradient(circle at 40% 35%,#ff9a9a,#e8414e 60%,#a71d3a);color:#fff;font:inherit;font-size:clamp(15px,2.6vh,24px);font-weight:bold;
+  box-shadow:0 8px 0 #6d1026,0 10px 30px #0008;display:flex;flex-direction:column;align-items:center;justify-content:center;margin-bottom:8px;touch-action:none}
+#beatBtn .em{font-size:1.8em;line-height:1}
+#beatBtn.pressed{transform:translateY(6px);box-shadow:0 2px 0 #6d1026}
+body.buttonMode #beatBtn{animation:glow 1.2s ease-in-out infinite alternate}
+@keyframes glow{from{filter:brightness(1)}to{filter:brightness(1.25)}}
+
+/* Screens */
+.screen{position:fixed;inset:0;display:flex;align-items:center;justify-content:center;z-index:20;background:rgba(8,6,30,.74);
+  backdrop-filter:blur(4px);-webkit-backdrop-filter:blur(4px);padding:16px}
+.screen.finale{background:rgba(40,20,90,.55)}
+.card{background:var(--panel);border-radius:28px;padding:clamp(16px,3vmin,32px);max-width:min(680px,94vw);max-height:94%;overflow:auto;
+  text-align:center;box-shadow:0 10px 50px #000a;border:3px solid rgba(255,255,255,.15)}
+.card.wide{max-width:min(820px,96vw)}
+h1.title{font-size:clamp(30px,7vmin,64px);margin:.1em 0;color:var(--yellow);text-shadow:0 4px 0 #b5179e,0 0 30px #ff7eb688}
+h2{font-size:clamp(24px,5vmin,44px);margin:.2em 0}
+.lead{font-size:clamp(17px,3vmin,26px);margin:.4em 0 .8em}
+.titleChars{display:flex;justify-content:center;gap:clamp(8px,3vw,30px);margin-bottom:6px}
+.big-btn{font:inherit;font-weight:bold;font-size:clamp(22px,4vmin,36px);padding:.5em 1.4em;border-radius:999px;border:0;cursor:pointer;margin:8px;
+  background:linear-gradient(180deg,#ffe066,#ffb703);color:#3a2300;box-shadow:0 6px 0 #c77d00}
+.big-btn:active{transform:translateY(4px);box-shadow:0 2px 0 #c77d00}
+.small-btn{font:inherit;font-size:clamp(14px,2vmin,18px);padding:.5em 1em;border-radius:999px;border:2px solid rgba(255,255,255,.4);
+  background:transparent;color:#fff;cursor:pointer;margin:6px}
+.note{font-size:clamp(12px,1.8vmin,15px);opacity:.75;margin:.6em auto;max-width:520px}
+.songEmoji{font-size:clamp(60px,14vmin,120px);line-height:1.1}
+.kicker{opacity:.8;font-size:clamp(14px,2.2vmin,20px)}
+.chips{display:flex;flex-wrap:wrap;justify-content:center;gap:8px;margin:10px 0}
+.chip{background:rgba(255,255,255,.14);border-radius:999px;padding:.35em .9em;font-size:clamp(16px,2.8vmin,24px)}
+.endStars{font-size:clamp(50px,12vmin,100px);letter-spacing:.1em}
+.bigstar{color:rgba(255,255,255,.2);display:inline-block}
+.bigstar.on{color:var(--yellow);text-shadow:0 0 20px #ffd54a;animation:starPop .6s ease-out backwards}
+#finaleStars{font-size:clamp(28px,6vmin,54px)}
+.testList{text-align:left;font-size:14px;line-height:1.5;margin:10px 0;max-height:55vh;overflow:auto}
+.testList h3{margin:.8em 0 .2em;font-size:16px;color:var(--yellow)}
+.testList .fail{color:#ffb3b3}
+.testList small{opacity:.8;display:block;margin-left:1.6em}
+#fx{position:fixed;inset:0;width:100%;height:100%;pointer-events:none;z-index:30}
+
+@media (max-height:520px){
+  .brand span{display:none}
+  .char{width:clamp(48px,16vh,90px)} #beatBtn{width:clamp(70px,20vh,110px);height:clamp(70px,20vh,110px)}
+}
+@media (max-width:560px){ .brand span{display:none} #volume{width:70px} }
+@media (prefers-reduced-motion:reduce){
+  .sideCue.on,.char.mini,#noCam .planet,body.buttonMode #beatBtn{animation:none}
+}
+</style>
+</head>
+<body>
+<div id="sky" aria-hidden="true"></div>
+
+<div id="app">
+  <header id="topbar">
+    <div class="brand">🚀 <span>Rhythm Rocket Band</span></div>
+    <div id="songBox">
+      <div id="songName">Ready for takeoff!</div>
+      <div id="progress" role="progressbar" aria-label="Song progress" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0">
+        <div id="progressFill"></div><span id="progressRocket">🚀</span><span id="progressPlanet">🪐</span>
+      </div>
+    </div>
+    <div id="stars" aria-label="Stars"><span class="star">★</span><span class="star">★</span><span class="star">★</span></div>
+    <div id="controls">
+      <button class="icon-btn" id="btnPause" aria-label="Pause" disabled>⏸</button>
+      <button class="icon-btn" id="btnRestart" aria-label="Restart song" disabled>↺</button>
+      <button class="icon-btn" id="btnSound" aria-label="Sound on or off">🔊</button>
+      <input id="volume" type="range" min="0" max="1" step="0.05" value="0.8" aria-label="Volume">
+    </div>
+  </header>
+
+  <main id="stage">
+    <div id="camWrap">
+      <div id="mirror"><video id="video" playsinline muted autoplay></video><canvas id="overlay"></canvas></div>
+      <div id="noCam" hidden><div class="planet">🪐</div><p>Tap the big drum on the beat!</p></div>
+      <div id="sideL" class="sideCue L"><span class="arrow">⬆</span><span class="hand">✋</span></div>
+      <div id="sideR" class="sideCue R"><span class="arrow">⬆</span><span class="hand">✋</span></div>
+      <div id="cue" hidden><div class="bubble"><div id="cueRing"><span id="cueIcon">🙌</span></div><div id="cueText">Hands up!</div></div></div>
+      <div id="countBig" aria-live="polite"></div>
+      <div id="feedback" aria-live="polite"></div>
+
+      <div id="calPanel" class="inpanel" hidden>
+        <div id="calIcon">🧍</div><div id="calText">Stand where we can see you!</div>
+        <div class="meter"><div id="calMeter"></div></div>
+        <button class="small-btn" id="btnCalSkip">Skip (grown-ups)</button>
+      </div>
+      <div id="lostPanel" class="inpanel center" hidden>
+        <div class="bigemoji">👀</div><div>Where did you go?<br>Come back to the rocket!</div>
+        <button class="small-btn" id="btnLostButton">Keep playing with the drum button</button>
+      </div>
+      <div id="loadPanel" class="inpanel center" hidden>
+        <div class="bigemoji"><span class="spin">🛸</span></div><div id="loadText">Warming up the rocket camera...</div>
+      </div>
+    </div>
+  </main>
+
+  <footer id="band">
+    <div class="char" id="char0"></div>
+    <div class="char" id="char1"></div>
+    <button id="beatBtn" aria-label="Beat drum button"><span class="em">🥁</span><span>Tap!</span></button>
+    <div class="char" id="char2"></div>
+  </footer>
+</div>
+
+<section class="screen" id="scrTitle">
+  <div class="card">
+    <div class="titleChars" id="titleChars"></div>
+    <h1 class="title">Rhythm Rocket Band</h1>
+    <p class="lead">Join the space band! Move your arms to the beat. 🎵</p>
+    <button class="big-btn" id="btnStart">▶ Start</button><br>
+    <button class="small-btn" id="btnNoCam">🥁 Play with the drum button (no camera)</button>
+    <p class="note">Grown-ups: the camera picture is processed on this device and never uploaded. Stand about 1.5 to 2 metres back so both arms fit in the picture.</p>
+    <button class="small-btn" id="btnTests">🧪 Grown-ups: run self-tests</button>
+  </div>
+</section>
+
+<section class="screen" id="scrError" hidden>
+  <div class="card">
+    <div class="bigemoji">📷</div><h2>Camera trouble</h2><p id="errText"></p>
+    <button class="big-btn" id="btnRetry">↻ Try again</button><br>
+    <button class="small-btn" id="btnErrNoCam">🥁 Play with the drum button</button>
+    <button class="small-btn" id="btnErrHome">🏠 Home</button>
+  </div>
+</section>
+
+<section class="screen" id="scrIntro" hidden>
+  <div class="card">
+    <div class="songEmoji" id="introEmoji">🌙</div>
+    <div class="kicker" id="introNum">Stage 1 of 7</div>
+    <h2 id="introTitle">Moon Wave</h2>
+    <p class="lead" id="introText"></p>
+    <div class="chips" id="introChips"></div>
+    <button class="big-btn" id="btnPlay">▶ Play!</button>
+    <p class="note" id="introHint">Or raise both hands to start!</p>
+  </div>
+</section>
+
+<section class="screen" id="scrPause" hidden>
+  <div class="card">
+    <h2>⏸ Paused</h2><p class="lead">Take a little space break!</p>
+    <button class="big-btn" id="btnResume">▶ Keep playing</button><br>
+    <button class="small-btn" id="btnPauseRestart">↺ Start song again</button>
+    <button class="small-btn" id="btnRecal">📷 Check camera again</button>
+    <button class="small-btn" id="btnHome">🏠 Home</button>
+  </div>
+</section>
+
+<section class="screen" id="scrSongEnd" hidden>
+  <div class="card">
+    <h2>Stage clear! 🎉</h2>
+    <div class="endStars" id="endStars"></div>
+    <p class="lead" id="endText"></p>
+    <button class="big-btn" id="btnNext">Next stage ▶</button><br>
+    <button class="small-btn" id="btnAgain">↺ Play it again</button>
+    <p class="note" id="endHint">Or raise both hands!</p>
+  </div>
+</section>
+
+<section class="screen finale" id="scrFinale" hidden>
+  <div class="card">
+    <div class="titleChars" id="finaleChars"></div>
+    <h1 class="title">Rocket Band Superstar!</h1>
+    <div class="endStars" id="finaleStars"></div>
+    <p class="lead" id="finaleText"></p>
+    <button class="big-btn" id="btnPlayAgain">🔁 Play again</button>
+    <button class="small-btn" id="btnFinaleHome">🏠 Home</button>
+  </div>
+</section>
+
+<section class="screen" id="scrTests" hidden>
+  <div class="card wide">
+    <h2>🧪 Self-tests</h2><p id="testSummary">Running...</p>
+    <div id="testList" class="testList"></div>
+    <button class="small-btn" id="btnTestsAgain">Run again</button>
+    <button class="big-btn" id="btnTestsClose">Close</button>
+  </div>
+</section>
+
+<canvas id="fx"></canvas>
+
+<script type="module">
+/* =====================================================================
+   Rhythm Rocket Band
+   Pure logic first (clock, chart, judge, detector, audio), then UI/game.
+   ===================================================================== */
+
+const MP_VERSION = '0.10.14';
+const MP_URL  = `https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@${MP_VERSION}/vision_bundle.mjs`;
+const MP_WASM = `https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@${MP_VERSION}/wasm`;
+const MODEL_URL = 'https://storage.googleapis.com/mediapipe-models/pose_landmarker/pose_landmarker_lite/float16/1/pose_landmarker_lite.task';
+
+const CFG = {
+  countInBeats: 4,        // "3, 2, 1, Go!"
+  beatsPerAction: 2,      // one move every 2 beats: lots of time for little bodies
+  windowFrac: 0.5,        // early and late window = half the gap between moves (contiguous, no overlap)
+  lookahead: 0.12,        // audio scheduling lookahead in seconds
+  startLeadMs: 200,       // small head start so the first beat is scheduled cleanly
+  lostPoseMs: 1500, regainPoseMs: 700, staleFrameMs: 1500,
+  edgeRefractoryMs: 250,  // ignore re-triggers faster than this
+  smoothAlpha: 0.55,      // landmark smoothing (EMA)
+  minVis: 0.5,
+  handUpOn: 0.15,         // wrist above shoulder by 15% of shoulder width = hand up
+  handUpOff: -0.05,       // must come back down below shoulder level to re-arm
+  clapOn: 0.5, clapOff: 0.85, // wrist distance relative to shoulder width
+  resumeCountMs: 700,
+};
+
+/* Seven stages. Every stage is a little faster, has a slightly tighter timing window
+   and a longer, trickier dance than the one before it. */
+const SONGS = [
+  { id:'moon', stage:'Launch Pad', level:'Easy', title:'Moon Wave', emoji:'🌙', bpm:76, windowFrac:0.50, root:60, prog:[0,9,5,7], hero:0,
+    melody:[0,1,2,1, 2,3,2,null, 0,1,2,4, 3,2,0,null],
+    pattern:['both','both','both','both','left','right','left','right','left','right','left','right','both','both'],
+    intro:'Hands up high, then wave one hand at a time!' },
+  { id:'clap', stage:'Blast Off', level:'Easy+', title:'Star Clap', emoji:'⭐', bpm:82, windowFrac:0.50, root:62, prog:[0,7,9,5], hero:1,
+    melody:[2,2,4,null, 3,2,1,null, 2,4,5,4, 2,1,0,null],
+    pattern:['both','both','clap','clap','both','clap','both','clap','both','clap','both','clap','clap','both'],
+    intro:'Rocket arms, then clap clap clap!' },
+  { id:'party', stage:'Orbit Party', level:'Medium', title:'Rocket Party', emoji:'🚀', bpm:88, windowFrac:0.48, root:65, prog:[0,5,7,5], hero:2, groove:'party',
+    melody:[0,2,4,5, 4,2,4,null, 5,4,2,4, 2,1,0,null],
+    pattern:['left','right','left','right','both','clap','both','clap','left','left','right','right','both','clap','both','both'],
+    intro:'Mix it all up for the big rocket party!' },
+  { id:'comet', stage:'Comet Trail', level:'Medium+', title:'Comet Conga', emoji:'☄️', bpm:94, windowFrac:0.46, root:64, prog:[0,7,9,5], hero:0, groove:'latin',
+    melody:[0,2,4,2, 5,4,2,null, 3,5,7,5, 4,2,0,null],
+    pattern:['both','left','right','clap','both','both','left','right','clap','clap','left','right','both','clap','left','right','both','clap'],
+    intro:'Switch hands quickly, then clap along with the comet!' },
+  { id:'galaxy', stage:'Nebula Disco', level:'Tricky', title:'Galaxy Groove', emoji:'🌌', bpm:100, windowFrac:0.43, root:67, prog:[0,5,9,7], hero:1, groove:'disco', lead:'square',
+    melody:[4,4,5,4, 2,null,2,4, 5,7,5,4, 2,0,2,null],
+    pattern:['left','right','both','clap','right','left','both','clap','left','left','right','right','both','both','clap','clap','left','right','both','clap'],
+    intro:'Quick hands, claps and rocket arms. Find the groove!' },
+  { id:'blackhole', stage:'Black Hole Boogie', level:'Tricky+', title:'Black Hole Boogie', emoji:'🌀', bpm:106, windowFrac:0.40, root:62, prog:[0,7,5,9], hero:2, groove:'rock', lead:'sawtooth',
+    melody:[0,null,2,4, 5,4,2,null, 7,5,4,5, 2,4,2,0],
+    pattern:['both','clap','left','right','clap','both','right','left','both','clap','clap','left','right','both','left','clap','right','both','clap','left','right','both'],
+    intro:'A long boogie with fast moves. Stay with the beat!' },
+  { id:'supernova', stage:'Supernova Showdown', level:'Super!', title:'Supernova Showdown', emoji:'💥', bpm:112, windowFrac:0.38, root:65, prog:[0,5,7,9], hero:0, groove:'boss', lead:'sawtooth',
+    melody:[4,5,7,5, 4,2,4,5, 7,8,7,5, 4,2,0,null],
+    pattern:['left','right','both','clap','right','left','clap','both','left','right','left','right','both','clap','clap','both','right','left','clap','both','left','right','both','clap'],
+    intro:'The biggest show in the galaxy! Use every move you know!' },
+];
+
+const ACTION_INFO = {
+  both:  { icon:'🙌', text:'Hands up!',  color:'#ffd54a' },
+  clap:  { icon:'👏', text:'Clap!',      color:'#ff7eb6' },
+  left:  { icon:'✋', text:'This hand!', color:'#3fe0ff', side:'L' }, // child's left = screen left in the mirror
+  right: { icon:'✋', text:'This hand!', color:'#ffa53f', side:'R' },
+};
+
+const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
+const pick = arr => arr[Math.floor(Math.random() * arr.length)];
+const midiHz = m => 440 * Math.pow(2, (m - 69) / 12);
+const PENTA = [0, 2, 4, 7, 9];
+const degreeToMidi = (root, d) => root + 12 + PENTA[((d % 5) + 5) % 5] + 12 * Math.floor(d / 5);
+
+/* ---------- Chart ---------- */
+function buildChart(song, { clapReliable = true } = {}) {
+  const beatSec = 60 / song.bpm;
+  let alt = 0;
+  const actions = song.pattern.map(a => (a === 'clap' && !clapReliable) ? (alt++ % 2 === 0 ? 'left' : 'right') : a);
+  const firstBeat = CFG.countInBeats + 1;
+  const per = song.beatsPerAction ?? CFG.beatsPerAction;
+  const events = actions.map((action, i) => {
+    const beat = firstBeat + i * per;
+    return { i, beat, t: beat * beatSec, action };
+  });
+  const endBeat = events[events.length - 1].beat + 3;
+  return { song, beatSec, spacing: beatSec * per, windowFrac: song.windowFrac ?? CFG.windowFrac, events, endBeat,
+           endTime: endBeat * beatSec, actionBeats: new Set(events.map(e => e.beat)) };
+}
+
+function beatsDue(nextBeat, now, lookahead, beatSec, endBeat) {
+  const due = []; let b = nextBeat;
+  while (b <= endBeat && b * beatSec < now + lookahead) {
+    const delay = b * beatSec - now;
+    if (delay > -0.05) due.push({ beat: b, delay: Math.max(0, delay) }); // too-late beats are skipped, never bunched
+    b++;
+  }
+  return { due, next: b };
+}
+const resyncBeat = (now, beatSec) => Math.max(0, Math.ceil(now / beatSec - 1e-6));
+
+const starsFor = (hits, total) => { if (total <= 0) return 3; const r = hits / total; return r >= 0.75 ? 3 : r >= 0.4 ? 2 : 1; };
+const liveStars = (hits, total) => { const r = total ? hits / total : 0; return r >= 0.75 ? 3 : r >= 0.4 ? 2 : hits > 0 ? 1 : 0; };
+
+/* ---------- Clock (pausable, injectable time source) ---------- */
+class SongClock {
+  constructor(now = () => performance.now()) { this.now = now; this.reset(); }
+  reset() { this.running = false; this.acc = 0; this.startedAt = 0; }
+  start(offsetMs = 0) { this.acc = offsetMs; this.startedAt = this.now(); this.running = true; }
+  pause() { if (!this.running) return; this.acc += this.now() - this.startedAt; this.running = false; }
+  resume() { if (this.running) return; this.startedAt = this.now(); this.running = true; }
+  ms() { return this.acc + (this.running ? this.now() - this.startedAt : 0); }
+  sec() { return this.ms() / 1000; }
+}
+
+/* ---------- Judge: one score per beat, gentle misses ---------- */
+class ActionJudge {
+  constructor(events, spacing, windowFrac = CFG.windowFrac) {
+    this.events = events.map(e => ({ ...e, state: 'pending', hitAt: null }));
+    this.early = spacing * windowFrac; this.late = spacing * windowFrac;
+    this.cursor = 0; this.hits = 0; this.misses = 0;
+  }
+  update(st) {
+    const missed = [];
+    while (this.cursor < this.events.length) {
+      const e = this.events[this.cursor];
+      if (e.state !== 'pending') { this.cursor++; continue; }
+      if (st >= e.t + this.late) { e.state = 'miss'; this.misses++; missed.push(e); this.cursor++; continue; }
+      break;
+    }
+    return missed;
+  }
+  active(st) {
+    for (let i = this.cursor; i < this.events.length; i++) {
+      const e = this.events[i];
+      if (st < e.t - this.early) return null;
+      if (e.state === 'pending' && st < e.t + this.late) return e;
+    }
+    return null;
+  }
+  current(st) {
+    for (let i = this.cursor; i < this.events.length; i++) {
+      const e = this.events[i];
+      if (e.state === 'pending' && st < e.t + this.late) return e;
+    }
+    return null;
+  }
+  register(action, st) {
+    const e = this.active(st);
+    if (!e) return { result: 'none' };
+    if (action !== 'any' && action !== e.action) return { result: 'wrong', index: e.i };
+    e.state = 'hit'; e.hitAt = st; this.hits++;
+    return { result: 'hit', index: e.i, offset: st - e.t };
+  }
+  get done() { return this.cursor >= this.events.length; }
+  get total() { return this.events.length; }
+}
+
+class Campaign {
+  constructor(n) { this.n = n; this.reset(); }
+  reset() { this.index = 0; this.results = []; }
+  record(stars) { this.results[this.index] = stars; return this.index >= this.n - 1 ? 'finale' : 'next'; }
+  advance() { this.index = Math.min(this.index + 1, this.n - 1); }
+  get totalStars() { return this.results.reduce((a, b) => a + (b || 0), 0); }
+}
+
+/* ---------- Pose -> actions (smoothing, hysteresis, rising edges only) ---------- */
+class EdgeSwitch {
+  constructor(refractoryMs) { this.ref = refractoryMs; this.on = false; this.lastEdge = -Infinity; }
+  update(onCond, offCond, t) {
+    if (!this.on && onCond) {
+      this.on = true;
+      if (t - this.lastEdge >= this.ref) { this.lastEdge = t; return true; }
+      return false;
+    }
+    if (this.on && offCond) this.on = false;
+    return false;
+  }
+}
+
+class PoseActionDetector {
+  constructor(cfg = CFG) { this.cfg = cfg; this.clapOn = cfg.clapOn; this.clapOff = cfg.clapOff; this.setUpThreshold(cfg.handUpOn); this.reset(); }
+  setUpThreshold(v) { this.upOn = v; this.upOff = Math.min(v - 0.2, this.cfg.handUpOff); }
+  reset() {
+    const r = this.cfg.edgeRefractoryMs;
+    this.s = null; this.lastValid = -Infinity; this.primed = false;
+    this.L = new EdgeSwitch(r); this.R = new EdgeSwitch(r); this.B = new EdgeSwitch(r); this.C = new EdgeSwitch(r);
+  }
+  process(lm, t) {
+    const res = { valid: false, actions: [], info: null };
+    if (!lm || lm.length < 17) return res;
+    if (t - this.lastValid > 600) { this.s = null; this.primed = false; }
+    const a = this.cfg.smoothAlpha;
+    if (!this.s) this.s = lm.map(p => ({ x: p.x, y: p.y, v: p.visibility ?? 1 }));
+    else for (let i = 0; i < lm.length; i++) {
+      const p = lm[i], q = this.s[i];
+      q.x += a * (p.x - q.x); q.y += a * (p.y - q.y); q.v += a * ((p.visibility ?? 1) - q.v);
+    }
+    const s = this.s, nose = s[0], ls = s[11], rs = s[12], le = s[13], re = s[14], lw = s[15], rw = s[16];
+    if (ls.v < this.cfg.minVis || rs.v < this.cfg.minVis) return res;
+    const sw = Math.hypot(ls.x - rs.x, ls.y - rs.y);
+    if (sw < 0.03) return res;
+    this.lastValid = t;
+
+    // Hands raised high often leave the frame: fall back to the elbow then.
+    const arm = (sh, el, wr) => wr.v >= 0.3 ? (sh.y - wr.y) / sw : (el.v >= 0.3 ? (sh.y - el.y) / sw + 0.35 : -1);
+    const relL = arm(ls, le, lw), relR = arm(rs, re, rw);
+    const wristVis = Math.min(lw.v, rw.v);
+    const dist = Math.hypot(lw.x - rw.x, lw.y - rw.y) / sw;
+    const clapSeen = wristVis >= 0.4 && dist < this.clapOn;
+    const info = { sw, relL, relR, dist, wristVis, pts: s, full: nose.v > 0.5, tooFar: sw < 0.09, tooClose: sw > 0.5 };
+    res.valid = true; res.info = info;
+
+    const lOn = relL > this.upOn, lOff = relL < this.upOff, rOn = relR > this.upOn, rOff = relR < this.upOff;
+    if (!this.primed) { // first frame after (re)acquiring: adopt the current pose, emit nothing
+      this.L.on = lOn; this.R.on = rOn; this.B.on = lOn && rOn; this.C.on = clapSeen; this.primed = true;
+    } else {
+      if (this.L.update(lOn, lOff, t)) res.actions.push('left');
+      if (this.R.update(rOn, rOff, t)) res.actions.push('right');
+      const both = this.L.on && this.R.on;
+      if (this.B.update(both, !both, t)) res.actions.push('both');
+      if (this.C.update(clapSeen, dist > this.clapOff, t)) res.actions.push('clap');
+    }
+    info.leftUp = this.L.on; info.rightUp = this.R.on;
+    return res;
+  }
+}
+
+/* ---------- Audio (all synthesized) ---------- */
+class AudioEngine {
+  constructor(factory = () => { const C = window.AudioContext || window.webkitAudioContext; return C ? new C() : null; }) {
+    this.factory = factory; this.ctx = null; this.available = true; this.muted = false; this.volume = 0.8;
+  }
+  async init() {
+    if (this.ctx) { await this.resume(); return this.ctx; }
+    let ctx = null;
+    try { ctx = this.factory(); } catch (e) { ctx = null; }
+    if (!ctx) { this.available = false; return null; }
+    this.ctx = ctx;
+    this.master = ctx.createGain(); this.master.connect(ctx.destination);
+    this.sfxBus = ctx.createGain(); this.sfxBus.gain.value = 0.9; this.sfxBus.connect(this.master);
+    this.musicBus = null; this.newMusicBus();
+    this.applyGain(true);
+    const len = Math.floor(ctx.sampleRate);
+    this.noiseBuf = ctx.createBuffer(1, len, ctx.sampleRate);
+    const d = this.noiseBuf.getChannelData(0); for (let i = 0; i < len; i++) d[i] = Math.random() * 2 - 1;
+    try { const b = ctx.createBuffer(1, 1, 22050), s = ctx.createBufferSource(); s.buffer = b; s.connect(ctx.destination); s.start(0); } catch (e) {}
+    await this.resume();
+    return ctx;
+  }
+  async resume() { if (this.ctx && this.ctx.state !== 'running') { try { await this.ctx.resume(); } catch (e) {} } return this.ctx ? this.ctx.state : 'none'; }
+  get ready() { return !!this.ctx && this.ctx.state === 'running'; }
+  now() { return this.ctx ? this.ctx.currentTime : 0; }
+  newMusicBus() {
+    const ctx = this.ctx, old = this.musicBus;
+    if (old) { try { old.gain.setTargetAtTime(0, ctx.currentTime, 0.02); setTimeout(() => { try { old.disconnect(); } catch (e) {} }, 250); } catch (e) {} }
+    this.musicBus = ctx.createGain(); this.musicBus.gain.value = 0.75; this.musicBus.connect(this.master);
+  }
+  stopMusic() { if (this.ctx) this.newMusicBus(); } // silences anything already scheduled
+  setMuted(m) { this.muted = !!m; this.applyGain(); }
+  setVolume(v) { this.volume = clamp(v, 0, 1); this.applyGain(); }
+  applyGain(immediate) {
+    if (!this.master) return;
+    const g = this.muted ? 0 : this.volume;
+    if (immediate) this.master.gain.value = g; else this.master.gain.setTargetAtTime(g, this.ctx.currentTime, 0.03);
+  }
+  tone({ f, f2, t, dur = 0.2, type = 'triangle', vol = 0.2, a = 0.01, bus }) {
+    if (!this.ctx) return;
+    const ctx = this.ctx; t = Math.max(t ?? ctx.currentTime, ctx.currentTime); vol = Math.max(vol, 0.0002);
+    const o = ctx.createOscillator(), g = ctx.createGain();
+    o.type = type; o.frequency.setValueAtTime(f, t);
+    if (f2) o.frequency.exponentialRampToValueAtTime(f2, t + dur * 0.9);
+    g.gain.setValueAtTime(0.0001, t); g.gain.exponentialRampToValueAtTime(vol, t + a); g.gain.exponentialRampToValueAtTime(0.0001, t + dur);
+    o.connect(g); g.connect(bus || this.sfxBus); o.start(t); o.stop(t + dur + 0.05);
+  }
+  noise({ t, dur = 0.1, vol = 0.1, filter = 'highpass', freq = 5000, bus }) {
+    if (!this.ctx || !this.noiseBuf) return;
+    const ctx = this.ctx; t = Math.max(t ?? ctx.currentTime, ctx.currentTime);
+    const src = ctx.createBufferSource(); src.buffer = this.noiseBuf;
+    const fl = ctx.createBiquadFilter(); fl.type = filter; fl.frequency.value = freq;
+    const g = ctx.createGain(); g.gain.setValueAtTime(Math.max(vol, 0.0002), t); g.gain.exponentialRampToValueAtTime(0.0001, t + dur);
+    src.connect(fl); fl.connect(g); g.connect(bus || this.sfxBus); src.start(t); src.stop(t + dur + 0.02);
+  }
+  kick(t, bus) { this.tone({ f: 140, f2: 45, t, dur: 0.22, type: 'sine', vol: 0.55, bus }); }
+  snare(t, bus) { this.noise({ t, dur: 0.12, vol: 0.14, filter: 'bandpass', freq: 2000, bus }); }
+  hat(t, bus, vol = 0.07) { this.noise({ t, dur: 0.035, vol, filter: 'highpass', freq: 7000, bus }); }
+  crash(t, bus) { this.noise({ t, dur: 1.2, vol: 0.1, filter: 'highpass', freq: 5000, bus }); }
+  bell(t, bus) { this.tone({ f: 2093, t, dur: 0.3, type: 'sine', vol: 0.05, bus }); }
+  tick(t, accent, bus) { this.tone({ f: accent ? 1568 : 1047, t, dur: 0.09, type: 'triangle', vol: accent ? 0.3 : 0.2, bus }); }
+  sfxHit() { const t = this.now(); [88, 91, 96].forEach((m, i) => this.tone({ f: midiHz(m), t: t + i * 0.055, dur: 0.18, type: 'triangle', vol: 0.15 })); this.noise({ t: t + 0.1, dur: 0.15, vol: 0.04, freq: 8000 }); }
+  sfxMiss() { this.tone({ f: 392, f2: 330, t: this.now(), dur: 0.22, type: 'sine', vol: 0.05 }); }
+  sfxTap() { const t = this.now(); this.tone({ f: 210, f2: 95, t, dur: 0.2, type: 'sine', vol: 0.35 }); this.noise({ t, dur: 0.03, vol: 0.06, filter: 'bandpass', freq: 3000 }); }
+  sfxBlip(hi) { this.tone({ f: hi ? 1175 : 880, t: this.now(), dur: 0.14, type: 'triangle', vol: 0.2 }); }
+  sfxStar() { const t = this.now(); [96, 100].forEach((m, i) => this.tone({ f: midiHz(m), t: t + 0.15 + i * 0.08, dur: 0.25, type: 'sine', vol: 0.1 })); }
+  jingle() { const t = this.now() + 0.05; [72, 76, 79, 84].forEach((m, i) => this.tone({ f: midiHz(m), t: t + i * 0.13, dur: i === 3 ? 0.7 : 0.18, type: 'triangle', vol: 0.18 })); this.crash(t + 0.39); }
+  fanfare() {
+    if (!this.ctx) return;
+    const t = this.now() + 0.05;
+    [[67,0,.18],[72,.2,.18],[76,.4,.18],[79,.6,.35],[76,1.0,.18],[79,1.2,.6],[84,1.9,1.2]].forEach(([m,o,d]) => {
+      this.tone({ f: midiHz(m), t: t + o, dur: d + 0.1, type: 'square', vol: 0.05 });
+      this.tone({ f: midiHz(m), t: t + o, dur: d + 0.15, type: 'triangle', vol: 0.14 });
+    });
+    [0, .45, .9, 1.35, 1.9].forEach(o => this.kick(t + o));
+    this.crash(t + 1.9);
+    [60, 64, 67, 72].forEach(m => this.tone({ f: midiHz(m), t: t + 1.9, dur: 2.2, type: 'triangle', vol: 0.06 }));
+  }
+}
+
+const Music = {
+  playBeat(audio, chart, beat, at) {
+    if (!audio.ctx) return;
+    const song = chart.song, bs = chart.beatSec, bus = audio.musicBus;
+    if (beat < CFG.countInBeats) { audio.tick(at, beat === CFG.countInBeats - 1, bus); return; }
+    if (beat > chart.endBeat) return;
+    const g = beat - CFG.countInBeats, bar = Math.floor(g / 4), inBar = g % 4;
+    const chord = song.prog[bar % song.prog.length];
+    if (beat === chart.endBeat) {
+      audio.kick(at, bus); audio.crash(at, bus);
+      [0, 7, 12, 16].forEach(i => audio.tone({ f: midiHz(song.root + chord + i), t: at, dur: bs * 3, type: 'triangle', vol: 0.07, bus }));
+      audio.tone({ f: midiHz(song.root - 12 + chord), t: at, dur: bs * 3, type: 'sine', vol: 0.2, bus });
+      return;
+    }
+    if (inBar === 0 || inBar === 2) audio.kick(at, bus); else audio.snare(at, bus);
+    audio.hat(at, bus); audio.hat(at + bs / 2, bus, 0.045);
+    if (song.groove === 'party' && inBar === 3) audio.kick(at + bs / 2, bus);
+    const gr = song.groove;
+    if (gr === 'latin') {
+      if (inBar === 1 || inBar === 3) audio.tone({ f: 330, f2: 220, t: at + bs * 0.5, dur: 0.1, type: 'sine', vol: 0.16, bus });
+      if (inBar === 2) audio.tone({ f: 440, f2: 300, t: at + bs * 0.75, dur: 0.08, type: 'sine', vol: 0.12, bus });
+    }
+    if (gr === 'disco' || gr === 'boss') { if (inBar === 1 || inBar === 3) audio.kick(at, bus); audio.hat(at + bs / 2, bus, 0.11); }
+    if (gr === 'rock') { if (inBar === 1 || inBar === 3) audio.snare(at, bus); if (inBar === 0 && bar % 4 === 0) audio.crash(at, bus); }
+    if (gr === 'boss') [0, 7].forEach((iv, k) => audio.tone({ f: midiHz(song.root + 12 + chord + iv + (inBar % 2 ? 5 : 0)), t: at + k * bs / 2, dur: bs * 0.4, type: 'square', vol: 0.035, bus }));
+    audio.tone({ f: midiHz(song.root - 24 + chord + (inBar === 2 ? 7 : 0)), t: at, dur: bs * 0.85, type: 'triangle', vol: 0.22, bus });
+    if (inBar === 0) [0, 7, 12].forEach(i => audio.tone({ f: midiHz(song.root - 12 + chord + i), t: at, dur: bs * 3.8, type: 'sine', vol: 0.035, a: 0.3, bus }));
+    const d = song.melody[g % song.melody.length];
+    if (d !== null) {
+      const f = midiHz(degreeToMidi(song.root, d)), lead = song.lead || 'triangle';
+      audio.tone({ f, t: at, dur: bs * 0.7, type: lead, vol: lead === 'triangle' ? 0.12 : 0.07, bus });
+      audio.tone({ f, t: at, dur: bs * 0.5, type: 'square', vol: 0.03, bus });
+    }
+    if (chart.actionBeats.has(beat)) audio.bell(at, bus);
+  }
+};
+
+/* =====================================================================
+   UI + game
+   ===================================================================== */
+const $ = id => document.getElementById(id);
+const REDUCED = matchMedia('(prefers-reduced-motion: reduce)').matches;
+const esc = s => String(s).replace(/[&<>"]/g, c => ({ '&':'&amp;', '<':'&lt;', '>':'&gt;', '"':'&quot;' }[c]));
+
+const audio = new AudioEngine();
+const clock = new SongClock();
+const detector = new PoseActionDetector();
+const campaign = new Campaign(SONGS.length);
+const NO_POSE = { valid: false, actions: [], info: null };
+
+const G = {
+  state: 'title', mode: 'camera', clapReliable: false,
+  chart: null, judge: null, nextBeat: 0, lastBeatShown: -1, liveStars: 0,
+  lastPose: null, presentSince: 0, absentSince: 0, lastFrameAt: 0,
+  cal: null, cdStart: 0, cdLast: null, handsGateAt: 0, outcome: 'next', dpr: 1, beatFlip: false,
+};
+
+class AppError extends Error { constructor(code, cause) { super(code); this.code = code; this.cause = cause; } }
+const ERR = {
+  insecure: 'The camera only works when this page is opened from https:// or http://localhost. Open it through a small local web server.',
+  nocamapi: "This browser can't use the camera. Try a recent Chrome, Edge, Firefox or Safari.",
+  denied:   'The camera is blocked. Click the camera icon in the address bar, allow it, then press "Try again".',
+  nocam:    "We couldn't find a camera. Plug one in and press \"Try again\".",
+  busy:     'The camera is busy in another app. Close that app and press "Try again".',
+  model:    "The movement tracker couldn't load. It needs an internet connection the first time.",
+  ended:    'The camera stopped. Check the cable or permissions and press "Try again".',
+  camera:   'Something went wrong starting the camera.',
+};
+
+/* ---------- Characters ---------- */
+const CHARS = [
+  { name: 'Zib', svg: `<svg viewBox="0 0 120 150" aria-hidden="true">
+    <path d="M42 32 L34 10" stroke="#7ef29a" stroke-width="5" stroke-linecap="round"/><path d="M78 32 L86 10" stroke="#7ef29a" stroke-width="5" stroke-linecap="round"/>
+    <circle cx="34" cy="9" r="7" fill="#ffd54a"/><circle cx="86" cy="9" r="7" fill="#ffd54a"/>
+    <ellipse cx="60" cy="66" rx="44" ry="40" fill="#7ef29a"/><ellipse cx="60" cy="82" rx="26" ry="16" fill="#a8f7bd"/>
+    <circle cx="44" cy="56" r="12" fill="#fff"/><circle cx="76" cy="56" r="12" fill="#fff"/>
+    <circle cx="46" cy="58" r="6" fill="#1b1446"/><circle cx="78" cy="58" r="6" fill="#1b1446"/>
+    <circle cx="48" cy="55" r="2" fill="#fff"/><circle cx="80" cy="55" r="2" fill="#fff"/>
+    <path d="M46 78 Q60 92 74 78" stroke="#1b1446" stroke-width="4" fill="none" stroke-linecap="round"/>
+    <circle cx="30" cy="72" r="6" fill="#ff8fb1" opacity=".7"/><circle cx="90" cy="72" r="6" fill="#ff8fb1" opacity=".7"/>
+    <rect x="24" y="112" width="72" height="30" rx="8" fill="#ff6b6b"/><ellipse cx="60" cy="112" rx="36" ry="9" fill="#ffe3e3"/>
+    <path d="M30 120 L90 138 M90 120 L30 138" stroke="#ffd54a" stroke-width="3"/>
+    <line x1="18" y1="92" x2="44" y2="110" stroke="#c48a4a" stroke-width="5" stroke-linecap="round"/>
+    <line x1="102" y1="92" x2="76" y2="110" stroke="#c48a4a" stroke-width="5" stroke-linecap="round"/></svg>` },
+  { name: 'Bleep', svg: `<svg viewBox="0 0 120 150" aria-hidden="true">
+    <line x1="60" y1="22" x2="60" y2="8" stroke="#cfd8ff" stroke-width="4"/><circle cx="60" cy="7" r="6" fill="#ff7eb6"/>
+    <rect x="22" y="22" width="76" height="62" rx="16" fill="#9fb4ff"/><rect x="32" y="32" width="56" height="40" rx="10" fill="#1b1446"/>
+    <rect x="40" y="42" width="12" height="12" rx="3" fill="#3fe0ff"/><rect x="68" y="42" width="12" height="12" rx="3" fill="#3fe0ff"/>
+    <path d="M46 62 Q60 70 74 62" stroke="#3fe0ff" stroke-width="3.5" fill="none" stroke-linecap="round"/>
+    <rect x="14" y="44" width="8" height="20" rx="4" fill="#cfd8ff"/><rect x="98" y="44" width="8" height="20" rx="4" fill="#cfd8ff"/>
+    <rect x="36" y="84" width="48" height="28" rx="10" fill="#7d93f0"/>
+    <rect x="10" y="108" width="100" height="30" rx="8" fill="#ffd54a"/><rect x="16" y="114" width="88" height="18" rx="3" fill="#fff"/>
+    <g fill="#1b1446"><rect x="26" y="114" width="6" height="10"/><rect x="38" y="114" width="6" height="10"/><rect x="56" y="114" width="6" height="10"/>
+    <rect x="68" y="114" width="6" height="10"/><rect x="80" y="114" width="6" height="10"/><rect x="94" y="114" width="6" height="10"/></g></svg>` },
+  { name: 'Nova', svg: `<svg viewBox="0 0 120 150" aria-hidden="true">
+    <path d="M60 4 L66 18 L81 18 L69 27 L74 42 L60 33 L46 42 L51 27 L39 18 L54 18 Z" fill="#ffd54a"/>
+    <circle cx="60" cy="74" r="42" fill="#b48cff"/>
+    <circle cx="38" cy="98" r="7" fill="#9a6cf0"/><circle cx="88" cy="54" r="6" fill="#9a6cf0"/><circle cx="84" cy="96" r="4" fill="#9a6cf0"/>
+    <path d="M38 64 Q46 56 54 64" stroke="#1b1446" stroke-width="4" fill="none" stroke-linecap="round"/>
+    <path d="M66 64 Q74 56 82 64" stroke="#1b1446" stroke-width="4" fill="none" stroke-linecap="round"/>
+    <ellipse cx="60" cy="84" rx="8" ry="7" fill="#1b1446"/>
+    <circle cx="34" cy="78" r="6" fill="#ff8fb1" opacity=".7"/><circle cx="86" cy="78" r="6" fill="#ff8fb1" opacity=".7"/>
+    <path d="M60 90 L60 124 L84 124" stroke="#ffd54a" stroke-width="7" fill="none" stroke-linejoin="round"/>
+    <path d="M84 114 L106 102 L106 146 L84 134 Z" fill="#ffd54a"/><circle cx="68" cy="116" r="4" fill="#fff3b0"/></svg>` },
+];
+function charHTML(c) { return `${c.svg}<div class="name">${c.name}</div>`; }
+function injectChars() {
+  CHARS.forEach((c, i) => { $('char' + i).innerHTML = charHTML(c); });
+  const minis = CHARS.map(c => `<div class="char mini">${charHTML(c)}</div>`).join('');
+  $('titleChars').innerHTML = minis; $('finaleChars').innerHTML = minis;
+}
+function makeSky() {
+  const sky = $('sky');
+  for (let i = 0; i < 70; i++) {
+    const s = document.createElement('i'), size = 1 + Math.random() * 2.5;
+    Object.assign(s.style, { left: Math.random() * 100 + '%', top: Math.random() * 100 + '%', width: size + 'px', height: size + 'px', animationDelay: (Math.random() * 3) + 's' });
+    sky.appendChild(s);
+  }
+}
+
+/* ---------- Effects canvas ---------- */
+const COLORS = ['#ffd54a', '#ff7eb6', '#3fe0ff', '#7ef29a', '#ffa53f', '#b48cff'];
+const fx = {
+  c: $('fx'), g: null, parts: [], confettiOn: false, w: 0, h: 0, dirty: false,
+  resize() {
+    const dpr = Math.min(devicePixelRatio || 1, 2);
+    this.w = innerWidth; this.h = innerHeight; this.c.width = this.w * dpr; this.c.height = this.h * dpr;
+    this.g = this.c.getContext('2d'); this.g.setTransform(dpr, 0, 0, dpr, 0, 0);
+  },
+  burst(x, y, n = 24) {
+    if (REDUCED) n = Math.ceil(n / 3);
+    for (let i = 0; i < n; i++) {
+      const ang = Math.random() * Math.PI * 2, sp = 2 + Math.random() * 6;
+      this.parts.push({ x, y, vx: Math.cos(ang) * sp, vy: Math.sin(ang) * sp - 2, life: 1, decay: 0.015 + Math.random() * 0.02,
+        size: 6 + Math.random() * 10, color: pick(COLORS), shape: Math.random() < 0.5 ? 'star' : 'dot', rot: Math.random() * 6, vr: (Math.random() - 0.5) * 0.3, grav: 0.12 });
+    }
+  },
+  confetti(on) { this.confettiOn = on; },
+  star(g, r) { g.beginPath(); for (let i = 0; i < 10; i++) { const rr = i % 2 ? r * 0.45 : r, a = i * Math.PI / 5 - Math.PI / 2; g.lineTo(Math.cos(a) * rr, Math.sin(a) * rr); } g.closePath(); g.fill(); },
+  step() {
+    const g = this.g; if (!g) return;
+    if (!this.parts.length && !this.confettiOn) { if (this.dirty) { g.clearRect(0, 0, this.w, this.h); this.dirty = false; } return; }
+    this.dirty = true; g.clearRect(0, 0, this.w, this.h);
+    if (this.confettiOn && this.parts.length < (REDUCED ? 50 : 240)) {
+      for (let k = 0; k < (REDUCED ? 1 : 4); k++) this.parts.push({ x: Math.random() * this.w, y: -20, vx: (Math.random() - 0.5) * 2, vy: 2 + Math.random() * 3,
+        life: 1, decay: 0.003, size: 8 + Math.random() * 8, color: pick(COLORS), shape: 'rect', rot: Math.random() * 6, vr: (Math.random() - 0.5) * 0.2, grav: 0.02 });
+    }
+    this.parts = this.parts.filter(p => p.life > 0 && p.y < this.h + 40);
+    for (const p of this.parts) {
+      p.x += p.vx; p.y += p.vy; p.vy += p.grav; p.rot += p.vr; p.life -= p.decay;
+      g.save(); g.globalAlpha = clamp(p.life, 0, 1); g.translate(p.x, p.y); g.rotate(p.rot); g.fillStyle = p.color;
+      if (p.shape === 'star') this.star(g, p.size); else if (p.shape === 'rect') g.fillRect(-p.size / 2, -p.size / 4, p.size, p.size / 2);
+      else { g.beginPath(); g.arc(0, 0, p.size / 2, 0, Math.PI * 2); g.fill(); }
+      g.restore();
+    }
+  }
+};
+
+/* ---------- Camera / pose tracker ---------- */
+const Tracker = {
+  landmarker: null, modelPromise: null, stream: null, ready: false, lastVideoTime: -1, lastTs: 0, errors: 0, recovering: false,
+  loadModel() {
+    if (this.landmarker) return Promise.resolve(this.landmarker);
+    if (!this.modelPromise) {
+      this.modelPromise = (async () => {
+        const vision = await import(MP_URL);
+        const fileset = await vision.FilesetResolver.forVisionTasks(MP_WASM);
+        const make = delegate => vision.PoseLandmarker.createFromOptions(fileset, {
+          baseOptions: { modelAssetPath: MODEL_URL, delegate }, runningMode: 'VIDEO', numPoses: 1,
+          minPoseDetectionConfidence: 0.5, minPosePresenceConfidence: 0.5, minTrackingConfidence: 0.5 });
+        try { this.landmarker = await make('GPU'); }
+        catch (e) { console.warn('GPU delegate failed, falling back to CPU', e); this.landmarker = await make('CPU'); }
+        return this.landmarker;
+      })().catch(e => { this.modelPromise = null; throw e; });
+    }
+    return this.modelPromise;
+  },
+  async start() {
+    this.stop();
+    if (!window.isSecureContext) throw new AppError('insecure');
+    if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) throw new AppError('nocamapi');
+    const modelP = this.loadModel(); modelP.catch(() => {});
+    let stream;
+    try {
+      stream = await navigator.mediaDevices.getUserMedia({ audio: false,
+        video: { facingMode: 'user', width: { ideal: 640 }, height: { ideal: 480 }, frameRate: { ideal: 30 } } });
+    } catch (e) {
+      const n = e && e.name;
+      throw new AppError(n === 'NotAllowedError' || n === 'SecurityError' ? 'denied'
+        : (n === 'NotFoundError' || n === 'OverconstrainedError') ? 'nocam' : n === 'NotReadableError' ? 'busy' : 'camera', e);
+    }
+    this.stream = stream;
+    const v = $('video'); v.srcObject = stream;
+    const track = stream.getVideoTracks()[0]; if (track) track.addEventListener('ended', onCameraEnded);
+    await new Promise((res, rej) => {
+      if (v.readyState >= 2) return res();
+      const to = setTimeout(() => rej(new AppError('camera')), 10000);
+      v.addEventListener('loadeddata', () => { clearTimeout(to); res(); }, { once: true });
+      v.play().catch(() => {});
+    });
+    try { await v.play(); } catch (e) {}
+    try { await modelP; } catch (e) { throw new AppError('model', e); }
+    this.lastVideoTime = -1; this.errors = 0; this.ready = true;
+  },
+  stop() {
+    this.ready = false;
+    if (this.stream) { this.stream.getTracks().forEach(t => { t.removeEventListener('ended', onCameraEnded); t.stop(); }); this.stream = null; }
+    const v = $('video'); v.srcObject = null; v.classList.remove('live');
+  },
+  detect() { // undefined = no new frame, null = no person, array = landmarks
+    const v = $('video');
+    if (!this.ready || !this.landmarker || v.readyState < 2 || !v.videoWidth) return undefined;
+    if (v.currentTime === this.lastVideoTime) return undefined;
+    this.lastVideoTime = v.currentTime;
+    let ts = performance.now(); if (ts <= this.lastTs) ts = this.lastTs + 1; this.lastTs = ts;
+    try { const r = this.landmarker.detectForVideo(v, ts); this.errors = 0; return (r && r.landmarks && r.landmarks[0]) || null; }
+    catch (e) { if (++this.errors === 1) console.warn('pose detect error', e); if (this.errors > 20) this.recover(); return null; }
+  },
+  async recover() {
+    if (this.recovering) return;
+    this.recovering = true; this.ready = false;
+    try { this.landmarker && this.landmarker.close(); } catch (e) {}
+    this.landmarker = null; this.modelPromise = null;
+    try { await this.loadModel(); this.errors = 0; this.ready = !!this.stream; } catch (e) { console.error(e); }
+    this.recovering = false;
+  }
+};
+function onCameraEnded() {
+  Tracker.ready = false;
+  if (['playing', 'countdown', 'lost'].includes(G.state)) { clock.pause(); audio.stopMusic(); }
+  showError('ended');
+}
+
+/* ---------- Layout + overlay ---------- */
+function layout() {
+  const s = $('stage').getBoundingClientRect(), v = $('video');
+  const ar = (v.videoWidth && v.videoHeight) ? v.videoWidth / v.videoHeight : 4 / 3;
+  let w = s.width, h = w / ar; if (h > s.height) { h = s.height; w = h * ar; }
+  const cw = $('camWrap'); cw.style.width = Math.floor(w) + 'px'; cw.style.height = Math.floor(h) + 'px';
+  const dpr = Math.min(devicePixelRatio || 1, 2), c = $('overlay');
+  c.width = Math.round(w * dpr); c.height = Math.round(h * dpr); G.dpr = dpr;
+}
+function coverMap() {
+  const r = $('camWrap').getBoundingClientRect(), v = $('video');
+  const vw = v.videoWidth || 640, vh = v.videoHeight || 480;
+  const s = Math.max(r.width / vw, r.height / vh), dx = (r.width - vw * s) / 2, dy = (r.height - vh * s) / 2;
+  return { r, toLocal: p => ({ x: p.x * vw * s + dx, y: p.y * vh * s + dy }) };
+}
+function clearOverlay() { const c = $('overlay'); c.getContext('2d').clearRect(0, 0, c.width, c.height); }
+function drawOverlay(pose) {
+  const c = $('overlay'), g = c.getContext('2d'), dpr = G.dpr || 1;
+  g.setTransform(dpr, 0, 0, dpr, 0, 0); g.clearRect(0, 0, c.width / dpr, c.height / dpr);
+  if (!pose.valid) return;
+  const m = coverMap(), P = pose.info.pts, L = p => m.toLocal(p);
+  g.lineWidth = Math.max(4, m.r.width * 0.012); g.lineCap = 'round'; g.strokeStyle = 'rgba(255,255,255,.35)';
+  const seg = (a, b) => { if (P[a].v < 0.3 || P[b].v < 0.3) return; const A = L(P[a]), B = L(P[b]); g.beginPath(); g.moveTo(A.x, A.y); g.lineTo(B.x, B.y); g.stroke(); };
+  seg(11, 12); seg(11, 13); seg(13, 15); seg(12, 14); seg(14, 16);
+  const r = Math.max(12, m.r.width * 0.035);
+  const dot = (i, col, on) => { const p = P[i]; if (p.v < 0.3) return; const A = L(p);
+    g.beginPath(); g.arc(A.x, A.y, r * (on ? 1.35 : 1), 0, Math.PI * 2); g.fillStyle = col; g.shadowColor = col; g.shadowBlur = on ? 30 : 12; g.fill(); g.shadowBlur = 0; };
+  dot(15, '#3fe0ff', pose.info.leftUp); dot(16, '#ffa53f', pose.info.rightUp);
+}
+function handScreenPos(action) {
+  const pose = G.lastPose; if (!pose || !pose.valid) return null;
+  const P = pose.info.pts, m = coverMap();
+  const pts = action === 'left' ? [P[15]] : action === 'right' ? [P[16]] : [P[15], P[16]];
+  return pts.map(p => { const l = m.toLocal(p); return { x: m.r.left + (m.r.width - l.x), y: m.r.top + l.y }; });
+}
+function centerOf(id) { const r = $(id).getBoundingClientRect(); return [{ x: r.left + r.width / 2, y: r.top + r.height / 2 }]; }
+
+/* ---------- Small UI helpers ---------- */
+const show = (id, on = true) => { $(id).hidden = !on; };
+function showScreen(id) { document.querySelectorAll('.screen').forEach(s => { s.hidden = s.id !== id; }); }
+function setProgress(p) {
+  p = clamp(p, 0, 1);
+  $('progressFill').style.width = (p * 100) + '%'; $('progressRocket').style.left = (p * 100) + '%';
+  $('progress').setAttribute('aria-valuenow', Math.round(p * 100));
+}
+function renderStars(n) { document.querySelectorAll('#stars .star').forEach((s, i) => s.classList.toggle('on', i < n)); }
+function sideCue(side) { $('sideL').classList.toggle('on', side === 'L'); $('sideR').classList.toggle('on', side === 'R'); }
+function flashFeedback(text, kind) { const f = $('feedback'); f.textContent = text; f.className = ''; void f.offsetWidth; f.className = 'show ' + kind; }
+function flashCount(text) { const c = $('countBig'); c.textContent = text; c.classList.remove('pop'); void c.offsetWidth; c.classList.add('pop'); }
+function bounceChars() {
+  G.beatFlip = !G.beatFlip;
+  for (let i = 0; i < 3; i++) { const e = $('char' + i); e.classList.remove('bA', 'bB'); e.classList.add(G.beatFlip ? 'bA' : 'bB'); }
+}
+function cheer(i) { const e = $('char' + i); e.classList.remove('cheer'); void e.offsetWidth; e.classList.add('cheer'); }
+function setDance(on) { for (let i = 0; i < 3; i++) $('char' + i).classList.toggle('dance', on); document.querySelectorAll('#finaleChars .char').forEach(c => c.classList.toggle('dance', on)); }
+function updateControls() {
+  const s = G.state, inSong = ['playing', 'countdown', 'paused', 'lost'].includes(s);
+  const bp = $('btnPause'); bp.disabled = !inSong;
+  const paused = s === 'paused' || s === 'lost'; bp.textContent = paused ? '▶' : '⏸'; bp.setAttribute('aria-label', paused ? 'Resume' : 'Pause');
+  $('btnRestart').disabled = !(inSong || ['songEnd', 'intro', 'finale'].includes(s));
+}
+function applySoundUI() { $('btnSound').textContent = (audio.muted || audio.volume === 0) ? '🔇' : '🔊'; $('volume').value = audio.volume; }
+function loadSoundPrefs() { try { const p = JSON.parse(localStorage.getItem('rrb-sound') || '{}'); if (typeof p.volume === 'number') audio.volume = p.volume; audio.muted = !!p.muted; } catch (e) {} applySoundUI(); }
+function saveSoundPrefs() { try { localStorage.setItem('rrb-sound', JSON.stringify({ volume: audio.volume, muted: audio.muted })); } catch (e) {} }
+let cueKey = '';
+function resetPlayUI() {
+  $('cue').hidden = true; sideCue(null); cueKey = ''; renderStars(0); setProgress(0);
+  $('feedback').className = ''; show('lostPanel', false); show('calPanel', false); show('loadPanel', false);
+  fx.confetti(false); setDance(false);
+}
+
+/* ---------- Flow: camera, calibration ---------- */
+async function startCamera() {
+  G.mode = 'camera'; G.state = 'camera'; document.body.classList.remove('buttonMode');
+  showScreen(null); resetPlayUI(); show('noCam', false); show('loadPanel', true);
+  $('loadText').textContent = 'Warming up the rocket camera...'; updateControls();
+  try {
+    await Tracker.start();
+    show('loadPanel', false); $('video').classList.add('live'); layout(); startCalibration();
+  } catch (e) {
+    show('loadPanel', false); console.error(e); showError(e.code || 'camera');
+  }
+}
+function showError(code) { G.state = 'error'; $('errText').textContent = ERR[code] || ERR.camera; showScreen('scrError'); updateControls(); }
+function switchToButtonMode() {
+  G.mode = 'button'; Tracker.stop(); clearOverlay(); document.body.classList.add('buttonMode');
+  show('noCam', true); show('lostPanel', false); show('calPanel', false); show('loadPanel', false);
+}
+function startButtonMode() { audio.init().then(applySoundUI); switchToButtonMode(); showIntro(campaign.index); }
+
+function startCalibration() {
+  G.state = 'calibrate'; showScreen(null); resetPlayUI();
+  detector.reset(); detector.setUpThreshold(0.05);
+  G.cal = { step: 'see', since: 0, upSince: 0, peak: 0, claps: 0, visSum: 0, visN: 0, stepAt: performance.now(), upDone: false };
+  show('calPanel', true); setCal('🧍', 'Stand where we can see you!', 0); updateControls();
+}
+let calShown = '';
+function setCal(icon, text, p) {
+  const key = icon + text;
+  if (key !== calShown) { calShown = key; $('calIcon').textContent = icon; $('calText').textContent = text; }
+  $('calMeter').style.width = (clamp(p, 0, 1) * 100) + '%';
+}
+function goCal(step, t) { G.cal.step = step; G.cal.stepAt = t; audio.sfxBlip(true); fx.burst(...Object.values(centerOf('calIcon')[0]), 20); }
+function calibrateStep(pose, t) {
+  const c = G.cal;
+  if (c.step === 'see') {
+    let msg = 'Stand where we can see you!';
+    if (pose.valid && pose.info.tooClose) msg = 'Step back a little!';
+    else if (pose.valid && pose.info.tooFar) msg = 'Come a little closer!';
+    if (pose.valid && pose.info.full && !pose.info.tooClose) {
+      c.since = c.since || t; const p = (t - c.since) / 1200;
+      setCal('🧍', 'Great! Stay right there...', p); if (p >= 1) goCal('up', t);
+    } else { c.since = 0; setCal('🧍', msg, 0); }
+  } else if (c.step === 'up') {
+    const txt = 'Rocket arms! Both hands up high!';
+    if (pose.valid && pose.info.leftUp && pose.info.rightUp) {
+      c.upSince = c.upSince || t; c.peak = Math.max(c.peak, Math.min(pose.info.relL, pose.info.relR));
+      const p = (t - c.upSince) / 500; setCal('🙌', txt, p);
+      if (p >= 1) { detector.setUpThreshold(clamp(c.peak * 0.45, 0.06, 0.2)); c.upDone = true; goCal('clap', t); }
+    } else { c.upSince = 0; setCal('🙌', txt, 0); }
+  } else if (c.step === 'clap') {
+    if (pose.valid) { c.visSum += pose.info.wristVis; c.visN++; }
+    if (pose.actions.includes('clap')) { c.claps++; audio.sfxHit(); flashFeedback('Clap!', 'good'); }
+    setCal('👏', 'Now clap your hands! Clap, clap!', c.claps / 2);
+    if (c.claps >= 2) finishCal(true); else if (t - c.stepAt > 9000) finishCal(false);
+  }
+}
+function finishCal(ok) {
+  const c = G.cal;
+  if (!c.upDone) detector.setUpThreshold(CFG.handUpOn);
+  const visOk = c.visN > 5 && c.visSum / c.visN > 0.55;
+  G.clapReliable = !!ok && visOk; // claps only used when they were actually seen clearly
+  G.state = 'calDone';
+  setCal(G.clapReliable ? '🎉' : '✋', G.clapReliable ? 'Clap power ON! You are ready!' : 'Great! We will use hand raises instead of claps.', 1);
+  audio.sfxStar();
+  setTimeout(() => { if (G.state === 'calDone') { show('calPanel', false); showIntro(campaign.index); } }, 1800);
+}
+
+/* ---------- Flow: songs ---------- */
+function actionChips(chart) {
+  const acts = new Set(chart.events.map(e => e.action)), chips = [];
+  if (acts.has('both')) chips.push('🙌 Hands up!');
+  if (acts.has('left') || acts.has('right')) chips.push('✋ One hand, then the other');
+  if (acts.has('clap')) chips.push('👏 Clap!');
+  if (G.mode === 'button') chips.push('🥁 Tap the drum on the beat');
+  return chips;
+}
+function showIntro(i) {
+  campaign.index = i; const song = SONGS[i];
+  const chart = buildChart(song, { clapReliable: G.mode === 'button' || G.clapReliable });
+  G.state = 'intro'; G.chart = null; G.judge = null; clock.reset(); resetPlayUI();
+  $('introEmoji').textContent = song.emoji; $('introNum').textContent = `Stage ${i + 1} of ${SONGS.length} · ${song.stage}`; $('introTitle').textContent = song.title;
+  let txt = song.intro;
+  if (G.mode === 'camera' && !G.clapReliable && song.pattern.includes('clap')) txt += ' (Claps are hand raises today.)';
+  $('introText').textContent = txt;
+  $('introChips').innerHTML = [`🔥 ${song.level}`, ...actionChips(chart)].map(c => `<span class="chip">${esc(c)}</span>`).join('');
+  $('introHint').textContent = G.mode === 'camera' ? 'Or raise both hands to start!' : 'Grown-ups can also press Space.';
+  $('songName').textContent = `Stage ${i + 1} · ${song.emoji} ${song.title}`;
+  showScreen('scrIntro'); G.handsGateAt = performance.now() + 1200; updateControls();
+}
+function startSong(i) {
+  resetPlayUI(); showScreen(null);
+  campaign.index = i; const song = SONGS[i];
+  G.chart = buildChart(song, { clapReliable: G.mode === 'button' || G.clapReliable });
+  G.judge = new ActionJudge(G.chart.events, G.chart.spacing, G.chart.windowFrac);
+  G.nextBeat = 0; G.lastBeatShown = -1; G.liveStars = 0;
+  $('songName').textContent = `Stage ${i + 1} · ${song.emoji} ${song.title}`;
+  audio.resume(); audio.stopMusic();
+  clock.start(-CFG.startLeadMs);
+  G.state = 'playing'; G.absentSince = 0; G.lastFrameAt = performance.now();
+  updateControls();
+}
+function restartSong() {
+  if (G.state === 'finale') { campaign.reset(); setDance(false); fx.confetti(false); showIntro(0); return; }
+  if (!['playing', 'countdown', 'paused', 'lost', 'songEnd', 'intro'].includes(G.state)) return;
+  audio.stopMusic(); startSong(campaign.index);
+}
+
+function playStep(pose, t) {
+  const st = clock.sec(), ch = G.chart;
+  for (const m of G.judge.update(st)) onMiss(m);
+  for (const a of pose.actions) handleAction(a, st);
+  const b = Math.floor(st / ch.beatSec);
+  if (b !== G.lastBeatShown && b >= 0 && b <= ch.endBeat) { G.lastBeatShown = b; onBeat(b); }
+  renderCue(st);
+  setProgress(st / ch.endTime);
+  if (G.mode === 'camera') {
+    const absentFor = G.absentSince ? t - G.absentSince : 0;
+    if (absentFor > CFG.lostPoseMs || t - G.lastFrameAt > CFG.staleFrameMs) { enterLost(); return; }
+  }
+  if (st >= ch.endTime && G.judge.done) finishSong();
+}
+function handleAction(action, st) {
+  const r = G.judge.register(action, st);
+  if (r.result === 'hit') onHit(action);
+}
+const PRAISE = ['Great!', 'Super!', 'Wow!', 'Yay!', 'Rocket power!', 'Awesome!', 'Hooray!'];
+function onHit(action) {
+  audio.sfxHit(); flashFeedback(pick(PRAISE), 'good');
+  const pos = action === 'any' ? centerOf('beatBtn') : (handScreenPos(action) || centerOf('cueRing'));
+  pos.forEach(p => fx.burst(p.x, p.y, 26));
+  cheer(G.chart.song.hero);
+  const ls = liveStars(G.judge.hits, G.judge.total);
+  if (ls > G.liveStars) { G.liveStars = ls; renderStars(ls); audio.sfxStar(); }
+}
+function onMiss() { audio.sfxMiss(); flashFeedback(pick(['Next one!', 'Keep going!', 'You got this!']), 'soft'); }
+function onBeat(b) {
+  bounceChars();
+  if (b < CFG.countInBeats) flashCount(['3', '2', '1', 'Go!'][b] || '');
+  if (G.chart.actionBeats.has(b)) { const w = $('camWrap'); w.classList.remove('pulse'); void w.offsetWidth; w.classList.add('pulse'); }
+}
+function renderCue(st) {
+  const ch = G.chart, cur = G.judge.current(st), cue = $('cue');
+  if (!cur || st < cur.t - ch.spacing) { if (cueKey !== '') { cueKey = ''; cue.hidden = true; sideCue(null); } return; }
+  const key = cur.i + ':' + cur.action;
+  if (key !== cueKey) {
+    cueKey = key; const info = ACTION_INFO[cur.action];
+    cue.hidden = false; $('cueIcon').textContent = info.icon;
+    $('cueText').textContent = info.text + (G.mode === 'button' ? ' 🥁' : '');
+    cue.style.setProperty('--ring', info.color); sideCue(G.mode === 'camera' ? (info.side || null) : null);
+    cue.classList.remove('enter'); void cue.offsetWidth; cue.classList.add('enter');
+  }
+  cue.style.setProperty('--p', clamp((st - (cur.t - ch.spacing)) / ch.spacing, 0, 1).toFixed(3));
+  cue.classList.toggle('now', Math.abs(st - cur.t) < 0.18);
+}
+function finishSong() {
+  G.state = 'songEnd';
+  const total = G.judge.total, hits = G.judge.hits, stars = starsFor(hits, total);
+  G.outcome = campaign.record(stars);
+  $('cue').hidden = true; sideCue(null); cueKey = ''; setProgress(1); renderStars(stars);
+  $('endStars').innerHTML = [0, 1, 2].map(k => `<span class="bigstar ${k < stars ? 'on' : ''}" style="animation-delay:${k * 0.25}s">★</span>`).join('');
+  $('endText').textContent = `You played ${hits} of ${total} beats!` + (G.outcome === 'next' ? ` Stage ${campaign.index + 2} is a little faster!` : '');
+  $('btnNext').textContent = G.outcome === 'finale' ? 'Big finale! 🎆' : 'Next stage ▶';
+  $('endHint').textContent = G.mode === 'camera' ? 'Or raise both hands!' : '';
+  showScreen('scrSongEnd'); audio.jingle();
+  for (let i = 0; i < 3; i++) setTimeout(() => cheer(i), i * 150);
+  [0.25, 0.5, 0.75].forEach((x, k) => setTimeout(() => fx.burst(innerWidth * x, innerHeight * 0.3, 30), k * 200));
+  G.handsGateAt = performance.now() + 1500; updateControls();
+}
+function primaryAction() {
+  audio.resume();
+  if (G.state === 'intro') startSong(campaign.index);
+  else if (G.state === 'songEnd') {
+    if (G.outcome === 'finale') showFinale();
+    else { campaign.advance(); showIntro(campaign.index); }
+  }
+}
+function showFinale() {
+  G.state = 'finale'; clock.reset();
+  const total = campaign.totalStars, max = SONGS.length * 3;
+  $('finaleStars').innerHTML = Array.from({ length: max }, (_, k) => `<span class="bigstar ${k < total ? 'on' : ''}" style="animation-delay:${k * 0.12}s">★</span>`).join('');
+  $('finaleText').textContent = `You cleared all ${SONGS.length} stages with the Rocket Band and collected ${total} stars!`;
+  showScreen('scrFinale'); audio.fanfare(); fx.confetti(true); setDance(true); updateControls();
+}
+function goHome() {
+  audio.stopMusic(); clock.reset(); Tracker.stop(); clearOverlay();
+  G.state = 'title'; G.chart = null; G.judge = null; campaign.reset();
+  resetPlayUI(); show('noCam', false); document.body.classList.remove('buttonMode');
+  $('songName').textContent = 'Ready for takeoff!';
+  showScreen('scrTitle'); updateControls();
+}
+
+/* ---------- Pause / resume / tracking loss ---------- */
+function pauseGame() {
+  if (!['playing', 'countdown', 'lost'].includes(G.state)) return;
+  clock.pause(); audio.stopMusic();
+  G.state = 'paused'; show('lostPanel', false); showScreen('scrPause'); updateControls();
+}
+function resumeGame() {
+  if (!['paused', 'lost'].includes(G.state)) return;
+  showScreen(null); show('lostPanel', false);
+  G.state = 'countdown'; G.cdStart = performance.now(); G.cdLast = null; audio.resume(); updateControls();
+}
+function togglePause() { if (G.state === 'paused' || G.state === 'lost') resumeGame(); else pauseGame(); }
+function enterLost() {
+  clock.pause(); audio.stopMusic(); G.state = 'lost';
+  show('lostPanel', true); $('cue').hidden = true; sideCue(null); cueKey = ''; updateControls();
+}
+function countdownStep(t) {
+  const n = 3 - Math.floor((t - G.cdStart) / CFG.resumeCountMs);
+  if (n !== G.cdLast) { G.cdLast = n; if (n > 0) { flashCount(String(n)); audio.sfxBlip(false); } }
+  if (n <= 0) {
+    flashCount('Go!'); audio.sfxBlip(true);
+    clock.resume();
+    G.nextBeat = resyncBeat(clock.sec(), G.chart.beatSec);
+    G.lastBeatShown = Math.floor(clock.sec() / G.chart.beatSec);
+    G.state = 'playing'; G.absentSince = 0; G.lastFrameAt = t; updateControls();
+  }
+}
+
+/* ---------- Beat button ---------- */
+function beatPress() {
+  const b = $('beatBtn'); b.classList.add('pressed'); setTimeout(() => b.classList.remove('pressed'), 120);
+  audio.resume();
+  if (G.state === 'playing') { audio.sfxTap(); handleAction('any', clock.sec()); }
+  else if (G.state === 'intro' || G.state === 'songEnd') primaryAction();
+  else audio.sfxTap();
+}
+
+/* ---------- Loops ---------- */
+function schedulerTick() {
+  if (G.state !== 'playing' || !audio.ctx || !G.chart) return;
+  const now = clock.sec();
+  const { due, next } = beatsDue(G.nextBeat, now, CFG.lookahead, G.chart.beatSec, G.chart.endBeat);
+  const base = audio.now();
+  for (const d of due) Music.playBeat(audio, G.chart, d.beat, base + d.delay);
+  G.nextBeat = next;
+}
+function tick(t) {
+  let pose = NO_POSE;
+  if (G.mode === 'camera' && Tracker.ready) {
+    const lm = Tracker.detect();
+    if (lm !== undefined) {
+      G.lastFrameAt = t; pose = detector.process(lm, t); G.lastPose = pose; drawOverlay(pose);
+      if (pose.valid) { if (!G.presentSince) G.presentSince = t; G.absentSince = 0; }
+      else { G.presentSince = 0; if (!G.absentSince) G.absentSince = t; }
+      if (G.state === 'calibrate') calibrateStep(pose, t);
+    }
+  }
+  switch (G.state) {
+    case 'playing': playStep(pose, t); break;
+    case 'countdown': countdownStep(t); break;
+    case 'lost': if (G.presentSince && t - G.presentSince >= CFG.regainPoseMs && t - G.lastFrameAt < 500) resumeGame(); break;
+    case 'intro': case 'songEnd': if (pose.actions.includes('both') && t >= G.handsGateAt) primaryAction(); break;
+  }
+  fx.step();
+}
+function frame() { requestAnimationFrame(frame); try { tick(performance.now()); } catch (e) { console.error(e); } }
+
+/* =====================================================================
+   Self-tests (pure logic, mocked audio, optional real AudioContext)
+   ===================================================================== */
+function fakePose({ relL = -0.8, relR = -0.8, dist = null, vis = 0.95 } = {}) {
+  const P = Array.from({ length: 33 }, () => ({ x: 0.5, y: 0.9, z: 0, visibility: 0.2 }));
+  const set = (i, x, y) => { P[i] = { x, y, z: 0, visibility: vis }; };
+  const sw = 0.2;
+  set(0, 0.5, 0.3); set(11, 0.6, 0.5); set(12, 0.4, 0.5); set(13, 0.68, 0.6); set(14, 0.32, 0.6);
+  if (dist != null) { set(15, 0.5 + dist * sw / 2, 0.62); set(16, 0.5 - dist * sw / 2, 0.62); }
+  else { set(15, 0.72, 0.5 - relL * sw); set(16, 0.28, 0.5 - relR * sw); }
+  return P;
+}
+class MockParam {
+  constructor(v = 0) { this.value = v; }
+  setValueAtTime(v) { this.value = v; return this; }
+  linearRampToValueAtTime(v) { this.value = v; return this; }
+  exponentialRampToValueAtTime(v) { if (!(v > 0)) throw new RangeError('exponential ramp to a value <= 0'); this.value = v; return this; }
+  setTargetAtTime(v) { this.value = v; return this; }
+  cancelScheduledValues() { return this; }
+}
+class MockNode { constructor() { this.out = []; } connect(n) { this.out.push(n); return n; } disconnect() { this.out = []; } }
+let mockCount = 0;
+class MockAudioContext {
+  constructor() { mockCount++; this.state = 'suspended'; this.currentTime = 0; this.sampleRate = 8000; this.destination = new MockNode(); this.started = []; }
+  async resume() { this.state = 'running'; }
+  createGain() { const n = new MockNode(); n.gain = new MockParam(1); return n; }
+  createOscillator() { const n = new MockNode(); n.frequency = new MockParam(440); n.start = t => this.started.push(t); n.stop = () => {}; return n; }
+  createBiquadFilter() { const n = new MockNode(); n.frequency = new MockParam(1000); return n; }
+  createBuffer(ch, len, sr) { const d = new Float32Array(len); return { getChannelData: () => d, length: len, sampleRate: sr }; }
+  createBufferSource() { const n = new MockNode(); n.start = t => this.started.push(t); n.stop = () => {}; return n; }
+}
+
+async function runSelfTests({ realAudio = false } = {}) {
+  const R = [];
+  const T = async (group, name, fn) => { try { await fn(); R.push({ group, name, ok: true }); } catch (e) { R.push({ group, name, ok: false, msg: (e && e.message) || String(e) }); } };
+  const ok = (c, m) => { if (!c) throw new Error(m || 'expected true'); };
+  const eq = (a, b, m) => { if (a !== b) throw new Error(`${m || 'value'}: expected ${b}, got ${a}`); };
+  const near = (a, b, eps, m) => { if (Math.abs(a - b) > eps) throw new Error(`${m || 'value'}: expected about ${b}, got ${a}`); };
+  const song60 = { ...SONGS[0], bpm: 60, pattern: ['both', 'left', 'right', 'both'] };
+  const feeder = () => { const d = new PoseActionDetector(); let t = 0; const counts = {};
+    return { d, counts, feed(o, n) { for (let k = 0; k < n; k++) { t += 33; d.process(fakePose(o), t).actions.forEach(a => counts[a] = (counts[a] || 0) + 1); } } }; };
+
+  // --- Beat timing
+  await T('Beat timing', 'Moves land exactly on the BPM grid', () => {
+    const ch = buildChart(song60); eq(ch.beatSec, 1); eq(ch.spacing, 2); eq(ch.events[0].beat, CFG.countInBeats + 1);
+    ch.events.forEach((e, i) => near(e.t, CFG.countInBeats + 1 + 2 * i, 1e-9, 'event ' + i));
+    ok(ch.endTime >= ch.events.at(-1).t + ch.spacing / 2, 'song must outlast the last window');
+  });
+  await T('Beat timing', 'All stages have kid-friendly tempos that speed up gently', () => {
+    SONGS.forEach(s => { const ch = buildChart(s); eq(ch.events.length, s.pattern.length); ok(s.bpm >= 60 && s.bpm <= 120, s.title + ' tempo'); });
+    for (let i = 1; i < SONGS.length; i++) ok(SONGS[i - 1].bpm < SONGS[i].bpm, 'tempo increases at stage ' + (i + 1));
+    eq(new Set(SONGS[2].pattern).size, 4, 'stage 3 uses all moves');
+  });
+  await T('Stages', 'There are at least 5 stages and each one is a little harder', () => {
+    ok(SONGS.length >= 5, 'at least 5 stages'); eq(new Set(SONGS.map(s => s.id)).size, SONGS.length, 'unique ids');
+    for (let i = 1; i < SONGS.length; i++) {
+      const a = SONGS[i - 1], b = SONGS[i];
+      ok(b.bpm > a.bpm, b.title + ' faster'); ok(b.windowFrac <= a.windowFrac, b.title + ' window not wider'); ok(b.pattern.length >= a.pattern.length, b.title + ' not shorter');
+    }
+    SONGS.forEach(s => { eq(s.melody.length, 16, s.title + ' melody'); eq(s.prog.length, 4, s.title + ' chords'); ok(s.stage && s.level, s.title + ' labels'); });
+    ok(new Set(SONGS.map(s => s.title)).size === SONGS.length, 'every stage has its own song');
+  });
+  await T('Beat timing', 'Timing windows are generous and never overlap', () => {
+    SONGS.forEach(s => { const ch = buildChart(s), j = new ActionJudge(ch.events, ch.spacing, ch.windowFrac);
+      for (let i = 1; i < ch.events.length; i++) ok(ch.events[i - 1].t + j.late <= ch.events[i].t - j.early + 1e-9, 'windows overlap at ' + i);
+      ok(j.early >= 0.3 && j.late >= 0.3, 'windows at least 300 ms'); });
+  });
+  await T('Beat timing', 'Early, on-beat and late moves all count', () => {
+    const ch = buildChart(song60);
+    for (const off of [-0.99, 0, 0.99]) { const j = new ActionJudge(ch.events, ch.spacing), e = ch.events[0]; j.update(e.t + off); eq(j.register('both', e.t + off).result, 'hit', 'offset ' + off); }
+  });
+  await T('Beat timing', 'A move after the window does not count for the old beat', () => {
+    const ch = buildChart(song60), j = new ActionJudge(ch.events, ch.spacing), t = ch.events[0].t + 1.0;
+    eq(j.update(t).length, 1, 'misses'); const r = j.register('both', t); ok(!(r.result === 'hit' && r.index === 0), 'must not hit event 0');
+  });
+  await T('Beat timing', 'Scheduler queues beats ahead with the right delay', () => {
+    let r = beatsDue(0, -0.2, 0.12, 0.5, 10); eq(r.due.length, 0, 'nothing too early');
+    r = beatsDue(0, -0.05, 0.12, 0.5, 10); eq(r.due.length, 1); near(r.due[0].delay, 0.05, 1e-9);
+    r = beatsDue(r.next, 0.4, 0.12, 0.5, 10); eq(r.due.length, 1); eq(r.due[0].beat, 1); near(r.due[0].delay, 0.1, 1e-9);
+    r = beatsDue(0, 3.0, 0.12, 0.5, 10); ok(r.due.every(d => d.beat >= 6), 'stale beats skipped, not bunched'); eq(r.next, 7);
+  });
+
+  // --- Duplicate prevention
+  await T('Duplicates', 'Repeating the same move in one beat scores once', () => {
+    const ch = buildChart(song60), j = new ActionJudge(ch.events, ch.spacing), e = ch.events[0]; let hits = 0;
+    for (let k = 0; k < 10; k++) { const t = e.t - 0.5 + k * 0.1; j.update(t); if (j.register('both', t).result === 'hit') hits++; }
+    eq(hits, 1); eq(j.hits, 1);
+  });
+  await T('Duplicates', 'Drum-button spam scores once per beat', () => {
+    const ch = buildChart(song60), j = new ActionJudge(ch.events, ch.spacing), e0 = ch.events[0], e1 = ch.events[1];
+    for (let t = e0.t - 0.9; t < e1.t + 0.9; t += 0.09) { j.update(t); j.register('any', t); }
+    eq(j.hits, 2);
+  });
+  await T('Duplicates', 'Holding both hands up triggers each move only once', () => {
+    const f = feeder(); f.feed({}, 10); f.feed({ relL: 1, relR: 1 }, 150);
+    eq(f.counts.both || 0, 1, 'both'); eq(f.counts.left || 0, 1, 'left'); eq(f.counts.right || 0, 1, 'right');
+  });
+  await T('Duplicates', 'Wobbly hands near the line do not double count', () => {
+    let f = feeder(); f.feed({}, 10); for (let k = 0; k < 100; k++) f.feed({ relL: k % 2 ? 0.3 : 0.0 }, 1); eq(f.counts.left || 0, 1, 'wobble at top');
+    f = feeder(); f.feed({}, 10); for (let k = 0; k < 100; k++) f.feed({ relL: k % 2 ? 0.1 : -0.02 }, 1); eq(f.counts.left || 0, 0, 'wobble below line');
+  });
+  await T('Duplicates', 'A held clap counts once, a new clap counts again', () => {
+    const f = feeder(); f.feed({ dist: 2 }, 10); f.feed({ dist: 0.2 }, 60); eq(f.counts.clap || 0, 1, 'held clap');
+    f.feed({ dist: 2 }, 15); f.feed({ dist: 0.2 }, 20); eq(f.counts.clap || 0, 2, 'second clap');
+  });
+  await T('Duplicates', 'Holding a pose through the next beats does not score them', () => {
+    const ch = buildChart({ ...song60, pattern: ['both', 'both', 'both'] }), j = new ActionJudge(ch.events, ch.spacing), d = new PoseActionDetector();
+    for (let st = 0; st <= ch.endTime + 0.1; st += 1 / 30) {
+      j.update(st);
+      const r = d.process(fakePose(st < 4.6 ? {} : { relL: 1, relR: 1 }), st * 1000);
+      r.actions.forEach(a => j.register(a, st));
+    }
+    eq(j.hits, 1, 'hits'); eq(j.misses, 2, 'misses');
+  });
+
+  // --- Pause / resume
+  await T('Pause/resume', 'Song clock stops while paused', () => {
+    let now = 0; const c = new SongClock(() => now); c.start(); now = 1000; c.pause(); now = 6000; near(c.sec(), 1, 1e-9, 'paused');
+    c.resume(); now = 6500; near(c.sec(), 1.5, 1e-9, 'resumed');
+  });
+  await T('Pause/resume', 'Double pause or double resume is harmless', () => {
+    let now = 0; const c = new SongClock(() => now); c.start(); now = 500; c.pause(); now = 900; c.pause(); now = 2000; c.resume(); now = 2100; c.resume(); now = 2200;
+    near(c.sec(), 0.7, 1e-9);
+  });
+  await T('Pause/resume', 'Lead-in offset gives the music a head start', () => { let now = 0; const c = new SongClock(() => now); c.start(-200); near(c.sec(), -0.2, 1e-9); now = 200; near(c.sec(), 0, 1e-9); });
+  await T('Pause/resume', 'No misses are counted while paused, the beat is still playable after', () => {
+    const ch = buildChart(song60), j = new ActionJudge(ch.events, ch.spacing); let now = 0; const c = new SongClock(() => now);
+    c.start(); now = 4500; j.update(c.sec()); c.pause(); now = 64500; c.resume(); now = 64600;
+    eq(j.update(c.sec()).length, 0, 'misses after a minute paused'); eq(j.register('both', c.sec()).result, 'hit');
+  });
+  await T('Pause/resume', 'Music resumes on the right beat: no repeats, no gaps', () => {
+    const bs = 0.5, end = 20, played = new Array(end + 1).fill(0); let next = 0, pending = [];
+    const run = (from, to) => { for (let t = from; t <= to + 1e-9; t += 0.025) {
+      const r = beatsDue(next, t, CFG.lookahead, bs, end); r.due.forEach(d => pending.push({ beat: d.beat, at: t + d.delay })); next = r.next;
+      pending = pending.filter(p => { if (p.at <= t) { played[p.beat]++; return false; } return true; }); } };
+    run(-0.2, 3.03);
+    pending = []; // pause: everything queued but not yet heard is silenced
+    next = resyncBeat(3.03, bs); run(3.03, end * bs + 0.3);
+    pending.forEach(p => played[p.beat]++);
+    played.forEach((n, b) => eq(n, 1, 'beat ' + b + ' count'));
+  });
+
+  // --- Audio init
+  await T('Audio init', 'Audio context is created once and starts running', async () => {
+    mockCount = 0; const a = new AudioEngine(() => new MockAudioContext());
+    const c1 = await a.init(); const c2 = await a.init();
+    ok(c1 && c1 === c2, 'same context'); eq(mockCount, 1, 'contexts created'); eq(c1.state, 'running'); ok(a.ready);
+  });
+  await T('Audio init', 'Volume and mute control the master gain', async () => {
+    const a = new AudioEngine(() => new MockAudioContext()); await a.init();
+    a.setVolume(0.5); near(a.master.gain.value, 0.5, 1e-9); a.setMuted(true); eq(a.master.gain.value, 0); a.setMuted(false); near(a.master.gain.value, 0.5, 1e-9);
+  });
+  await T('Audio init', 'Sounds before init are silent no-ops, never errors', () => {
+    const a = new AudioEngine(() => new MockAudioContext()); a.sfxHit(); a.sfxMiss(); a.fanfare(); a.stopMusic(); Music.playBeat(a, buildChart(SONGS[0]), 6, 0); ok(!a.ctx);
+  });
+  await T('Audio init', 'Missing or blocked Web Audio does not break the game', async () => {
+    const a = new AudioEngine(() => null); eq(await a.init(), null); ok(!a.available); a.sfxHit();
+    const b = new AudioEngine(() => { throw new Error('blocked'); }); eq(await b.init(), null); ok(!b.available);
+  });
+  await T('Audio init', 'Every beat of every song synthesizes without errors', async () => {
+    const a = new AudioEngine(() => new MockAudioContext()); await a.init();
+    for (const s of SONGS) { const ch = buildChart(s); for (let b = 0; b <= ch.endBeat; b++) Music.playBeat(a, ch, b, b * ch.beatSec); }
+    ok(a.ctx.started.length > 100, 'notes were scheduled');
+    const old = a.musicBus; a.stopMusic(); ok(a.musicBus !== old, 'pause swaps the music bus');
+  });
+  if (realAudio) await T('Audio init', 'Real browser AudioContext starts after a tap', async () => {
+    const a = new AudioEngine(); const ctx = await a.init(); ok(ctx, 'Web Audio unavailable'); eq(ctx.state, 'running');
+    a.sfxBlip(true); const t0 = ctx.currentTime; await new Promise(r => setTimeout(r, 200)); ok(ctx.currentTime > t0, 'audio clock advancing'); await ctx.close();
+  });
+
+  // --- Level completion
+  const playThrough = (song, hitAll) => {
+    const ch = buildChart(song), j = new ActionJudge(ch.events, ch.spacing, ch.windowFrac); let i = 0, t = 0;
+    while (!(t >= ch.endTime && j.done)) {
+      j.update(t); const e = ch.events[i];
+      if (e && t >= e.t) { if (hitAll) eq(j.register(e.action, t).result, 'hit', 'event ' + i); i++; }
+      t += 1 / 60; if (t > ch.endTime + 5) throw new Error('song never finished');
+    }
+    return { ch, j };
+  };
+  await T('Level completion', 'Perfect play earns 3 stars on every stage', () => { SONGS.forEach(s => { const { ch, j } = playThrough(s, true); eq(j.hits, ch.events.length, s.title); eq(starsFor(j.hits, j.total), 3, s.title); }); });
+  await T('Level completion', 'Perfect play finishes with 3 stars', () => { const { ch, j } = playThrough(SONGS[1], true); eq(j.hits, ch.events.length); eq(starsFor(j.hits, j.total), 3); });
+  await T('Level completion', 'Missing every beat still finishes kindly with 1 star', () => { const { j } = playThrough(SONGS[0], false); eq(j.hits, 0); ok(j.done); eq(starsFor(j.hits, j.total), 1); });
+  await T('Level completion', 'Every stage in a row leads to the finale', () => {
+    const n = SONGS.length, c = new Campaign(n);
+    for (let k = 0; k < n - 1; k++) { eq(c.record(2), 'next', 'stage ' + k); c.advance(); eq(c.index, k + 1); }
+    eq(c.record(1), 'finale'); eq(c.totalStars, 2 * (n - 1) + 1); c.reset(); eq(c.index, 0); eq(c.totalStars, 0);
+  });
+  await T('Level completion', 'Without reliable clapping, claps become alternating hand raises', () => {
+    const ch = buildChart(SONGS[1], { clapReliable: false });
+    ok(!ch.events.some(e => e.action === 'clap'), 'no claps left');
+    const subs = ch.events.filter((e, i) => SONGS[1].pattern[i] === 'clap').map(e => e.action);
+    subs.forEach((a, i) => eq(a, i % 2 ? 'right' : 'left', 'substitute ' + i));
+  });
+  return R;
+}
+async function openTests(realAudio) {
+  showScreen('scrTests'); $('testSummary').textContent = 'Running...'; $('testList').innerHTML = '';
+  const res = await runSelfTests({ realAudio });
+  const pass = res.filter(r => r.ok).length;
+  $('testSummary').textContent = `${pass} of ${res.length} tests passed ${pass === res.length ? '✅' : '⚠️'}`;
+  let html = '', grp = '';
+  for (const r of res) {
+    if (r.group !== grp) { grp = r.group; html += `<h3>${esc(grp)}</h3>`; }
+    html += `<div class="${r.ok ? 'pass' : 'fail'}">${r.ok ? '✅' : '❌'} ${esc(r.name)}${r.ok ? '' : `<small>${esc(r.msg)}</small>`}</div>`;
+  }
+  $('testList').innerHTML = html; console.table(res);
+}
+
+/* ---------- Wiring ---------- */
+$('btnStart').onclick = () => { audio.init().then(applySoundUI); campaign.reset(); startCamera(); };
+$('btnNoCam').onclick = () => { campaign.reset(); startButtonMode(); };
+$('btnTests').onclick = () => openTests(true);
+$('btnTestsAgain').onclick = () => openTests(true);
+$('btnTestsClose').onclick = () => { if (G.state === 'title') showScreen('scrTitle'); else showScreen(null); };
+$('btnRetry').onclick = () => startCamera();
+$('btnErrNoCam').onclick = () => startButtonMode();
+$('btnErrHome').onclick = goHome;
+$('btnPlay').onclick = primaryAction;
+$('btnNext').onclick = primaryAction;
+$('btnAgain').onclick = restartSong;
+$('btnResume').onclick = resumeGame;
+$('btnPauseRestart').onclick = restartSong;
+$('btnRecal').onclick = () => { audio.stopMusic(); clock.reset(); G.chart = null; if (G.mode === 'camera' && Tracker.ready) startCalibration(); else startCamera(); };
+$('btnHome').onclick = goHome;
+$('btnPlayAgain').onclick = () => { campaign.reset(); setDance(false); fx.confetti(false); showIntro(0); };
+$('btnFinaleHome').onclick = goHome;
+$('btnCalSkip').onclick = () => { if (G.state === 'calibrate') finishCal(false); };
+$('btnLostButton').onclick = () => { switchToButtonMode(); resumeGame(); };
+$('btnPause').onclick = e => { togglePause(); e.currentTarget.blur(); };
+$('btnRestart').onclick = e => { restartSong(); e.currentTarget.blur(); };
+$('btnSound').onclick = async e => { e.currentTarget.blur(); await audio.init(); audio.setMuted(!audio.muted); saveSoundPrefs(); applySoundUI(); };
+$('volume').oninput = e => { const v = +e.target.value; audio.setVolume(v); if (audio.muted && v > 0) audio.setMuted(false); saveSoundPrefs(); applySoundUI(); };
+$('beatBtn').addEventListener('pointerdown', e => { e.preventDefault(); beatPress(); });
+$('beatBtn').addEventListener('click', e => e.preventDefault());
+document.addEventListener('pointerdown', () => { if (audio.ctx) audio.resume(); });
+addEventListener('keydown', e => {
+  if (e.repeat) return;
+  if (e.code === 'Space' || e.code === 'Enter') {
+    if (['playing', 'intro', 'songEnd'].includes(G.state)) { e.preventDefault(); beatPress(); }
+  } else if (e.code === 'KeyP' || e.code === 'Escape') { if (['playing', 'countdown', 'paused', 'lost'].includes(G.state)) togglePause(); }
+});
+document.addEventListener('visibilitychange', () => { if (document.hidden && ['playing', 'countdown'].includes(G.state)) pauseGame(); });
+addEventListener('resize', () => { fx.resize(); layout(); });
+$('video').addEventListener('loadedmetadata', layout);
+if ('ResizeObserver' in window) new ResizeObserver(layout).observe($('stage'));
+
+loadSoundPrefs(); injectChars(); makeSky(); fx.resize(); layout();
+showScreen('scrTitle'); updateControls();
+requestAnimationFrame(frame);
+setInterval(schedulerTick, 25);
+if (location.hash === '#selftest') openTests(false);
+</script>
+</body>
+</html>

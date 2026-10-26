@@ -1,0 +1,1904 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, maximum-scale=1, user-scalable=no">
+<meta name="theme-color" content="#9fd8ff">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<title>Bubble Buddy Blaster</title>
+<style>
+/* =====================================================================
+   UI STYLES
+   Layout is driven by two body classes set from JS: .portrait / .landscape
+   Everything lives inside #stage, which respects the safe-area insets.
+===================================================================== */
+:root{
+  --ink:#2b2350; --card:rgba(255,255,255,.95);
+  --violet:#7b5cff; --violet-d:#5536d6; --pink:#ff5d8f; --pink-d:#c2305e; --sun:#ffc23c;
+  --font: ui-rounded, "SF Pro Rounded", "Nunito", "Varela Round", "Quicksand", "Trebuchet MS", "Segoe UI", system-ui, sans-serif;
+  --hud-h:64px;
+}
+*{box-sizing:border-box;margin:0;padding:0}
+html,body{width:100%;height:100%;overflow:hidden;overscroll-behavior:none}
+body{font-family:var(--font);color:var(--ink);background:linear-gradient(#9fd8ff,#ffd6ef);
+  -webkit-user-select:none;user-select:none;-webkit-tap-highlight-color:transparent;-webkit-touch-callout:none;touch-action:manipulation}
+#app{position:fixed;inset:0;padding:env(safe-area-inset-top,0) env(safe-area-inset-right,0) env(safe-area-inset-bottom,0) env(safe-area-inset-left,0)}
+#stage{position:relative;width:100%;height:100%;overflow:hidden}
+#game{position:absolute;inset:0;width:100%;height:100%;display:block;touch-action:none}
+#video{position:fixed;left:0;top:0;width:2px;height:2px;opacity:0;pointer-events:none}
+.hidden{display:none!important}
+.sr-only{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap}
+button{font-family:inherit;touch-action:manipulation}
+:focus-visible{outline:4px solid var(--sun);outline-offset:3px}
+
+/* ---------- HUD ---------- */
+#hud{position:absolute;top:0;left:0;right:0;height:var(--hud-h);display:flex;align-items:center;gap:8px;padding:8px 10px;z-index:10;pointer-events:none}
+#hud>*{pointer-events:auto}
+.icon-btn{flex:none;width:48px;height:48px;border-radius:50%;border:0;background:rgba(255,255,255,.93);color:var(--ink);
+  font-size:22px;line-height:1;cursor:pointer;display:grid;place-items:center;
+  box-shadow:0 4px 0 rgba(85,54,214,.35),0 6px 14px rgba(60,30,120,.18)}
+.icon-btn:active{transform:translateY(3px);box-shadow:0 1px 0 rgba(85,54,214,.35)}
+.hud-mid{flex:1;min-width:0;text-align:center;color:#fff;text-shadow:0 2px 0 rgba(85,54,214,.55);pointer-events:none!important}
+#hudLevel{font-size:clamp(12px,2.2vmin,16px);font-weight:800;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.score-row{display:flex;align-items:center;justify-content:center;gap:8px}
+#hudScore{font-size:clamp(22px,4vmin,30px);font-weight:900;line-height:1.05}
+#hudNum{background:#fff3b0;color:#7a4b00;text-shadow:none;font-weight:900;border-radius:999px;padding:2px 9px;font-size:13px;white-space:nowrap}
+#hudRight{display:flex;align-items:center;gap:8px}
+#hudStars{font-size:clamp(18px,3.4vmin,26px);letter-spacing:1px;white-space:nowrap}
+#hudStars span{color:rgba(255,255,255,.55);text-shadow:0 2px 0 rgba(85,54,214,.4);transition:color .3s}
+#hudStars span.on{color:var(--sun)}
+@media (max-width:360px){ .icon-btn{width:42px;height:42px;font-size:19px} #hud{gap:5px;padding:6px} }
+
+/* ---------- Caption (mirrors spoken prompts) ---------- */
+#caption{position:absolute;left:50%;top:calc(var(--hud-h) + 2px);transform:translate(-50%,-8px);max-width:min(92%,520px);
+  background:rgba(43,35,80,.8);color:#fff;font-weight:700;font-size:clamp(13px,2.4vmin,17px);padding:6px 14px;border-radius:999px;
+  text-align:center;opacity:0;transition:opacity .3s,transform .3s;z-index:12;pointer-events:none}
+#caption.show{opacity:1;transform:translate(-50%,0)}
+
+/* ---------- Big touch controls ---------- */
+#controls{position:absolute;z-index:10;display:flex;gap:10px;align-items:center;pointer-events:none}
+#controls button{pointer-events:auto}
+body.portrait #controls{right:8px;bottom:8px;flex-direction:row;align-items:flex-end}
+body.landscape #controls{right:16px;bottom:16px;flex-direction:column-reverse}
+.ctrl-btn{border:0;border-radius:50%;color:#fff;font-weight:900;cursor:pointer;display:flex;flex-direction:column;align-items:center;
+  justify-content:center;gap:2px;line-height:1;text-shadow:0 1px 0 rgba(0,0,0,.25)}
+.ctrl-btn:active{transform:translateY(4px)}
+#btnShoot{width:clamp(62px,18vw,88px);height:clamp(62px,18vw,88px);font-size:clamp(12px,3.2vw,15px);
+  background:radial-gradient(circle at 35% 30%,#ffe0ea 0,#ff5d8f 55%,#c2305e 100%);box-shadow:0 6px 0 #9e2049,0 10px 22px rgba(160,30,80,.3)}
+#btnShoot .ico{width:1.6em;height:1.6em;border-radius:50%;background:radial-gradient(circle at 35% 30%,#fff,rgba(255,255,255,.35) 60%,rgba(255,255,255,.15));border:2px solid rgba(255,255,255,.8)}
+#btnSwap{width:clamp(50px,14vw,66px);height:clamp(50px,14vw,66px);font-size:clamp(11px,2.8vw,13px);
+  background:radial-gradient(circle at 35% 30%,#e6dbff 0,#7b5cff 55%,#5536d6 100%);box-shadow:0 5px 0 #3f22b0,0 8px 18px rgba(60,30,120,.3)}
+body.landscape #btnShoot{width:88px;height:88px;font-size:15px}
+body.landscape #btnSwap{width:66px;height:66px;font-size:13px}
+.swap-dot{width:18px;height:18px;border-radius:50%;border:2px solid #fff;display:block;margin-bottom:2px}
+
+/* ---------- Mirrored camera preview ---------- */
+#camBox{position:absolute;z-index:9;border-radius:16px;overflow:hidden;border:3px solid rgba(255,255,255,.9);
+  box-shadow:0 6px 18px rgba(60,30,120,.25);background:#2b2350;cursor:pointer;aspect-ratio:4/3}
+#camBox canvas{width:100%;height:100%;display:block}
+body.portrait #camBox{left:8px;bottom:8px;width:clamp(78px,24vw,120px)}
+body.landscape #camBox{left:14px;bottom:14px;width:clamp(120px,22vw,240px)}
+#camBox.big{width:min(60vw,320px)!important}
+#camState{position:absolute;left:4px;bottom:4px;font-size:11px;font-weight:800;background:rgba(0,0,0,.5);color:#fff;border-radius:8px;padding:2px 6px;white-space:nowrap}
+
+/* ---------- Screens & cards ---------- */
+.screen{position:absolute;inset:0;z-index:20;display:flex;align-items:center;justify-content:center;padding:12px}
+.screen.dim{background:rgba(43,35,80,.38);-webkit-backdrop-filter:blur(3px);backdrop-filter:blur(3px)}
+.card{background:var(--card);border-radius:28px;box-shadow:0 14px 44px rgba(60,30,120,.28);padding:clamp(14px,3.2vmin,28px);
+  width:min(560px,100%);max-height:100%;overflow:auto;text-align:center;-webkit-overflow-scrolling:touch}
+.card h2{font-size:clamp(22px,4.4vmin,34px);font-weight:900;margin-bottom:6px}
+.card p{font-size:clamp(14px,2.6vmin,18px);line-height:1.35;margin:6px 0}
+.row-btns{display:flex;flex-wrap:wrap;gap:12px;justify-content:center;margin-top:14px}
+.row-btns.col{flex-direction:column;align-items:stretch;max-width:340px;margin-left:auto;margin-right:auto}
+body.landscape .row-btns.col{flex-direction:row;flex-wrap:wrap;max-width:none}
+.btn{border:0;border-radius:999px;min-height:56px;padding:12px 26px;font-size:clamp(17px,2.8vmin,22px);font-weight:900;color:#fff;
+  background:var(--violet);box-shadow:0 6px 0 var(--violet-d),0 10px 20px rgba(60,30,120,.22);cursor:pointer}
+.btn:active{transform:translateY(4px);box-shadow:0 2px 0 var(--violet-d)}
+.btn.pink{background:var(--pink);box-shadow:0 6px 0 var(--pink-d),0 10px 20px rgba(160,30,80,.2)}
+.btn.light{background:#fff;color:var(--ink);box-shadow:0 6px 0 #d8d0f7,0 10px 20px rgba(60,30,120,.12)}
+.btn.big{min-height:64px;padding:14px 30px;font-size:clamp(19px,3.2vmin,26px)}
+.logo{font-size:clamp(34px,8vmin,64px);font-weight:900;line-height:1;letter-spacing:.5px;margin:2px 0 8px}
+.logo span{display:inline-block;color:var(--c);text-shadow:0 .07em 0 rgba(43,35,80,.22);animation:bob 2.4s ease-in-out infinite}
+.logo span:nth-child(1){--c:#ff5d8f}
+.logo span:nth-child(2){--c:#3fa9ff;animation-delay:.3s}
+.logo span:nth-child(3){--c:#7b5cff;animation-delay:.6s}
+@keyframes bob{50%{transform:translateY(-6px)}}
+.seg{display:flex;gap:8px;justify-content:center;margin:10px 0 4px;flex-wrap:wrap}
+.seg-btn{border:3px solid #e2dcfb;background:#fff;border-radius:18px;padding:10px 16px;min-height:52px;font-size:clamp(15px,2.6vmin,19px);font-weight:800;color:var(--ink);cursor:pointer}
+.seg-btn.on{border-color:var(--violet);background:#efeaff}
+.toggles{display:flex;flex-wrap:wrap;gap:8px 18px;justify-content:center;margin-top:12px}
+.tog{display:flex;align-items:center;gap:8px;font-weight:800;font-size:clamp(14px,2.4vmin,17px);cursor:pointer;min-height:44px}
+.tog input{appearance:none;-webkit-appearance:none;width:52px;height:30px;border-radius:999px;background:#d9d3f0;position:relative;cursor:pointer;transition:background .2s;flex:none}
+.tog input::after{content:"";position:absolute;top:3px;left:3px;width:24px;height:24px;border-radius:50%;background:#fff;box-shadow:0 2px 4px rgba(0,0,0,.2);transition:transform .2s}
+.tog input:checked{background:#3fd07a}
+.tog input:checked::after{transform:translateX(22px)}
+.fine{font-size:13px!important;opacity:.75}
+.spinner{width:64px;height:64px;margin:8px auto 12px;border-radius:50%;background:radial-gradient(circle at 35% 30%,#fff,#9fd8ff 55%,#3fa9ff);animation:pulse 1s ease-in-out infinite}
+@keyframes pulse{50%{transform:scale(1.15)}}
+.emoji-big{font-size:clamp(44px,9vmin,72px);line-height:1;margin-bottom:4px}
+.wave{display:inline-block;animation:wave 1.2s ease-in-out infinite;transform-origin:70% 80%}
+@keyframes wave{0%,100%{transform:rotate(0)}30%{transform:rotate(18deg)}60%{transform:rotate(-12deg)}}
+.status{font-weight:800;color:var(--violet)}
+.bar{height:14px;border-radius:999px;background:#e9e4fb;overflow:hidden;margin:8px auto;max-width:420px}
+.bar>div{height:100%;width:0;background:linear-gradient(90deg,#3fd07a,#3fa9ff,#a173ff);border-radius:inherit;transition:width .15s}
+.stars-big{font-size:clamp(44px,10vmin,72px);margin:6px 0;letter-spacing:6px}
+.stars-big span{display:inline-block;color:#e3defa;transform:scale(.6);transition:transform .35s cubic-bezier(.3,1.8,.5,1),color .2s}
+.stars-big span.on{color:var(--sun);transform:scale(1.1);text-shadow:0 4px 0 #d89a1c}
+.stars-total{font-size:clamp(30px,6vmin,46px);font-weight:900;color:#d89a1c;margin:6px 0}
+
+/* ---------- Calibration ---------- */
+.calib-card{width:min(600px,100%)}
+.cal-view{position:relative;width:min(100%,calc(50vh * 1.333),520px);aspect-ratio:4/3;margin:0 auto 8px;border-radius:20px;overflow:hidden;background:#2b2350}
+.cal-view canvas{width:100%;height:100%;display:block}
+#calBadge{position:absolute;left:8px;top:8px;background:rgba(255,255,255,.92);border-radius:999px;padding:4px 12px;font-weight:900;font-size:14px}
+.cal-text{font-weight:700}
+body.landscape .calib-card{display:flex;gap:18px;align-items:center;width:min(940px,100%);text-align:left}
+body.landscape .cal-view{flex:none;width:min(56vw,calc(72vh * 1.333),600px);margin:0}
+body.landscape .cal-side{flex:1;min-width:0}
+body.landscape .cal-side .row-btns{justify-content:flex-start}
+body.landscape .cal-side .bar{margin-left:0}
+</style>
+</head>
+<body class="portrait">
+<div id="app">
+  <div id="stage">
+    <canvas id="game" role="img" aria-label="Bubble Buddy Blaster game board"></canvas>
+
+    <!-- HUD -->
+    <header id="hud" class="hidden">
+      <button id="btnPause" class="icon-btn" aria-label="Pause (P)">⏸</button>
+      <button id="btnHint" class="icon-btn" aria-label="Hint (H)">💡</button>
+      <div class="hud-mid">
+        <div id="hudLevel">Level 1</div>
+        <div class="score-row"><span id="hudScore">0</span><span id="hudNum" class="hidden">Next #1</span></div>
+      </div>
+      <div id="hudRight">
+        <div id="hudStars" aria-label="Stars"><span>★</span><span>★</span><span>★</span></div>
+        <button id="btnSound" class="icon-btn" aria-label="Sound on or off (M)">🔊</button>
+      </div>
+    </header>
+    <div id="caption" aria-hidden="true"></div>
+
+    <!-- Big buttons -->
+    <div id="controls" class="hidden">
+      <button id="btnSwap" class="ctrl-btn" aria-label="Swap bubble (S)"><span class="swap-dot" id="swapDot"></span>Swap</button>
+      <button id="btnShoot" class="ctrl-btn" aria-label="Shoot (Space)"><span class="ico"></span>Shoot</button>
+    </div>
+
+    <!-- Mirrored camera preview with hand landmarks -->
+    <div id="camBox" class="hidden" title="Tap to make bigger"><canvas id="camCanvas"></canvas><span id="camState">👀</span></div>
+
+    <!-- Title -->
+    <section id="scrTitle" class="screen">
+      <div class="card">
+        <h1 class="logo"><span>Bubble</span> <span>Buddy</span> <span>Blaster</span></h1>
+        <p>Help Bubbo pop the matching bubbles!</p>
+        <div class="seg" role="radiogroup" aria-label="How do you want to play?">
+          <button class="seg-btn" data-ctrl="hand" role="radio">✋ Hand camera</button>
+          <button class="seg-btn" data-ctrl="touch" role="radio">👆 Touch &amp; keys</button>
+        </div>
+        <div class="row-btns">
+          <button id="btnPlay" class="btn big">▶ Start Adventure</button>
+          <button id="btnPractice" class="btn pink big">Practice</button>
+        </div>
+        <div class="toggles">
+          <label class="tog"><input type="checkbox" id="optSeated">Seated mode</label>
+          <label class="tog"><input type="checkbox" id="optSound">Sounds</label>
+          <label class="tog"><input type="checkbox" id="optVoice">Voice</label>
+        </div>
+        <p class="fine">Camera pictures stay on this device. Nothing is uploaded.</p>
+        <p class="fine">Keys: ← → aim · Space shoot · S swap · H hint · P pause · R restart · M sound</p>
+      </div>
+    </section>
+
+    <!-- Loading -->
+    <section id="scrLoading" class="screen dim hidden">
+      <div class="card">
+        <div class="spinner"></div>
+        <h2>One moment…</h2>
+        <p id="loadText"></p>
+        <p class="fine">If your browser asks, choose "Allow" for the camera.</p>
+        <div class="row-btns"><button id="btnLoadTouch" class="btn light">Play with touch instead</button></div>
+      </div>
+    </section>
+
+    <!-- Error -->
+    <section id="scrError" class="screen dim hidden">
+      <div class="card">
+        <div class="emoji-big">🙈</div>
+        <h2>Uh-oh!</h2>
+        <p id="errText"></p>
+        <div class="row-btns">
+          <button id="btnErrRetry" class="btn">Try again</button>
+          <button id="btnErrTouch" class="btn pink">Play with touch</button>
+          <button id="btnErrHome" class="btn light">Home</button>
+        </div>
+      </div>
+    </section>
+
+    <!-- Calibration -->
+    <section id="scrCalib" class="screen dim hidden">
+      <div class="card calib-card">
+        <div class="cal-view"><canvas id="calCanvas"></canvas><div id="calBadge">👀</div></div>
+        <div class="cal-side">
+          <h2 id="calTitle">Let's warm up!</h2>
+          <p id="calText" class="cal-text"></p>
+          <div class="bar"><div id="calBar"></div></div>
+          <div class="row-btns">
+            <button id="btnCalSkip" class="btn">Skip ▶</button>
+            <button id="btnCalBack" class="btn light">Back</button>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- Pause -->
+    <section id="scrPause" class="screen dim hidden">
+      <div class="card">
+        <h2>Paused</h2>
+        <p>Take a little break. Bubbo will wait!</p>
+        <div class="row-btns col">
+          <button id="btnResume" class="btn big">▶ Resume</button>
+          <button id="btnRestart" class="btn pink">↻ Restart level</button>
+          <button id="btnRecal" class="btn light">✋ Recalibrate hand</button>
+          <button id="btnSwitchCtrl" class="btn light">👆 Play with touch</button>
+          <button id="btnHome" class="btn light">🏠 Home</button>
+        </div>
+      </div>
+    </section>
+
+    <!-- Tracking lost -->
+    <section id="scrLost" class="screen dim hidden">
+      <div class="card">
+        <div class="emoji-big"><span class="wave">✋</span></div>
+        <h2>Where's your hand?</h2>
+        <p>Hold your hand up so the camera can see it. Stepping back a little or turning on a light can help.</p>
+        <p id="lostStatus" class="status">Looking for your hand…</p>
+        <div class="bar"><div id="lostBar"></div></div>
+        <div class="row-btns">
+          <button id="btnLostTouch" class="btn pink">👆 Play with touch</button>
+          <button id="btnLostPause" class="btn light">Pause</button>
+        </div>
+      </div>
+    </section>
+
+    <!-- Level complete -->
+    <section id="scrLevel" class="screen dim hidden">
+      <div class="card">
+        <h2 id="lvlTitle">Level cleared!</h2>
+        <div class="stars-big" id="lvlStars"><span>★</span><span>★</span><span>★</span></div>
+        <p id="lvlScore"></p>
+        <div class="row-btns">
+          <button id="btnNext" class="btn big">Next level ▶</button>
+          <button id="btnReplay" class="btn light">↻ Play again</button>
+          <button id="btnLvlHome" class="btn light">🏠 Home</button>
+        </div>
+      </div>
+    </section>
+
+    <!-- Celebration -->
+    <section id="scrCelebrate" class="screen hidden">
+      <div class="card">
+        <div class="emoji-big">🎉</div>
+        <h2>You did it!</h2>
+        <p>You finished every level. Bubbo is so proud of you!</p>
+        <div class="stars-total" id="celStars"></div>
+        <p id="celScore"></p>
+        <div class="row-btns">
+          <button id="btnCelAgain" class="btn big">Play again</button>
+          <button id="btnCelPractice" class="btn pink">Practice</button>
+          <button id="btnCelHome" class="btn light">🏠 Home</button>
+        </div>
+      </div>
+    </section>
+  </div>
+</div>
+<video id="video" playsinline muted autoplay></video>
+<div id="live" class="sr-only" aria-live="polite"></div>
+
+<script>
+/* =====================================================================
+   BUBBLE BUDDY BLASTER
+   1. Config, text, helpers
+   2. Settings, sound, voice
+   3. HAND TRACKING (camera, MediaPipe, smoothing, gestures, calibration)
+   4. GAME LOGIC (board, physics, matching, helpers, levels)
+   5. RENDERING (background, bubbles, creature, effects)
+   6. UI (screens, HUD, buttons, keyboard, touch)
+   7. Main loop and start-up
+===================================================================== */
+(function(){
+'use strict';
+
+/* =====================================================================
+   1. CONFIG, TEXT, HELPERS
+===================================================================== */
+const TAU = Math.PI * 2, DEG = Math.PI / 180, SQ3 = Math.sqrt(3);
+const COLS = 8;                    // bubbles per even row (odd rows have COLS-1)
+const MIN_A = 12 * DEG, MAX_A = 168 * DEG;  // allowed launch angles
+const MUZZLE = 2.05;               // distance (in bubble radii) from pivot to loaded bubble
+const COLLIDE = 0.8;               // <1 = shots slip a little into gaps (forgiving)
+const FONT = 'ui-rounded, "SF Pro Rounded", "Nunito", "Varela Round", "Trebuchet MS", "Segoe UI", system-ui, sans-serif';
+
+// All spoken and on-screen prompts in one place (easy to translate).
+const TEXT = {
+  loadCam: "Waking up the camera…",
+  loadModel: "Teaching Bubbo to see hands…",
+  calFind: "Hold up one hand so I can see it.",
+  calRange: "Great! Now point your finger and draw a big rainbow in the air.",
+  calRangeSeated: "Great! Now point your finger and slide it slowly left and right.",
+  calFire: "Now point at the bubble, then open your hand wide to pop it!",
+  calDone: "Perfect! You're ready to play.",
+  howToHand: "Point to aim, then open your hand wide to shoot.",
+  howToHandSeated: "Slide your pointing finger left and right to aim, then open your hand to shoot.",
+  howToTouch: "Tap where you want the bubble to go.",
+  level: ["Level one! Match the pink and blue bubbles.", "Level two! Now there are three colors.", "Level three! Pop the numbers in order: one, two, three.", "Level four! The bubbles are in stripes. Match the colors!", "Level five! Now there are four colors.", "Level six! Pop the numbers in order, from one to four.", "Level seven! The bubbles are in colorful blocks.", "Level eight! A big board with four colors. You can do it!", "Level nine! Count from one to five, popping the numbers in order.", "Level ten! The grand finale with five colors and five numbers!"],
+  practice: "Practice time! Play as long as you like.",
+  lost: "Oops! I can't see your hand. Show it to the camera.",
+  back: "There you are! Let's keep going.",
+  hint: "Try aiming at the glowing spot!",
+  helpColor: "Bubbo picked a helpful color for you!",
+  breeze: "Whoosh! A friendly breeze blew some bubbles away.",
+  great: ["Great!", "Wow!", "Super!", "Bubble-tastic!", "Amazing!", "Pop pop!"],
+  countDone: "You counted one, two, three! Counting champ!",
+  levelDone: n => `Level complete! You got ${n} ${n === 1 ? 'star' : 'stars'}!`,
+  celebrate: "You did it! You finished every level. Bubbo is so proud of you!",
+  boardClear: "Board cleared! Here comes a new one.",
+  errNoSupport: "This browser can't open the camera here. Try Chrome, Edge, Firefox or Safari, and open the game from an https address, localhost, or straight from your computer.",
+  errDenied: "The camera is blocked. Allow it with the camera icon in the address bar, or play with touch instead.",
+  errNotFound: "I couldn't find a camera on this device. You can play with touch instead.",
+  errBusy: "The camera is busy in another app. Close that app and try again.",
+  errModel: "The hand tracker couldn't load. Check the internet connection and try again.",
+  errGeneric: "Something went wrong while starting the camera."
+};
+
+// Original bubble palette. Each color also gets a white symbol for color-blind players.
+const COLORS = [
+  { base:'#ff5d8f', light:'#ffd0de', dark:'#c2305e', sym:'dot' },      // pink
+  { base:'#3fa9ff', light:'#cfeaff', dark:'#1b6fc0', sym:'diamond' },  // blue
+  { base:'#ffc23c', light:'#fff1c4', dark:'#d08a00', sym:'triangle' }, // yellow
+  { base:'#3fd07a', light:'#c9f7dc', dark:'#1d9152', sym:'plus' },     // green
+  { base:'#a173ff', light:'#e6dbff', dark:'#6a3fd1', sym:'square' }    // purple
+];
+
+const LEVELS = [
+  { name:'Level 1',  title:'Two Colors',      colors:[0,1],       rows:4, numbers:false, say:TEXT.level[0] },
+  { name:'Level 2',  title:'Three Colors',    colors:[0,1,2],     rows:5, numbers:false, say:TEXT.level[1] },
+  { name:'Level 3',  title:'Count & Pop',     colors:[1,2,3],     rows:5, numbers:true, nums:3, say:TEXT.level[2] },
+  { name:'Level 4',  title:'Rainbow Stripes', colors:[0,1,2],     rows:5, numbers:false, pattern:'stripes', say:TEXT.level[3] },
+  { name:'Level 5',  title:'Four Colors',     colors:[0,1,2,3],   rows:6, numbers:false, say:TEXT.level[4] },
+  { name:'Level 6',  title:'Count to Four',   colors:[0,2,3],     rows:6, numbers:true, nums:4, say:TEXT.level[5] },
+  { name:'Level 7',  title:'Color Blocks',    colors:[1,2,3,4],   rows:6, numbers:false, pattern:'blocks', say:TEXT.level[6] },
+  { name:'Level 8',  title:'Big Board',       colors:[0,1,3,4],   rows:7, numbers:false, say:TEXT.level[7] },
+  { name:'Level 9',  title:'Count to Five',   colors:[0,1,2,3],   rows:7, numbers:true, nums:5, say:TEXT.level[8] },
+  { name:'Level 10', title:'Grand Finale',    colors:[0,1,2,3,4], rows:8, numbers:true, nums:5, pattern:'blocks', say:TEXT.level[9] }
+];
+const PRACTICE = { name:'Practice', title:'Free play', colors:[0,1,2], rows:5, numbers:true, say:TEXT.practice };
+
+const $ = id => document.getElementById(id);
+const clamp = (v, a, b) => v < a ? a : (v > b ? b : v);
+const rand = (a, b) => a + Math.random() * (b - a);
+const pick = arr => arr[Math.floor(Math.random() * arr.length)];
+function clampAngle(a){ if (a < 0) a = (a < -Math.PI / 2) ? MAX_A : MIN_A; return clamp(a, MIN_A, MAX_A); }
+function easeOutBack(k){ const c1 = 1.70158, c3 = c1 + 1; return 1 + c3 * Math.pow(k - 1, 3) + c1 * Math.pow(k - 1, 2); }
+function roundRectPath(c, x, y, w, h, r){
+  r = Math.min(r, w / 2, h / 2);
+  c.beginPath(); c.moveTo(x + r, y);
+  c.arcTo(x + w, y, x + w, y + h, r); c.arcTo(x + w, y + h, x, y + h, r);
+  c.arcTo(x, y + h, x, y, r); c.arcTo(x, y, x + w, y, r); c.closePath();
+}
+class FriendlyError extends Error { constructor(msg){ super(msg); this.friendly = msg; } }
+
+/* =====================================================================
+   2. SETTINGS, SOUND, VOICE
+===================================================================== */
+const settings = { ctrl:'hand', seated:false, sound:true, voice:true };
+try { Object.assign(settings, JSON.parse(localStorage.getItem('bbb-settings') || '{}')); } catch (e) {}
+function saveSettings(){ try { localStorage.setItem('bbb-settings', JSON.stringify(settings)); } catch (e) {} }
+
+// Soft synthesized sounds (no audio files needed).
+const Sound = {
+  ctx:null, master:null, noiseBuf:null,
+  unlock(){
+    if (!this.ctx){
+      const AC = window.AudioContext || window.webkitAudioContext; if (!AC) return;
+      this.ctx = new AC(); this.master = this.ctx.createGain(); this.master.gain.value = 0.45;
+      this.master.connect(this.ctx.destination);
+      const len = Math.floor(this.ctx.sampleRate * 0.3);
+      this.noiseBuf = this.ctx.createBuffer(1, len, this.ctx.sampleRate);
+      const d = this.noiseBuf.getChannelData(0); for (let i = 0; i < len; i++) d[i] = Math.random() * 2 - 1;
+    }
+    if (this.ctx.state === 'suspended') this.ctx.resume();
+  },
+  ok(){ return settings.sound && this.ctx; },
+  tone(f0, f1, dur, type = 'sine', vol = 0.25, delay = 0){
+    if (!this.ok()) return;
+    const t = this.ctx.currentTime + delay, o = this.ctx.createOscillator(), g = this.ctx.createGain();
+    o.type = type; o.frequency.setValueAtTime(f0, t); if (f1 && f1 !== f0) o.frequency.exponentialRampToValueAtTime(f1, t + dur);
+    g.gain.setValueAtTime(0.0001, t); g.gain.exponentialRampToValueAtTime(vol, t + 0.012); g.gain.exponentialRampToValueAtTime(0.0001, t + dur);
+    o.connect(g); g.connect(this.master); o.start(t); o.stop(t + dur + 0.03);
+  },
+  noise(dur, vol, freq, delay = 0){
+    if (!this.ok()) return;
+    const t = this.ctx.currentTime + delay, s = this.ctx.createBufferSource(); s.buffer = this.noiseBuf; s.loop = true;
+    const f = this.ctx.createBiquadFilter(); f.type = 'bandpass'; f.frequency.value = freq; f.Q.value = 0.8;
+    const g = this.ctx.createGain(); g.gain.setValueAtTime(vol, t); g.gain.exponentialRampToValueAtTime(0.0001, t + dur);
+    s.connect(f); f.connect(g); g.connect(this.master); s.start(t); s.stop(t + dur + 0.03);
+  },
+  pop(i = 0){ const f = 520 + i * 55; this.tone(f, f * 0.45, 0.13, 'sine', 0.26); this.noise(0.05, 0.1, 2600); },
+  shoot(){ this.tone(260, 620, 0.16, 'triangle', 0.16); },
+  bounce(){ this.tone(720, 520, 0.07, 'sine', 0.1); },
+  stick(){ this.tone(230, 150, 0.1, 'sine', 0.18); },
+  ready(){ this.tone(880, 880, 0.05, 'sine', 0.06); },
+  swap(){ this.tone(500, 760, 0.09, 'sine', 0.12); },
+  chime(){ [660, 880, 1100].forEach((f, i) => this.tone(f, f, 0.2, 'triangle', 0.13, i * 0.07)); },
+  breeze(){ this.noise(0.7, 0.16, 900); this.tone(300, 620, 0.5, 'sine', 0.05); },
+  win(){ [523, 659, 784, 1047, 784, 1047].forEach((f, i) => this.tone(f, f, 0.24, 'triangle', 0.16, i * 0.12)); }
+};
+
+// Friendly speech prompts (also shown as a caption and in an aria-live region).
+const Voice = {
+  supported: 'speechSynthesis' in window, voice:null, last:0, primed:false,
+  pick(){
+    if (!this.supported) return;
+    const vs = speechSynthesis.getVoices() || [];
+    this.voice = vs.find(v => /^en/i.test(v.lang) && /(samantha|karen|moira|tessa|zira|aria|jenny|google us english|female)/i.test(v.name))
+      || vs.find(v => /^en[-_](US|GB)/i.test(v.lang)) || vs.find(v => /^en/i.test(v.lang)) || null;
+  },
+  prime(){ if (!this.supported || this.primed) return; this.primed = true; try { const u = new SpeechSynthesisUtterance(' '); u.volume = 0; speechSynthesis.speak(u); } catch (e) {} },
+  say(text, important){
+    caption(text);
+    if (!settings.voice || !this.supported) return;
+    const now = performance.now();
+    if (!important && speechSynthesis.speaking && now - this.last < 2500) return;
+    try {
+      speechSynthesis.cancel();
+      const u = new SpeechSynthesisUtterance(text);
+      if (!this.voice) this.pick();
+      if (this.voice){ u.voice = this.voice; u.lang = this.voice.lang; } else u.lang = 'en-US';
+      u.rate = 0.95; u.pitch = 1.2; speechSynthesis.speak(u); this.last = now;
+    } catch (e) {}
+  },
+  stop(){ if (this.supported) try { speechSynthesis.cancel(); } catch (e) {} }
+};
+if (Voice.supported) speechSynthesis.onvoiceschanged = () => Voice.pick();
+
+let capTimer = 0;
+function caption(text){
+  const el = $('caption'); el.textContent = text; el.classList.add('show'); $('live').textContent = text;
+  clearTimeout(capTimer); capTimer = setTimeout(() => el.classList.remove('show'), 3200);
+}
+
+/* =====================================================================
+   3. HAND TRACKING
+   - Camera via getUserMedia, MediaPipe Hand Landmarker (tasks-vision) via CDN.
+   - Pointer = index fingertip nudged along the finger direction (MCP -> tip),
+     so tilting the finger also steers. Mapped through calibration, then
+     smoothed with a One Euro filter (steady when still, quick when moving).
+   - Gestures: "ready" = fist or pointing (middle/ring/pinky curled).
+     Holding ready for READY_MS arms the launcher; opening the hand fires.
+     After a shot, the hand must go back to ready, plus a cooldown. This
+     debounces accidental repeated firing.
+===================================================================== */
+const HAND_LINKS = [[0,1],[1,2],[2,3],[3,4],[0,5],[5,6],[6,7],[7,8],[5,9],[9,10],[10,11],[11,12],[9,13],[13,14],[14,15],[15,16],[13,17],[17,18],[18,19],[19,20],[0,17]];
+const READY_MS = 350, ARM_WINDOW = 2200, FIRE_COOLDOWN = 1000, LOST_MS = 1500, FOUND_MS = 800;
+const VISION_VER = '0.10.14';
+const CDN = [
+  { lib:`https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@${VISION_VER}/vision_bundle.mjs`, wasm:`https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@${VISION_VER}/wasm` },
+  { lib:`https://unpkg.com/@mediapipe/tasks-vision@${VISION_VER}/vision_bundle.mjs`, wasm:`https://unpkg.com/@mediapipe/tasks-vision@${VISION_VER}/wasm` }
+];
+const MODEL_URL = 'https://storage.googleapis.com/mediapipe-models/hand_landmarker/hand_landmarker/float16/1/hand_landmarker.task';
+
+// One Euro filter: adaptive low-pass smoothing for the cursor.
+class LowPass { constructor(){ this.y = null; } f(x, a){ this.y = (this.y === null) ? x : a * x + (1 - a) * this.y; return this.y; } }
+class OneEuro {
+  constructor(minCutoff, beta, dCutoff = 1){ this.minCutoff = minCutoff; this.beta = beta; this.dCutoff = dCutoff; this.reset(); }
+  reset(){ this.x = new LowPass(); this.dx = new LowPass(); this.t = null; }
+  static alpha(cut, dt){ const tau = 1 / (TAU * cut); return 1 / (1 + tau / dt); }
+  filter(v, tMs){
+    if (this.t === null){ this.t = tMs; this.dx.f(0, 1); return this.x.f(v, 1); }
+    const dt = Math.max(0.001, (tMs - this.t) / 1000); this.t = tMs;
+    const ed = this.dx.f((v - this.x.y) / dt, OneEuro.alpha(this.dCutoff, dt));
+    return this.x.f(v, OneEuro.alpha(this.minCutoff + this.beta * Math.abs(ed), dt));
+  }
+}
+
+function defaultCal(seated){ return seated ? { x0:.3, x1:.7, y0:.35, y1:.8 } : { x0:.22, x1:.78, y0:.18, y1:.7 }; }
+
+// Mirrored pointer point (selfie view): fingertip pushed a bit along the finger direction.
+function pointerPoint(lm){
+  const t = lm[8], m = lm[5];
+  return { x:(1 - t.x) - (t.x - m.x) * 0.5, y:t.y + (t.y - m.y) * 0.5 };
+}
+
+// Calibration: robust range (5th to 95th percentile), slightly shrunk so edges are easy to reach.
+function computeCal(samples, seated){
+  if (samples.length < 20) return defaultCal(seated);
+  const xs = samples.map(s => s.x).sort((a, b) => a - b), ys = samples.map(s => s.y).sort((a, b) => a - b);
+  const pc = (arr, p) => arr[clamp(Math.round(p * (arr.length - 1)), 0, arr.length - 1)];
+  const fit = (a, b, min) => {
+    const c = (a + b) / 2, s = Math.max(min, (b - a) * 0.88); a = c - s / 2; b = c + s / 2;
+    if (a < 0){ b -= a; a = 0; } if (b > 1){ a -= b - 1; b = 1; }
+    return [Math.max(0, a), Math.min(1, b)];
+  };
+  const [x0, x1] = fit(pc(xs, .05), pc(xs, .95), 0.2);
+  const [y0, y1] = fit(pc(ys, .05), pc(ys, .95), 0.16);
+  return { x0, x1, y0, y1 };
+}
+
+function cameraErrorText(e){
+  switch (e && e.name){
+    case 'NotAllowedError': case 'PermissionDeniedError': case 'SecurityError': return TEXT.errDenied;
+    case 'NotFoundError': case 'DevicesNotFoundError': case 'OverconstrainedError': return TEXT.errNotFound;
+    case 'NotReadableError': case 'TrackStartError': case 'AbortError': return TEXT.errBusy;
+    default: return TEXT.errGeneric;
+  }
+}
+
+const Tracker = {
+  video:null, stream:null, landmarker:null, ready:false, calibrated:false,
+  lastVideoTime:-1, lastTs:0,
+  hand:null, lastSeen:0, seenSince:0,
+  fx:new OneEuro(0.35, 0.7), fy:new OneEuro(0.35, 0.7), nx:0.5, ny:0.5,
+  cal:defaultCal(false),
+  g:{ openS:0, readyS:0, pose:'none', readySince:0, lastReadyAt:0, armed:false, lastFire:0, charge:0 },
+  onFire:null,
+
+  async startCamera(){
+    if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) throw new FriendlyError(TEXT.errNoSupport);
+    if (this.stream) return;
+    let stream;
+    try {
+      stream = await navigator.mediaDevices.getUserMedia({ audio:false, video:{ facingMode:'user', width:{ ideal:640 }, height:{ ideal:480 }, frameRate:{ ideal:30 } } });
+    } catch (e){ throw new FriendlyError(cameraErrorText(e)); }
+    this.stream = stream; this.video.srcObject = stream;
+    await new Promise(res => {
+      if (this.video.readyState >= 2) return res();
+      this.video.onloadeddata = () => res(); setTimeout(res, 4000);
+    });
+    try { await this.video.play(); } catch (e) {}
+  },
+
+  async loadModel(){
+    if (this.landmarker) return;
+    for (const src of CDN){
+      try {
+        const vision = await import(src.lib);
+        const files = await vision.FilesetResolver.forVisionTasks(src.wasm);
+        const opts = d => ({ baseOptions:{ modelAssetPath:MODEL_URL, delegate:d }, runningMode:'VIDEO', numHands:1,
+          minHandDetectionConfidence:0.5, minHandPresenceConfidence:0.5, minTrackingConfidence:0.5 });
+        try { this.landmarker = await vision.HandLandmarker.createFromOptions(files, opts('GPU')); }
+        catch (e){ this.landmarker = await vision.HandLandmarker.createFromOptions(files, opts('CPU')); }
+        return;
+      } catch (e){ console.warn('Hand tracker failed to load from', src.lib, e); }
+    }
+    throw new FriendlyError(TEXT.errModel);
+  },
+
+  // Run detection once per new video frame.
+  update(now){
+    if (!this.ready || !this.landmarker) return;
+    const v = this.video; if (v.readyState < 2 || !v.videoWidth) return;
+    if (v.currentTime === this.lastVideoTime) return;
+    this.lastVideoTime = v.currentTime;
+    const ts = Math.max(now, this.lastTs + 1); this.lastTs = ts;
+    let res = null;
+    try { res = this.landmarker.detectForVideo(v, ts); } catch (e){ return; }
+    this.process(res && res.landmarks && res.landmarks.length ? res.landmarks[0] : null, now);
+  },
+
+  // Turn raw landmarks into a smoothed cursor plus a debounced fire gesture.
+  process(lm, now){
+    const g = this.g;
+    if (!lm){
+      this.hand = null; this.seenSince = 0;
+      g.openS *= 0.5; g.readyS *= 0.5; g.pose = 'none'; g.readySince = 0;
+      if (g.armed && now - g.lastReadyAt > ARM_WINDOW) g.armed = false;
+      g.charge = g.armed ? 1 : 0;
+      return;
+    }
+    if (!this.hand) this.seenSince = now;
+    this.hand = lm; this.lastSeen = now;
+
+    // A finger counts as extended when its tip is clearly farther from the wrist than its middle joint.
+    const w = lm[0], d = (a, b) => Math.hypot(a.x - b.x, a.y - b.y);
+    const ext = [[8,6],[12,10],[16,14],[20,18]].map(([t, p]) => d(lm[t], w) > d(lm[p], w) * 1.12);
+    const count = ext.filter(Boolean).length;
+    const others = (ext[1] ? 1 : 0) + (ext[2] ? 1 : 0) + (ext[3] ? 1 : 0);
+
+    // Smoothed pose scores give hysteresis, so one noisy frame can't flip the pose.
+    g.openS = g.openS * 0.45 + (count >= 3 ? 0.55 : 0);
+    g.readyS = g.readyS * 0.45 + (others <= 1 ? 0.55 : 0);
+    const open = g.openS > 0.6;
+    const ready = !open && g.readyS > 0.6;
+    g.pose = open ? 'open' : ready ? (ext[0] ? 'point' : 'fist') : 'other';
+
+    // Cursor update. Frozen during a fist, because the fingertip is curled into the palm.
+    if (g.pose !== 'fist'){
+      const pp = pointerPoint(lm), c = this.cal;
+      const nx = clamp((pp.x - c.x0) / (c.x1 - c.x0), 0, 1);
+      const ny = clamp((pp.y - c.y0) / (c.y1 - c.y0), 0, 1);
+      this.nx = this.fx.filter(nx, now); this.ny = this.fy.filter(ny, now);
+    }
+
+    // Gesture state machine: hold ready -> armed -> open hand -> fire -> cooldown.
+    if (ready){
+      if (!g.readySince) g.readySince = now;
+      g.lastReadyAt = now;
+      if (!g.armed && now - g.readySince >= READY_MS){ g.armed = true; Sound.ready(); }
+    } else g.readySince = 0;
+    if (g.armed && now - g.lastReadyAt > ARM_WINDOW) g.armed = false;
+    if (open && g.armed && now - g.lastFire > FIRE_COOLDOWN){
+      g.armed = false; g.lastFire = now;
+      if (this.onFire) this.onFire();
+    }
+    g.charge = ready ? Math.min(1, (now - g.readySince) / READY_MS) : (g.armed ? 1 : 0);
+  },
+
+  resetGesture(){ const g = this.g; g.armed = false; g.readySince = 0; g.charge = 0; }
+};
+
+/* ---------- Calibration: find hand -> record range -> test shot ---------- */
+const Calib = {
+  step:'off', samples:[], visible:0, doneAt:0, popT:0, returnToGame:false,
+  start(returnToGame){
+    this.returnToGame = !!returnToGame; this.step = 'find'; this.samples = []; this.visible = 0; this.popT = 0;
+    Tracker.cal = defaultCal(settings.seated); Tracker.fx.reset(); Tracker.fy.reset(); Tracker.resetGesture();
+    setState('calib');
+    this.setText(TEXT.calFind, 'Step 1 of 3'); Voice.say(TEXT.calFind, true);
+  },
+  setText(t, title){ $('calText').textContent = t; if (title) $('calTitle').textContent = title; },
+  update(now, dt){
+    const h = Tracker.hand; let prog = 0;
+    if (this.step === 'find'){
+      prog = h ? Math.min(1, (now - Tracker.seenSince) / 700) : 0;
+      if (h && now - Tracker.seenSince >= 700){
+        this.step = 'range';
+        const t = settings.seated ? TEXT.calRangeSeated : TEXT.calRange;
+        this.setText(t, 'Step 2 of 3'); Voice.say(t, true);
+      }
+    } else if (this.step === 'range'){
+      if (h){ this.visible += dt; this.samples.push(pointerPoint(h)); if (this.samples.length > 600) this.samples.shift(); }
+      prog = Math.min(1, this.visible / 3.2);
+      if (this.visible >= 3.2){
+        Tracker.cal = computeCal(this.samples, settings.seated); Tracker.fx.reset(); Tracker.fy.reset();
+        Tracker.resetGesture(); this.step = 'fire';
+        this.setText(TEXT.calFire, 'Step 3 of 3'); Voice.say(TEXT.calFire, true);
+      }
+    } else if (this.step === 'fire'){
+      prog = Tracker.g.charge;
+    } else if (this.step === 'done'){
+      prog = 1; this.popT += dt;
+      if (now - this.doneAt > 1300) this.finish();
+    }
+    $('calBar').style.width = Math.round(prog * 100) + '%';
+  },
+  onFire(){
+    if (this.step !== 'fire') return;
+    this.step = 'done'; this.doneAt = performance.now(); this.popT = 0;
+    Sound.pop(4); Sound.chime(); this.setText(TEXT.calDone, 'Yay!'); Voice.say(TEXT.calDone, true);
+  },
+  skip(){
+    if (this.step === 'range' && this.samples.length > 40) Tracker.cal = computeCal(this.samples, settings.seated);
+    this.finish();
+  },
+  finish(){
+    if (this.step === 'off') return;
+    this.step = 'off'; Tracker.calibrated = true; Tracker.resetGesture(); Tracker.lastSeen = performance.now();
+    if (this.returnToGame){ setState('play'); Voice.say(settings.seated ? TEXT.howToHandSeated : TEXT.howToHand, true); }
+    else startPending();
+  }
+};
+
+/* =====================================================================
+   4. GAME LOGIC
+   Hex grid stored as rows of cells (null or {c:color, n:number}).
+   Even rows hold COLS bubbles, odd rows COLS-1, shifted right by R.
+   Shots follow a pre-simulated path, so the preview always matches the result.
+   No game over: a friendly breeze clears rows and hints appear when stuck.
+===================================================================== */
+const stage = $('stage'), canvas = $('game'), ctx = canvas.getContext('2d');
+let state = 'title';
+let L = null, dpr = 1, layoutVersion = 0, boardVersion = 0;
+let mode = { idx:0, practice:false, def:LEVELS[0] };
+let pending = { idx:0, practice:false };
+let handCtx = 'start';
+let grid = [];
+let score = 0, displayScore = 0, levelStartScore = 0, shots = 0, par = 10, missStreak = 0;
+let current = { c:0 }, next = { c:1 };
+let shot = null;
+let popQueue = [], falling = [], particles = [], floaters = [], toasts = [];
+let numbersTotal = 0, nextNumber = 1, numberBonuses = 0, numbersDone = false;
+let hint = null, goodAngles = [], aimDirty = true;
+const aimHist = [];
+let pendingClear = 0, pendingRegen = 0;
+let levelStars = new Array(LEVELS.length).fill(0);
+let gT = 0, lastPopSnd = 0, lastFireAt = 0, lastManual = 0;
+const aim = { angle:Math.PI / 2, raw:Math.PI / 2, target:Math.PI / 2, readyAngle:Math.PI / 2, readyAt:0, cursor:null, source:'pointer' };
+const creature = { happy:0, recoil:0, blinkT:0, blinkIn:2 };
+const keys = { left:false, right:false };
+const pointer = { active:false };
+let bgBubbles = [], sprites = [], spritesPlain = [];
+const simCache = { key:'', sim:null };
+let occCache = { v:-1, lv:-1, list:[], maxY:-Infinity };
+
+/* ---------- Grid helpers ---------- */
+function colsInRow(r){ return (r & 1) ? COLS - 1 : COLS; }
+function cellXY(r, c){ return { x:L.left + L.R + c * 2 * L.R + ((r & 1) ? L.R : 0), y:L.top + L.R + r * L.rowH }; }
+function getCell(r, c){ if (r < 0 || r >= grid.length) return null; const row = grid[r]; return (c < 0 || c >= row.length) ? null : row[c]; }
+function ensureRows(r){ while (grid.length <= r) grid.push(new Array(colsInRow(grid.length)).fill(null)); }
+function trimRows(){ while (grid.length && grid[grid.length - 1].every(v => !v)) grid.pop(); }
+function neighbors(r, c){
+  const d = (r & 1) ? [[0,-1],[0,1],[-1,0],[-1,1],[1,0],[1,1]] : [[0,-1],[0,1],[-1,-1],[-1,0],[1,-1],[1,0]];
+  const out = [];
+  for (const [dr, dc] of d){ const rr = r + dr, cc = c + dc; if (rr >= 0 && cc >= 0 && cc < colsInRow(rr)) out.push([rr, cc]); }
+  return out;
+}
+function hasNeighbor(r, c){ return neighbors(r, c).some(([a, b]) => getCell(a, b)); }
+function forEachBubble(fn){ for (let r = 0; r < grid.length; r++){ const row = grid[r]; for (let c = 0; c < row.length; c++) if (row[c]) fn(row[c], r, c); } }
+function bubbleCount(){ let n = 0; forEachBubble(() => n++); return n; }
+function colorsOnBoard(){ const s = new Set(); forEachBubble(b => s.add(b.c)); return s; }
+function numberOnBoard(n){ let f = false; forEachBubble(b => { if (b.n === n) f = true; }); return f; }
+function muzzle(a){ return { x:L.launcherX + Math.cos(a) * L.R * MUZZLE, y:L.launcherY - Math.sin(a) * L.R * MUZZLE }; }
+function nextPos(){ return { x:L.launcherX - L.R * 2.5, y:L.launcherY + L.R * 1.9 }; }
+
+// Cached pixel positions of all bubbles (rebuilt when the board or layout changes).
+function getOcc(){
+  if (occCache.v === boardVersion && occCache.lv === layoutVersion) return occCache;
+  const list = []; let maxY = -Infinity;
+  forEachBubble((b, r, c) => { const p = cellXY(r, c); list.push(p); if (p.y > maxY) maxY = p.y; });
+  occCache = { v:boardVersion, lv:layoutVersion, list, maxY };
+  return occCache;
+}
+
+// Closest empty cell that is attached to the ceiling or to another bubble.
+function nearestEmpty(x, y){
+  const r0 = Math.round((y - L.top - L.R) / L.rowH);
+  let best = null, bd = Infinity;
+  const tryRow = r => {
+    if (r < 0) return;
+    for (let c = 0; c < colsInRow(r); c++){
+      if (getCell(r, c)) continue;
+      if (r > 0 && !hasNeighbor(r, c)) continue;
+      const p = cellXY(r, c), dd = (p.x - x) ** 2 + (p.y - y) ** 2;
+      if (dd < bd){ bd = dd; best = { r, c }; }
+    }
+  };
+  for (let r = r0 - 1; r <= r0 + 1; r++) tryRow(r);
+  if (!best) for (let r = 0; r <= grid.length; r++) tryRow(r);
+  return best;
+}
+
+// Trace a shot with wall bounces. Used by the preview, the aim assist, hints and real shots.
+function simulate(angle){
+  const R = L.R, m = muzzle(angle);
+  let x = m.x, y = m.y, dx = Math.cos(angle), dy = -Math.sin(angle);
+  const minX = L.left + R, maxX = L.left + L.W - R, topY = L.top + R;
+  const step = R * 0.45, hit2 = (2 * R * COLLIDE) ** 2, occ = getOcc();
+  const pts = [{ x, y, w:false }];
+  for (let i = 0; i < 4000; i++){
+    x += dx * step; y += dy * step;
+    if (x < minX){ x = 2 * minX - x; dx = -dx; pts.push({ x:minX, y, w:true }); }
+    else if (x > maxX){ x = 2 * maxX - x; dx = -dx; pts.push({ x:maxX, y, w:true }); }
+    if (y <= topY){ y = topY; break; }
+    if (y - 2 * R <= occ.maxY){
+      let hit = false;
+      for (const b of occ.list){ const ex = b.x - x, ey = b.y - y; if (ex * ex + ey * ey < hit2){ hit = true; break; } }
+      if (hit) break;
+    }
+  }
+  pts.push({ x, y, w:false });
+  const cell = nearestEmpty(x, y);
+  if (cell){ const p = cellXY(cell.r, cell.c); pts.push({ x:p.x, y:p.y, w:false }); }
+  return { pts, cell };
+}
+function previewSim(){
+  const key = aim.angle.toFixed(4) + '|' + boardVersion + '|' + layoutVersion;
+  if (simCache.key !== key){ simCache.key = key; simCache.sim = simulate(aim.angle); }
+  return simCache.sim;
+}
+
+/* ---------- Matching ---------- */
+function findGroup(r, c){
+  const color = grid[r][c].c, out = [], seen = new Set([r * 64 + c]), q = [[r, c, 0]];
+  while (q.length){
+    const [a, b, d] = q.shift(); out.push({ r:a, c:b, d });
+    for (const [na, nb] of neighbors(a, b)){
+      const k = na * 64 + nb; if (seen.has(k)) continue;
+      const cell = getCell(na, nb);
+      if (cell && cell.c === color){ seen.add(k); q.push([na, nb, d + 1]); }
+    }
+  }
+  return out;
+}
+// Size of the group a bubble of `color` would join if placed at (r,c).
+function groupSizeIf(r, c, color){
+  const seen = new Set([r * 64 + c]), q = [[r, c]]; let n = 0;
+  while (q.length){
+    const [a, b] = q.pop(); n++;
+    for (const [na, nb] of neighbors(a, b)){
+      const k = na * 64 + nb; if (seen.has(k)) continue;
+      const cell = getCell(na, nb);
+      if (cell && cell.c === color){ seen.add(k); q.push([na, nb]); }
+    }
+  }
+  return n;
+}
+// Sweep all angles and remember the ones that would pop something (aim assist + hints).
+function computeGoodFor(color){
+  const out = [], step = 1.5 * DEG;
+  for (let a = MIN_A; a <= MAX_A + 1e-6; a += step){
+    const s = simulate(a); if (!s.cell) continue;
+    const n = groupSizeIf(s.cell.r, s.cell.c, color);
+    if (n >= 3) out.push({ a, score:n });
+  }
+  return out;
+}
+// Generous aim: if the raw angle is near a popping angle, snap to it.
+function assist(raw, tol){
+  if (!goodAngles.length) return raw;
+  let best = null, bd = Infinity;
+  for (const g of goodAngles){ const dd = Math.abs(g.a - raw); if (dd < bd){ bd = dd; best = g; } }
+  if (bd <= 0.8 * DEG) return raw;
+  if (bd <= tol) return best.a;
+  return raw;
+}
+
+function popGroup(group){
+  let sx = 0, sy = 0; const nums = [];
+  group.forEach((g, i) => {
+    const cell = grid[g.r][g.c], p = cellXY(g.r, g.c); sx += p.x; sy += p.y;
+    grid[g.r][g.c] = null;
+    popQueue.push({ x:p.x, y:p.y, color:cell.c, num:cell.n, at:gT + g.d * 0.055 + 0.03, i });
+    if (cell.n) nums.push(cell.n);
+  });
+  const n = group.length, pts = n * 10 + Math.max(0, n - 3) * 15; score += pts;
+  floaters.push({ x:sx / n, y:sy / n, text:'+' + pts, life:1.1, max:1.1, color:'#fff' });
+  return nums;
+}
+// Bubbles no longer connected to the ceiling fall down for bonus points.
+function dropFloating(){
+  const seen = new Set(), q = [];
+  if (grid.length) grid[0].forEach((b, c) => { if (b){ seen.add(c); q.push([0, c]); } });
+  while (q.length){
+    const [r, c] = q.pop();
+    for (const [a, b] of neighbors(r, c)){
+      const k = a * 64 + b; if (seen.has(k)) continue;
+      if (getCell(a, b)){ seen.add(k); q.push([a, b]); }
+    }
+  }
+  let count = 0; const nums = [], sc = L.R / 24;
+  forEachBubble((b, r, c) => {
+    if (seen.has(r * 64 + c)) return;
+    const p = cellXY(r, c); grid[r][c] = null;
+    falling.push({ x:p.x, y:p.y, vx:rand(-60, 60) * sc, vy:rand(-180, -60) * sc, color:b.c, num:b.n });
+    if (b.n) nums.push(b.n); count++;
+  });
+  return { count, nums };
+}
+
+// Number bubbles: bonus for clearing 1, 2, 3... in order. Out of order is never punished.
+function processNumbers(list){
+  if (!numbersTotal) return;
+  list.sort((a, b) => a - b);
+  for (const n of list){
+    if (n === nextNumber){
+      const b = 50 * n; score += b; numberBonuses++; nextNumber++;
+      floaters.push({ x:L.w / 2, y:L.top + L.R * 2, text:`#${n} in order! +${b}`, life:1.4, max:1.4, color:'#fff3b0' });
+      Sound.chime();
+    }
+  }
+  while (nextNumber <= numbersTotal && !numberOnBoard(nextNumber)) nextNumber++;
+  if (nextNumber > numbersTotal && !numbersDone){
+    numbersDone = true;
+    if (numberBonuses === numbersTotal){ score += 300; toast('Counting champ!', `1 to ${numbersTotal}!  +300`, '#fff3b0'); Voice.say(numbersTotal === 3 ? TEXT.countDone : `You counted all the way to ${numbersTotal}! Counting champ!`, true); }
+  }
+  updateHud();
+}
+
+/* ---------- Landing a shot ---------- */
+function land(s){
+  let { r, c } = s.cell;
+  if (getCell(r, c)){ const alt = nearestEmpty(s.endX, s.endY); if (!alt) return; r = alt.r; c = alt.c; }
+  ensureRows(r); grid[r][c] = { c:s.color, n:0 }; boardVersion++;
+  Sound.stick();
+  const group = findGroup(r, c);
+  let nums = [];
+  if (group.length >= 3){
+    nums = nums.concat(popGroup(group));
+    const drop = dropFloating(); nums = nums.concat(drop.nums);
+    if (drop.count){
+      const pts = drop.count * 20; score += pts; const p = cellXY(r, c);
+      floaters.push({ x:p.x, y:p.y + L.R * 1.4, text:`+${pts} drop!`, life:1.2, max:1.2, color:'#fff3b0' });
+    }
+    missStreak = 0; creature.happy = 1.4;
+    const total = group.length + drop.count;
+    if (total >= 6){ const w = pick(TEXT.great); toast(w, ''); if (total >= 9) Voice.say(w); }
+  } else missStreak++;
+  if (nums.length) processNumbers(nums);
+  trimRows();
+  afterBoardChange(true);
+}
+
+// Runs after every board change: keeps colors valid and applies the "never punishing" helpers.
+function afterBoardChange(fromShot){
+  boardVersion++; aimDirty = true; hint = null;
+  fixColors();
+  if (bubbleCount() === 0){ onBoardCleared(); updateHud(); return; }
+  if (!checkDanger() && fromShot){
+    if (missStreak >= 5){ if (breeze(1)) missStreak = 0; else showHint(true); }
+    else if (missStreak === 3) showHint(true);
+  }
+  updateHud();
+}
+function checkDanger(){
+  trimRows(); const lowest = grid.length - 1;
+  if (lowest >= L.maxRows - 1) return breeze(Math.max(1, lowest - (L.maxRows - 4)));
+  return false;
+}
+// Friendly breeze: clears the lowest rows (no penalty, never a game over).
+function breeze(nRows){
+  trimRows(); if (grid.length <= 1) return false;
+  const keep = Math.max(1, grid.length - nRows), nums = [], rows = grid.length;
+  for (let r = rows - 1; r >= keep; r--){
+    grid[r].forEach((cell, c) => {
+      if (!cell) return; const p = cellXY(r, c);
+      popQueue.push({ x:p.x, y:p.y, color:cell.c, num:cell.n, at:gT + 0.05 + c * 0.04 + (rows - 1 - r) * 0.08, i:c, soft:true });
+      if (cell.n) nums.push(cell.n);
+    });
+    grid[r] = new Array(colsInRow(r)).fill(null);
+  }
+  trimRows();
+  const drop = dropFloating(); nums.push(...drop.nums);
+  if (nums.length) processNumbers(nums);
+  boardVersion++; aimDirty = true; hint = null; fixColors();
+  windStreaks(); Sound.breeze(); toast('Whoosh!', 'A friendly breeze helped'); Voice.say(TEXT.breeze);
+  if (bubbleCount() === 0) onBoardCleared();
+  updateHud();
+  return true;
+}
+function onBoardCleared(){
+  if (pendingClear || pendingRegen) return;
+  if (mode.practice){
+    score += 200; toast('Board cleared!', '+200'); Voice.say(TEXT.boardClear); confetti(40); Sound.chime();
+    pendingRegen = gT + 1.4;
+  } else pendingClear = gT + 1.0;
+}
+
+/* ---------- Colors and helpers ---------- */
+function pickColor(){
+  let present = [...colorsOnBoard()];
+  if (!present.length) present = mode.def.colors.slice();
+  // After a couple of misses, quietly hand out the most useful color.
+  if (missStreak >= 2 && present.length > 1 && bubbleCount()){
+    let best = null, bs = 0;
+    for (const col of present){
+      const s = computeGoodFor(col).reduce((m, g) => Math.max(m, g.score), 0);
+      if (s > bs){ bs = s; best = col; }
+    }
+    if (best !== null) return best;
+  }
+  return pick(present);
+}
+function fixColors(){
+  const present = colorsOnBoard(); if (!present.size) return;
+  const arr = [...present];
+  if (!present.has(current.c)){ current.c = pick(arr); aimDirty = true; }
+  if (!present.has(next.c)) next.c = pick(arr);
+}
+function showHint(auto){
+  if (state !== 'play' || shot || pendingClear || pendingRegen) return;
+  let list = computeGoodFor(current.c);
+  if (!list.length){
+    for (const col of colorsOnBoard()){
+      if (col === current.c) continue;
+      const l2 = computeGoodFor(col);
+      if (l2.length){
+        current.c = col; list = l2;
+        const m = muzzle(aim.angle); burst(m.x, m.y, col, 0.8);
+        toast('Magic!', 'Bubbo picked a helpful color'); Voice.say(TEXT.helpColor, true);
+        break;
+      }
+    }
+  }
+  if (!list.length){ if (!breeze(1)) toast('Try anywhere!', ''); return; }
+  goodAngles = list.slice(); aimDirty = false;
+  list.sort((a, b) => (b.score - a.score) || (Math.abs(a.a - aim.angle) - Math.abs(b.a - aim.angle)));
+  const best = list[0];
+  hint = { angle:best.a, until:gT + 6, sim:simulate(best.a), v:boardVersion };
+  Sound.tone(660, 990, 0.18, 'sine', 0.12);
+  Voice.say(TEXT.hint, !auto);
+}
+function swap(){
+  if (state !== 'play' || shot) return;
+  const t = current.c; current.c = next.c; next.c = t;
+  aimDirty = true; hint = null; Sound.swap(); updateHud();
+}
+
+/* ---------- Board generation and levels ---------- */
+function generateBoard(){
+  const def = mode.def; grid = [];
+  const rows = Math.max(3, Math.min(def.rows, L.maxRows - 4));
+  for (let r = 0; r < rows; r++){
+    ensureRows(r);
+    for (let c = 0; c < colsInRow(r); c++){
+      let col = pick(def.colors);
+      // Patterned boards (stripes / blocks) with a little randomness so they are not too easy.
+      if (def.pattern && Math.random() < 0.8){
+        const k = def.pattern === 'stripes' ? r : Math.floor(c / 2) + Math.floor(r / 2);
+        col = def.colors[k % def.colors.length];
+      }
+      // Copy a neighbor's color now and then, so friendly clusters form.
+      if (!def.pattern && Math.random() < 0.55){
+        const nb = neighbors(r, c).map(([a, b]) => getCell(a, b)).filter(Boolean);
+        if (nb.length) col = pick(nb).c;
+      }
+      grid[r][c] = { c:col, n:0 };
+    }
+  }
+  numbersTotal = 0; nextNumber = 1; numberBonuses = 0; numbersDone = false;
+  if (def.numbers){
+    const cand = [];
+    for (let r = Math.max(0, rows - 3); r < rows; r++) for (let c = 0; c < colsInRow(r); c++) cand.push([r, c]);
+    for (let n = 1; n <= (def.nums || 3) && cand.length; n++){
+      const [r, c] = cand.splice(Math.floor(Math.random() * cand.length), 1)[0];
+      grid[r][c].n = n; numbersTotal = n;
+    }
+  }
+  par = Math.ceil(bubbleCount() / 2.5) + 3;
+  boardVersion++; aimDirty = true;
+}
+function startLevel(idx, practice){
+  mode = { idx, practice:!!practice, def:practice ? PRACTICE : LEVELS[idx] };
+  levelStartScore = score; gT = 0; shots = 0; missStreak = 0; hint = null; shot = null;
+  popQueue = []; falling = []; floaters = []; toasts = []; pendingClear = 0; pendingRegen = 0;
+  generateBoard();
+  current = { c:pickColor() }; next = { c:pickColor() };
+  aim.angle = aim.raw = aim.target = Math.PI / 2;
+  aim.source = settings.ctrl === 'hand' ? 'hand' : 'pointer';
+  Tracker.resetGesture(); Tracker.lastSeen = performance.now(); lastManual = 0;
+  setState('play'); updateHud();
+  toast(mode.def.name, mode.def.title);
+  const how = settings.ctrl === 'hand' ? (settings.seated ? TEXT.howToHandSeated : TEXT.howToHand) : TEXT.howToTouch;
+  Voice.say(mode.def.say + ' ' + how, true);
+}
+function startPending(){ startLevel(pending.idx, pending.practice); }
+function restartLevel(){ score = levelStartScore; displayScore = score; startLevel(mode.idx, mode.practice); }
+function projectedStars(){ if (shots <= par) return 3; if (shots <= Math.ceil(par * 1.6)) return 2; return 1; }
+function completeLevel(){
+  const stars = projectedStars(), bonus = 200 + Math.max(0, par - shots) * 25;
+  score += bonus; levelStars[mode.idx] = Math.max(levelStars[mode.idx], stars);
+  confetti(90); Sound.win(); creature.happy = 3;
+  if (mode.idx >= LEVELS.length - 1) showCelebrate();
+  else { showLevelDone(stars, bonus); Voice.say(TEXT.levelDone(stars), true); }
+}
+
+/* ---------- Aiming ---------- */
+function handCursor(){
+  const fx = Tracker.nx, fy = Tracker.ny;
+  if (settings.seated){
+    // Seated: only left/right matters, mapped straight onto the launch angle.
+    const a = MAX_A - fx * (MAX_A - MIN_A), rr = L.W * 0.42;
+    return { angle:a, cursor:{ x:L.launcherX + Math.cos(a) * rr, y:L.launcherY - Math.sin(a) * rr } };
+  }
+  const cx = L.launcherX + (fx * 2 - 1) * L.W * 0.62;
+  const cy = L.top + fy * (L.launcherY - L.R * 2.5 - L.top);
+  return { angle:clampAngle(Math.atan2(L.launcherY - cy, cx - L.launcherX)), cursor:{ x:cx, y:cy } };
+}
+function updateAim(dt, now){
+  if (aimDirty && !shot){ goodAngles = computeGoodFor(current.c); aimDirty = false; }
+  if (keys.left || keys.right){
+    aim.raw = clamp(aim.raw + (keys.left ? 1 : -1) * 0.7 * dt, MIN_A, MAX_A);
+    aim.source = 'keys'; lastManual = now;
+  }
+  let tol = 5 * DEG, speed = 8;
+  const handActive = settings.ctrl === 'hand' && Tracker.ready && Tracker.hand && now - lastManual > 1800;
+  if (handActive){
+    const hc = handCursor(); aim.source = 'hand'; aim.cursor = hc.cursor;
+    const posing = Tracker.g.pose === 'point' || Tracker.g.pose === 'fist';
+    // Only follow the hand while it is in the ready pose; opening it (to fire) must not steer the shot.
+    // A dead zone ignores small wobbles: the aim only moves once the hand has really moved.
+    if (posing && Math.abs(hc.angle - aim.raw) > 2.5 * DEG) aim.raw = hc.angle;
+    tol = 10 * DEG; speed = 4;
+  } else if (aim.source === 'keys'){ tol = 0; speed = 14; }
+  else if (aim.source === 'pointer'){ speed = 9; }
+  aim.target = tol ? assist(aim.raw, tol) : aim.raw;
+  aim.angle += (aim.target - aim.angle) * Math.min(1, dt * speed);
+  // Keep a short history of the aim while the hand is in the ready pose; on firing we use the angle from
+  // just before the hand started to open, because opening shifts the fingertip.
+  if (handActive && (Tracker.g.pose === 'point' || Tracker.g.pose === 'fist')){
+    aim.readyAngle = aim.angle; aim.readyAt = now;
+    aimHist.push({ t:now, a:aim.angle }); while (aimHist.length && now - aimHist[0].t > 1200) aimHist.shift();
+  }
+}
+
+/* ---------- Shooting ---------- */
+function fire(source){
+  if (state !== 'play' || shot || pendingClear || pendingRegen) return;
+  const now = performance.now(); if (now - lastFireAt < 400) return;
+  if (aimDirty){ goodAngles = computeGoodFor(current.c); aimDirty = false; }
+  let a = aim.angle;
+  if (source === 'pointer') a = assist(aim.raw, 5 * DEG);
+  else if (source === 'hand' && aim.source === 'hand' && now - aim.readyAt < 1200){
+    // Median angle from the ready pose, ignoring the last ~250 ms before the hand opened.
+    let h = aimHist.filter(q => q.t <= aim.readyAt - 250 && q.t >= aim.readyAt - 900);
+    if (h.length < 3) h = aimHist.slice(-12);
+    if (h.length){ const v = h.map(q => q.a).sort((x, y) => x - y); a = assist(v[Math.floor(v.length / 2)], 10 * DEG); }
+    else a = aim.readyAngle;
+  }
+  a = clamp(a, MIN_A, MAX_A);
+  const sim = simulate(a); if (!sim.cell) return;
+  lastFireAt = now;
+  const cum = []; let total = 0;
+  for (let i = 1; i < sim.pts.length; i++){ total += Math.hypot(sim.pts[i].x - sim.pts[i-1].x, sim.pts[i].y - sim.pts[i-1].y); cum.push(total); }
+  const end = sim.pts[Math.max(0, sim.pts.length - 2)];
+  shot = { pts:sim.pts, cum, total, dist:0, seg:0, color:current.c, cell:sim.cell, endX:end.x, endY:end.y, x:sim.pts[0].x, y:sim.pts[0].y, trail:[] };
+  shots++; aim.angle = a;
+  current = { c:next.c }; next = { c:pickColor() };
+  aimDirty = true; hint = null; creature.recoil = 1; Sound.shoot(); updateHud();
+}
+function updateShot(dt){
+  if (!shot) return;
+  const s = shot; s.dist += L.R * 17 * dt;
+  while (s.seg < s.cum.length && s.dist >= s.cum[s.seg]){ s.seg++; const p = s.pts[s.seg]; if (p && p.w) Sound.bounce(); }
+  if (s.dist >= s.total){ shot = null; land(s); return; }
+  const start = s.seg === 0 ? 0 : s.cum[s.seg - 1], len = s.cum[s.seg] - start;
+  const t = len > 0 ? (s.dist - start) / len : 1;
+  const a = s.pts[s.seg], b = s.pts[s.seg + 1];
+  s.trail.push({ x:s.x, y:s.y }); if (s.trail.length > 4) s.trail.shift();
+  s.x = a.x + (b.x - a.x) * t; s.y = a.y + (b.y - a.y) * t;
+}
+function updatePops(){
+  for (let i = popQueue.length - 1; i >= 0; i--){
+    const q = popQueue[i];
+    if (gT >= q.at){
+      burst(q.x, q.y, q.color, q.soft ? 0.6 : 1);
+      if (gT - lastPopSnd > 0.035){ Sound.pop(Math.min(q.i || 0, 8)); lastPopSnd = gT; }
+      popQueue.splice(i, 1);
+    }
+  }
+}
+function updateFalling(dt){
+  const floor = L.launcherY + L.R, minX = L.left + L.R, maxX = L.left + L.W - L.R;
+  for (let i = falling.length - 1; i >= 0; i--){
+    const f = falling[i]; f.vy += 1600 * dt; f.x = clamp(f.x + f.vx * dt, minX, maxX); f.y += f.vy * dt;
+    if (f.y > floor){
+      burst(f.x, floor, f.color, 0.6); falling.splice(i, 1);
+      if (gT - lastPopSnd > 0.04){ Sound.pop(2); lastPopSnd = gT; }
+    }
+  }
+}
+
+/* ---------- Per-frame game update, pause and tracking loss ---------- */
+function updateGame(dt, now){
+  gT += dt;
+  updateAim(dt, now);
+  updateShot(dt);
+  updatePops(); updateFalling(dt);
+  if (pendingRegen && gT >= pendingRegen){ pendingRegen = 0; generateBoard(); fixColors(); aimDirty = true; updateHud(); toast('New board!', ''); }
+  if (pendingClear && gT >= pendingClear && !popQueue.length && !falling.length){ pendingClear = 0; completeLevel(); return; }
+  // Friendly auto-pause when the hand disappears (skipped while the player is using touch or keys).
+  if (settings.ctrl === 'hand' && Tracker.ready && !Tracker.hand && now - Tracker.lastSeen > LOST_MS && now - lastManual > 6000 && !pendingClear) enterLost();
+}
+function enterLost(){
+  keys.left = keys.right = false; pointer.active = false;
+  setState('lost'); Voice.say(TEXT.lost, true); Sound.tone(520, 320, 0.3, 'sine', 0.1);
+}
+function updateLost(now){
+  const h = Tracker.hand, st = $('lostStatus');
+  if (h){
+    const k = Math.min(1, (now - Tracker.seenSince) / FOUND_MS), t = 'Found you! Getting ready…';
+    if (st.textContent !== t) st.textContent = t;
+    $('lostBar').style.width = Math.round(k * 100) + '%';
+    if (k >= 1){ Tracker.resetGesture(); Tracker.lastSeen = now; setState('play'); toast('Welcome back!', ''); Voice.say(TEXT.back, true); }
+  } else {
+    const t = 'Looking for your hand…';
+    if (st.textContent !== t){ st.textContent = t; $('lostBar').style.width = '0%'; }
+  }
+}
+function pause(){ if (state !== 'play') return; keys.left = keys.right = false; pointer.active = false; setState('paused'); caption('Paused'); }
+function resume(){
+  if (state !== 'paused' && state !== 'lost') return;
+  Tracker.lastSeen = performance.now(); Tracker.resetGesture(); setState('play');
+}
+/* =====================================================================
+   5. RENDERING
+   Everything is original vector art drawn on canvas: gradient bubbles
+   (pre-rendered to sprites for speed), Bubbo the bubble creature,
+   an animated pastel sky, and particle pop effects.
+===================================================================== */
+
+// Small white symbol inside each color, so colors are never the only clue.
+function drawSymbol(c, x, y, s, sym){
+  c.save(); c.fillStyle = 'rgba(255,255,255,0.6)'; c.beginPath();
+  switch (sym){
+    case 'dot': c.arc(x, y, s * 0.55, 0, TAU); break;
+    case 'diamond': c.moveTo(x, y - s); c.lineTo(x + s * 0.75, y); c.lineTo(x, y + s); c.lineTo(x - s * 0.75, y); c.closePath(); break;
+    case 'triangle': c.moveTo(x, y - s * 0.9); c.lineTo(x + s * 0.9, y + s * 0.7); c.lineTo(x - s * 0.9, y + s * 0.7); c.closePath(); break;
+    case 'plus': c.rect(x - s * 0.28, y - s * 0.85, s * 0.56, s * 1.7); c.rect(x - s * 0.85, y - s * 0.28, s * 1.7, s * 0.56); break;
+    case 'square': c.rect(x - s * 0.65, y - s * 0.65, s * 1.3, s * 1.3); break;
+  }
+  c.fill(); c.restore();
+}
+function drawBubbleRaw(c, x, y, r, col, withSymbol){
+  const g = c.createRadialGradient(x - r * 0.35, y - r * 0.4, r * 0.1, x, y, r * 1.05);
+  g.addColorStop(0, col.light); g.addColorStop(0.45, col.base); g.addColorStop(1, col.dark);
+  c.beginPath(); c.arc(x, y, r * 0.96, 0, TAU); c.fillStyle = g; c.fill();
+  c.lineWidth = Math.max(1, r * 0.07); c.strokeStyle = 'rgba(255,255,255,0.55)'; c.stroke();
+  c.beginPath(); c.ellipse(x - r * 0.35, y - r * 0.42, r * 0.32, r * 0.2, -0.6, 0, TAU); c.fillStyle = 'rgba(255,255,255,0.75)'; c.fill();
+  c.beginPath(); c.arc(x + r * 0.42, y + r * 0.38, r * 0.09, 0, TAU); c.fillStyle = 'rgba(255,255,255,0.45)'; c.fill();
+  if (withSymbol) drawSymbol(c, x, y + r * 0.06, r * 0.32, col.sym);
+}
+function buildSprites(){
+  sprites = []; spritesPlain = [];
+  const R = L.R, size = Math.ceil((R * 2 + 4) * dpr);
+  COLORS.forEach(col => {
+    for (const withSym of [true, false]){
+      const cv = document.createElement('canvas'); cv.width = cv.height = size;
+      const c = cv.getContext('2d'); c.scale(dpr, dpr);
+      drawBubbleRaw(c, size / dpr / 2, size / dpr / 2, R, col, withSym);
+      (withSym ? sprites : spritesPlain).push(cv);
+    }
+  });
+}
+function drawBubble(x, y, color, num, scale = 1, alpha = 1){
+  const sp = (num ? spritesPlain : sprites)[color]; if (!sp) return;
+  const s = (sp.width / dpr) * scale;
+  if (alpha !== 1) ctx.globalAlpha = alpha;
+  ctx.drawImage(sp, x - s / 2, y - s / 2, s, s);
+  if (num){
+    const R = L.R * scale;
+    ctx.lineWidth = R * 0.13; ctx.strokeStyle = 'rgba(255,243,176,0.95)';
+    ctx.beginPath(); ctx.arc(x, y, R * 0.8, 0, TAU); ctx.stroke();
+    ctx.font = `900 ${Math.round(R * 1.05)}px ${FONT}`; ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.lineJoin = 'round';
+    ctx.lineWidth = R * 0.22; ctx.strokeStyle = 'rgba(60,25,100,0.7)'; ctx.strokeText(num, x, y + R * 0.05);
+    ctx.fillStyle = '#fff'; ctx.fillText(num, x, y + R * 0.05);
+  }
+  if (alpha !== 1) ctx.globalAlpha = 1;
+}
+function label(text, x, y, size, fill){
+  ctx.font = `900 ${Math.round(size)}px ${FONT}`; ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.lineJoin = 'round';
+  ctx.lineWidth = size * 0.3; ctx.strokeStyle = 'rgba(85,40,170,0.85)'; ctx.strokeText(text, x, y);
+  ctx.fillStyle = fill || '#fff'; ctx.fillText(text, x, y);
+}
+function sparkle(c, x, y, s, rot){
+  c.save(); c.translate(x, y); c.rotate(rot); c.beginPath();
+  for (let i = 0; i < 8; i++){ const r = i % 2 ? s * 0.28 : s, a = i * Math.PI / 4; c.lineTo(Math.cos(a) * r, Math.sin(a) * r); }
+  c.closePath(); c.fill(); c.restore();
+}
+
+/* ---------- Background ---------- */
+function initBg(){ bgBubbles = []; for (let i = 0; i < 18; i++) bgBubbles.push({ x:Math.random(), y:Math.random(), r:rand(6, 34), v:rand(0.015, 0.05), ph:rand(0, TAU) }); }
+function updateBg(dt){ for (const b of bgBubbles){ b.y -= b.v * dt; if (b.y < -0.1){ b.y = 1.1; b.x = Math.random(); } } }
+function drawBackground(t){
+  const h1 = 200 + 16 * Math.sin(t * 0.07), h2 = 325 + 18 * Math.sin(t * 0.09 + 1);
+  const g = ctx.createLinearGradient(0, 0, 0, L.h);
+  g.addColorStop(0, `hsl(${h1},90%,79%)`); g.addColorStop(0.55, `hsl(${(h1 + h2) / 2},80%,86%)`); g.addColorStop(1, `hsl(${h2},90%,89%)`);
+  ctx.fillStyle = g; ctx.fillRect(0, 0, L.w, L.h);
+  for (const b of bgBubbles){
+    const x = b.x * L.w + Math.sin(t * 0.8 + b.ph) * 12, y = b.y * L.h;
+    ctx.fillStyle = 'rgba(255,255,255,0.16)'; ctx.beginPath(); ctx.arc(x, y, b.r, 0, TAU); ctx.fill();
+    ctx.strokeStyle = 'rgba(255,255,255,0.4)'; ctx.lineWidth = 1.5; ctx.stroke();
+    ctx.fillStyle = 'rgba(255,255,255,0.5)'; ctx.beginPath(); ctx.arc(x - b.r * 0.35, y - b.r * 0.35, b.r * 0.18, 0, TAU); ctx.fill();
+  }
+  for (let layer = 0; layer < 2; layer++){
+    ctx.fillStyle = layer ? 'rgba(150,235,215,0.35)' : 'rgba(255,255,255,0.28)';
+    const amp = L.R * (layer ? 0.5 : 0.7), y0 = L.h - L.R * (layer ? 1.2 : 2.0);
+    ctx.beginPath(); ctx.moveTo(0, L.h);
+    for (let x = 0; x <= L.w + 20; x += 20) ctx.lineTo(x, y0 - Math.sin(x * 0.012 + t * (layer ? 0.6 : 0.35) + layer * 2) * amp);
+    ctx.lineTo(L.w, L.h); ctx.closePath(); ctx.fill();
+  }
+}
+
+/* ---------- Board, preview, hint ---------- */
+function drawBoardPanel(){
+  const R = L.R;
+  roundRectPath(ctx, L.left - R * 0.35, L.top - R * 0.3, L.W + R * 0.7, L.dangerY - L.top + R * 0.3, R * 0.9);
+  ctx.fillStyle = 'rgba(255,255,255,0.18)'; ctx.fill(); ctx.lineWidth = 2; ctx.strokeStyle = 'rgba(255,255,255,0.55)'; ctx.stroke();
+  // Soft "bottom line". It glows warm when bubbles get close; a breeze clears them before they reach it.
+  const near = grid.length - 1 >= L.maxRows - 3;
+  ctx.save(); ctx.setLineDash([R * 0.3, R * 0.3]); ctx.lineWidth = near ? 3 : 2;
+  ctx.strokeStyle = near ? `rgba(255,170,90,${0.6 + 0.3 * Math.sin(gT * 6)})` : 'rgba(255,255,255,0.6)';
+  ctx.beginPath(); ctx.moveTo(L.left, L.dangerY); ctx.lineTo(L.left + L.W, L.dangerY); ctx.stroke(); ctx.restore();
+}
+function drawGrid(){
+  const R = L.R;
+  forEachBubble((b, r, c) => {
+    const p = cellXY(r, c), s = 1 + 0.025 * Math.sin(gT * 2.4 + r * 0.9 + c * 1.7);
+    if (b.n && b.n === nextNumber){
+      ctx.strokeStyle = `rgba(255,226,120,${0.5 + 0.4 * Math.sin(gT * 5)})`; ctx.lineWidth = R * 0.18;
+      ctx.beginPath(); ctx.arc(p.x, p.y, R * 1.08, 0, TAU); ctx.stroke();
+    }
+    drawBubble(p.x, p.y, b.c, b.n, s);
+  });
+}
+function drawPopQueue(){ for (const q of popQueue){ const k = clamp(1 - (q.at - gT) / 0.25, 0, 1); drawBubble(q.x, q.y, q.color, q.num, 1 + k * 0.18); } }
+function drawFalling(){ for (const f of falling) drawBubble(f.x, f.y, f.color, f.num, 1); }
+
+// Trajectory preview: moving dots along the exact simulated path, plus a ghost bubble where it lands.
+function drawPreview(){
+  if (shot || pendingClear || pendingRegen) return;
+  const sim = previewSim(); if (!sim.cell) return;
+  const pts = sim.pts, R = L.R, sp = R * 0.75, col = COLORS[current.c];
+  let carry = R * 1.1 + ((gT * R * 2.2) % sp), k = 0;
+  ctx.lineWidth = Math.max(1.5, R * 0.08); ctx.strokeStyle = col.dark; ctx.fillStyle = '#fff';
+  for (let i = 0; i < pts.length - 2; i++){
+    const a = pts[i], b = pts[i + 1], dx = b.x - a.x, dy = b.y - a.y, len = Math.hypot(dx, dy);
+    let d = carry;
+    while (d < len){
+      const t = d / len; ctx.globalAlpha = Math.max(0.25, 0.95 - k * 0.012);
+      ctx.beginPath(); ctx.arc(a.x + dx * t, a.y + dy * t, R * 0.17, 0, TAU); ctx.fill(); ctx.stroke();
+      k++; d += sp;
+    }
+    carry = d - len;
+  }
+  ctx.globalAlpha = 1;
+  const p = cellXY(sim.cell.r, sim.cell.c);
+  drawBubble(p.x, p.y, current.c, 0, 1, 0.35);
+  ctx.save(); ctx.setLineDash([R * 0.25, R * 0.2]); ctx.lineWidth = 2; ctx.strokeStyle = '#fff';
+  ctx.beginPath(); ctx.arc(p.x, p.y, R * 0.98, 0, TAU); ctx.stroke(); ctx.restore();
+  if (groupSizeIf(sim.cell.r, sim.cell.c, current.c) >= 3){
+    const pulse = 1 + 0.12 * Math.sin(gT * 8);
+    ctx.strokeStyle = 'rgba(255,214,90,0.95)'; ctx.lineWidth = R * 0.14;
+    ctx.beginPath(); ctx.arc(p.x, p.y, R * 1.12 * pulse, 0, TAU); ctx.stroke();
+    ctx.fillStyle = '#fff7c9'; sparkle(ctx, p.x + R * 0.85, p.y - R * 0.85, R * 0.4, gT * 2);
+  }
+}
+function drawHint(){
+  if (!hint) return;
+  if (gT > hint.until || hint.v !== boardVersion){ hint = null; return; }
+  const pts = hint.sim.pts, R = L.R;
+  ctx.save(); ctx.setLineDash([R * 0.45, R * 0.35]); ctx.lineDashOffset = -gT * R * 3;
+  ctx.lineWidth = R * 0.2; ctx.lineCap = 'round'; ctx.strokeStyle = 'rgba(255,210,80,0.85)';
+  ctx.beginPath(); ctx.moveTo(pts[0].x, pts[0].y);
+  for (let i = 1; i < pts.length - 1; i++) ctx.lineTo(pts[i].x, pts[i].y);
+  ctx.stroke(); ctx.restore();
+  if (hint.sim.cell){
+    const c = cellXY(hint.sim.cell.r, hint.sim.cell.c), pulse = 1 + 0.15 * Math.sin(gT * 8);
+    ctx.strokeStyle = 'rgba(255,214,90,0.95)'; ctx.lineWidth = R * 0.18;
+    ctx.beginPath(); ctx.arc(c.x, c.y, R * 1.1 * pulse, 0, TAU); ctx.stroke();
+    ctx.fillStyle = '#fff3b0'; sparkle(ctx, c.x + R * 0.9, c.y - R * 0.9, R * 0.5, gT * 3);
+    label('Try here!', c.x, c.y + R * 1.9, R * 0.55, '#ffe27a');
+  }
+}
+
+/* ---------- Bubbo, the bubble buddy ---------- */
+function drawCreature(t){
+  const R = L.R, a = aim.angle, bx = L.launcherX, baseY = L.launcherY + R * 1.35;
+  let hop = 0;
+  if (state === 'celebrate') hop = Math.abs(Math.sin(t * 6)) * R * 0.35;
+  else if (creature.happy > 0) hop = Math.abs(Math.sin(t * 11)) * R * 0.32 * Math.min(1, creature.happy);
+  const br = Math.sin(t * 2.3) * 0.035;
+  const rx = R * 1.15 * (1 + br), ry = R * 1.05 * (1 - br), cy = baseY - hop;
+  const tilt = state === 'celebrate' ? Math.sin(t * 6) * 0.12 : 0;
+
+  ctx.fillStyle = 'rgba(60,30,110,0.16)';
+  ctx.beginPath(); ctx.ellipse(bx, baseY + ry + R * 0.2, rx * 0.95, R * 0.18, 0, 0, TAU); ctx.fill();
+
+  ctx.save();
+  if (tilt){ ctx.translate(bx, baseY + ry); ctx.rotate(tilt); ctx.translate(-bx, -(baseY + ry)); }
+  ctx.fillStyle = '#22958a';
+  for (const s of [-1, 1]){ ctx.beginPath(); ctx.ellipse(bx + s * rx * 0.45, cy + ry * 0.88, R * 0.36, R * 0.22, 0, 0, TAU); ctx.fill(); }
+  for (const s of [-1, 1]){
+    ctx.fillStyle = '#3cc7b4'; ctx.beginPath(); ctx.arc(bx + s * rx * 0.64, cy - ry * 0.74, R * 0.28, 0, TAU); ctx.fill();
+    ctx.fillStyle = '#ffb3c8'; ctx.beginPath(); ctx.arc(bx + s * rx * 0.64, cy - ry * 0.74, R * 0.13, 0, TAU); ctx.fill();
+  }
+  const g = ctx.createRadialGradient(bx - rx * 0.35, cy - ry * 0.45, R * 0.1, bx, cy, rx * 1.25);
+  g.addColorStop(0, '#c8fff3'); g.addColorStop(0.5, '#4ad4c0'); g.addColorStop(1, '#239a8f');
+  ctx.fillStyle = g; ctx.beginPath(); ctx.ellipse(bx, cy, rx, ry, 0, 0, TAU); ctx.fill();
+  ctx.lineWidth = Math.max(1, R * 0.06); ctx.strokeStyle = 'rgba(18,90,85,0.35)'; ctx.stroke();
+  ctx.fillStyle = 'rgba(255,255,255,0.3)'; ctx.beginPath(); ctx.ellipse(bx, cy + ry * 0.38, rx * 0.58, ry * 0.42, 0, 0, TAU); ctx.fill();
+  ctx.fillStyle = 'rgba(255,255,255,0.6)'; ctx.beginPath(); ctx.ellipse(bx - rx * 0.45, cy - ry * 0.5, rx * 0.2, ry * 0.12, -0.6, 0, TAU); ctx.fill();
+  // Eyes follow the aim and blink now and then.
+  const eyeS = creature.blinkT > 0 ? 0.12 : 1, lx = Math.cos(a) * R * 0.09, ly = -Math.sin(a) * R * 0.09;
+  for (const s of [-1, 1]){
+    const ex = bx + s * rx * 0.36, ey = cy - ry * 0.12;
+    ctx.fillStyle = '#fff'; ctx.beginPath(); ctx.ellipse(ex, ey, R * 0.25, R * 0.3 * eyeS, 0, 0, TAU); ctx.fill();
+    if (eyeS > 0.5){
+      ctx.fillStyle = '#2b2350'; ctx.beginPath(); ctx.arc(ex + lx, ey + ly, R * 0.14, 0, TAU); ctx.fill();
+      ctx.fillStyle = '#fff'; ctx.beginPath(); ctx.arc(ex + lx - R * 0.05, ey + ly - R * 0.06, R * 0.05, 0, TAU); ctx.fill();
+    }
+  }
+  ctx.fillStyle = 'rgba(255,120,160,0.45)';
+  for (const s of [-1, 1]){ ctx.beginPath(); ctx.ellipse(bx + s * rx * 0.62, cy + ry * 0.14, R * 0.17, R * 0.11, 0, 0, TAU); ctx.fill(); }
+  if (creature.happy > 0 || state === 'celebrate'){
+    ctx.fillStyle = '#5a2350'; ctx.beginPath(); ctx.moveTo(bx - R * 0.24, cy + ry * 0.16);
+    ctx.quadraticCurveTo(bx, cy + ry * 0.7, bx + R * 0.24, cy + ry * 0.16); ctx.closePath(); ctx.fill();
+    ctx.fillStyle = '#ff8fb1'; ctx.beginPath(); ctx.ellipse(bx, cy + ry * 0.38, R * 0.1, R * 0.06, 0, 0, TAU); ctx.fill();
+  } else {
+    ctx.strokeStyle = '#2b2350'; ctx.lineWidth = Math.max(1.5, R * 0.07); ctx.lineCap = 'round';
+    ctx.beginPath(); ctx.arc(bx, cy + ry * 0.1, R * 0.2, 0.15 * Math.PI, 0.85 * Math.PI); ctx.stroke();
+  }
+  ctx.restore();
+
+  // Bubble launcher held overhead. The pivot never moves, so the aim always matches the physics.
+  const px = L.launcherX, py = L.launcherY, len = R * 1.6 * (1 - creature.recoil * 0.18);
+  ctx.save(); ctx.translate(px, py); ctx.rotate(-a);
+  const tg = ctx.createLinearGradient(0, -R * 0.4, 0, R * 0.4);
+  tg.addColorStop(0, '#d8ceff'); tg.addColorStop(0.5, '#8c6cff'); tg.addColorStop(1, '#5a3bd9');
+  roundRectPath(ctx, -R * 0.45, -R * 0.4, len + R * 0.45, R * 0.8, R * 0.4); ctx.fillStyle = tg; ctx.fill();
+  ctx.lineWidth = Math.max(1, R * 0.05); ctx.strokeStyle = 'rgba(40,20,100,0.3)'; ctx.stroke();
+  ctx.fillStyle = 'rgba(255,255,255,0.35)'; roundRectPath(ctx, R * 0.15, -R * 0.4, R * 0.18, R * 0.8, R * 0.08); ctx.fill();
+  ctx.fillStyle = '#ffcf5a'; roundRectPath(ctx, len - R * 0.22, -R * 0.52, R * 0.32, R * 1.04, R * 0.14); ctx.fill();
+  ctx.strokeStyle = '#d89a1c'; ctx.stroke();
+  ctx.beginPath(); ctx.arc(0, 0, R * 0.3, 0, TAU); ctx.fillStyle = '#ffcf5a'; ctx.fill();
+  ctx.restore();
+
+  const ca = Math.cos(a), sa = Math.sin(a), gx = px + ca * R * 0.35, gy = py - sa * R * 0.35;
+  ctx.lineCap = 'round';
+  for (const s of [-1, 1]){
+    const sx = bx + s * rx * 0.86, sy = cy - ry * 0.1, hx = gx + s * sa * R * 0.32, hy = gy + s * ca * R * 0.32;
+    ctx.strokeStyle = '#38c2ae'; ctx.lineWidth = R * 0.24;
+    ctx.beginPath(); ctx.moveTo(sx, sy); ctx.quadraticCurveTo(sx + s * R * 0.3, (sy + hy) / 2, hx, hy); ctx.stroke();
+    ctx.fillStyle = '#5fe0cc'; ctx.beginPath(); ctx.arc(hx, hy, R * 0.16, 0, TAU); ctx.fill();
+  }
+  const m = muzzle(a);
+  drawBubble(m.x - ca * R * 0.3 * creature.recoil, m.y + sa * R * 0.3 * creature.recoil, current.c, 0, 0.92 + 0.03 * Math.sin(t * 4));
+}
+function drawNext(){
+  const p = nextPos(), R = L.R;
+  ctx.fillStyle = 'rgba(255,255,255,0.55)'; ctx.beginPath(); ctx.ellipse(p.x, p.y + R * 0.6, R * 0.8, R * 0.22, 0, 0, TAU); ctx.fill();
+  drawBubble(p.x, p.y, next.c, 0, 0.68);
+  label('next', p.x, p.y - R * 0.95, R * 0.42, '#fff');
+}
+function drawShot(){
+  if (!shot) return;
+  shot.trail.forEach((p, i) => {
+    ctx.globalAlpha = 0.12 * (i + 1); ctx.fillStyle = COLORS[shot.color].light;
+    ctx.beginPath(); ctx.arc(p.x, p.y, L.R * (0.5 + 0.1 * i), 0, TAU); ctx.fill();
+  });
+  ctx.globalAlpha = 1; drawBubble(shot.x, shot.y, shot.color, 0, 1);
+}
+// Hand cursor: a ring that fills while the hand holds the ready pose, then says "Open!".
+function drawCursor(){
+  if (aim.source !== 'hand' || !Tracker.hand || !aim.cursor) return;
+  const R = L.R, g = Tracker.g, p = aim.cursor;
+  if (settings.seated){
+    ctx.save(); ctx.setLineDash([R * 0.2, R * 0.3]); ctx.strokeStyle = 'rgba(255,255,255,0.45)'; ctx.lineWidth = 2;
+    ctx.beginPath(); ctx.arc(L.launcherX, L.launcherY, L.W * 0.42, -MAX_A, -MIN_A); ctx.stroke(); ctx.restore();
+  }
+  if (g.armed){ ctx.fillStyle = 'rgba(255,214,90,0.35)'; ctx.beginPath(); ctx.arc(p.x, p.y, R * 1.25, 0, TAU); ctx.fill(); }
+  ctx.save(); ctx.shadowColor = 'rgba(60,30,120,0.5)'; ctx.shadowBlur = 6; ctx.lineWidth = 3; ctx.strokeStyle = '#fff';
+  ctx.beginPath(); ctx.arc(p.x, p.y, R * 0.8, 0, TAU); ctx.stroke(); ctx.restore();
+  ctx.fillStyle = COLORS[current.c].base; ctx.beginPath(); ctx.arc(p.x, p.y, R * 0.22, 0, TAU); ctx.fill();
+  if (g.charge > 0 && !g.armed){
+    ctx.strokeStyle = '#ffc23c'; ctx.lineWidth = 5; ctx.lineCap = 'round';
+    ctx.beginPath(); ctx.arc(p.x, p.y, R * 0.8, -Math.PI / 2, -Math.PI / 2 + TAU * g.charge); ctx.stroke();
+  }
+  if (g.armed) label('Open!', p.x, p.y - R * 1.5, R * 0.6, '#ffe27a');
+}
+
+/* ---------- Particles, floating scores, banners ---------- */
+function burst(x, y, color, power = 1){
+  const col = COLORS[color], R = L.R, sc = R / 24;
+  particles.push({ t:'ring', x, y, vx:0, vy:0, r:R * 0.5, life:0.4, max:0.4, color:col.light });
+  const n = Math.round(10 * power);
+  for (let i = 0; i < n; i++){
+    const a = rand(0, TAU), s = rand(90, 260) * sc, life = rand(0.45, 0.85);
+    particles.push({ t:'dot', x, y, vx:Math.cos(a) * s, vy:Math.sin(a) * s - 70 * sc, life, max:life, size:R * rand(0.12, 0.26), color:i % 3 === 0 ? col.light : col.base });
+  }
+  for (let i = 0; i < 2 * power; i++)
+    particles.push({ t:'star', x:x + rand(-0.5, 0.5) * R, y:y + rand(-0.5, 0.5) * R, vx:rand(-40, 40) * sc, vy:rand(-140, -60) * sc, life:0.7, max:0.7, size:R * rand(0.25, 0.4), rot:rand(0, TAU), color:'#fff7c9' });
+  if (particles.length > 700) particles.splice(0, particles.length - 700);
+}
+function confetti(n){
+  const cols = ['#ff5d8f', '#3fa9ff', '#ffc23c', '#3fd07a', '#a173ff', '#ffffff'];
+  for (let i = 0; i < n; i++){
+    const life = rand(3, 5);
+    particles.push({ t:'conf', x:rand(0, L.w), y:rand(-L.h * 0.3, -10), vx:rand(-30, 30), vy:rand(80, 180), life, max:life, size:rand(8, 14), rot:rand(0, TAU), vr:rand(-6, 6), color:pick(cols) });
+  }
+}
+function windStreaks(){
+  for (let i = 0; i < 12; i++)
+    particles.push({ t:'wind', x:L.left - rand(0, 200), y:rand(L.top, L.dangerY), vx:rand(700, 1000), vy:0, life:0.9, max:0.9, len:rand(40, 90) });
+}
+function updateParticles(dt){
+  for (let i = particles.length - 1; i >= 0; i--){
+    const p = particles[i]; p.life -= dt;
+    if (p.life <= 0){ particles.splice(i, 1); continue; }
+    if (p.t === 'dot'){ p.vy += 650 * dt; p.vx *= 0.985; }
+    else if (p.t === 'star'){ p.vy += 180 * dt; p.rot += dt * 5; }
+    else if (p.t === 'conf'){ p.rot += p.vr * dt; p.x += Math.sin(p.life * 3 + p.vr) * 20 * dt; }
+    p.x += p.vx * dt; p.y += p.vy * dt;
+  }
+}
+function drawParticles(){
+  const R = L.R;
+  for (const p of particles){
+    const k = p.life / p.max;
+    if (p.t === 'dot'){ ctx.globalAlpha = Math.min(1, k * 1.5); ctx.fillStyle = p.color; ctx.beginPath(); ctx.arc(p.x, p.y, p.size * (0.4 + 0.6 * k), 0, TAU); ctx.fill(); }
+    else if (p.t === 'ring'){ ctx.globalAlpha = k; ctx.strokeStyle = p.color; ctx.lineWidth = R * 0.18 * k + 1; ctx.beginPath(); ctx.arc(p.x, p.y, p.r + (1 - k) * R * 1.1, 0, TAU); ctx.stroke(); }
+    else if (p.t === 'star'){ ctx.globalAlpha = Math.min(1, k * 1.5); ctx.fillStyle = p.color; sparkle(ctx, p.x, p.y, p.size * (0.5 + 0.5 * k), p.rot); }
+    else if (p.t === 'conf'){ ctx.globalAlpha = Math.min(1, k * 3); ctx.save(); ctx.translate(p.x, p.y); ctx.rotate(p.rot); ctx.fillStyle = p.color; ctx.fillRect(-p.size / 2, -p.size / 4, p.size, p.size / 2); ctx.restore(); }
+    else if (p.t === 'wind'){ ctx.globalAlpha = k * 0.7; ctx.strokeStyle = '#fff'; ctx.lineWidth = 3; ctx.lineCap = 'round'; ctx.beginPath(); ctx.moveTo(p.x, p.y); ctx.quadraticCurveTo(p.x - p.len * 0.5, p.y - 8, p.x - p.len, p.y); ctx.stroke(); }
+  }
+  ctx.globalAlpha = 1;
+}
+function drawFloaters(){
+  const R = L.R;
+  for (const f of floaters){
+    const k = f.life / f.max, y = f.y - (1 - k) * R * 1.6;
+    const x = clamp(f.x, L.left + R * 2.5, L.left + L.W - R * 2.5);
+    ctx.globalAlpha = Math.min(1, k * 2); label(f.text, x, y, R * 0.75, f.color);
+  }
+  ctx.globalAlpha = 1;
+}
+function toast(text, sub, color){ toasts = [{ text, sub, color, life:1.7, max:1.7 }]; }
+function drawToast(){
+  const t = toasts[0]; if (!t) return;
+  const age = t.max - t.life, s = easeOutBack(Math.min(1, age / 0.3)), a = t.life < 0.4 ? t.life / 0.4 : 1;
+  const size = Math.min(L.R * 1.7, L.w / (t.text.length * 0.62 + 1));
+  const y = L.top + (L.dangerY - L.top) * 0.4;
+  ctx.save(); ctx.globalAlpha = a; ctx.translate(L.w / 2, y); ctx.scale(s, s);
+  ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.lineJoin = 'round';
+  ctx.font = `900 ${Math.round(size)}px ${FONT}`; ctx.lineWidth = size * 0.24; ctx.strokeStyle = 'rgba(85,40,170,0.9)';
+  ctx.strokeText(t.text, 0, 0); ctx.fillStyle = t.color || '#fff'; ctx.fillText(t.text, 0, 0);
+  if (t.sub){
+    const ss = Math.min(size * 0.42, L.w / (t.sub.length * 0.55 + 1));
+    ctx.font = `800 ${Math.round(ss)}px ${FONT}`; ctx.lineWidth = ss * 0.28;
+    ctx.strokeText(t.sub, 0, size * 0.85); ctx.fillStyle = '#fff'; ctx.fillText(t.sub, 0, size * 0.85);
+  }
+  ctx.restore();
+}
+
+/* ---------- Mirrored camera preview with hand landmarks ---------- */
+const POSE_LABEL = { none:'👀 No hand', point:'☝️ Aiming', fist:'✊ Ready', open:'🖐️ Open', other:'✋ Hand' };
+let lastPoseKey = '';
+function drawCam(cv, calib){
+  const cw = Math.max(2, Math.round(cv.clientWidth * dpr)), ch = Math.max(2, Math.round(cv.clientHeight * dpr));
+  if (cv.width !== cw || cv.height !== ch){ cv.width = cw; cv.height = ch; }
+  const c = cv.getContext('2d'), v = Tracker.video;
+  c.setTransform(1, 0, 0, 1, 0, 0); c.fillStyle = '#2b2350'; c.fillRect(0, 0, cw, ch);
+  if (!v || v.readyState < 2 || !v.videoWidth){
+    c.fillStyle = '#fff'; c.font = `700 ${Math.round(ch * 0.08)}px ${FONT}`; c.textAlign = 'center'; c.textBaseline = 'middle';
+    c.fillText('Camera starting…', cw / 2, ch / 2); return;
+  }
+  // Cover-fit the video, drawn mirrored like a selfie.
+  const vw = v.videoWidth, vh = v.videoHeight, vr = vw / vh, cr = cw / ch;
+  let sx, sy, sw, sh;
+  if (vr > cr){ sh = vh; sw = vh * cr; sx = (vw - sw) / 2; sy = 0; } else { sw = vw; sh = vw / cr; sx = 0; sy = (vh - sh) / 2; }
+  c.save(); c.translate(cw, 0); c.scale(-1, 1); c.drawImage(v, sx, sy, sw, sh, 0, 0, cw, ch); c.restore();
+  const map = (x, y) => ({ x:cw - ((x * vw - sx) / sw) * cw, y:((y * vh - sy) / sh) * ch });
+  const u = Math.max(1.5, cw / 160);
+
+  if (calib && Calib.step === 'range'){
+    const s = Calib.samples;
+    for (let i = Math.max(0, s.length - 90); i < s.length; i++){
+      const p = map(1 - s[i].x, s[i].y);
+      c.fillStyle = `hsl(${(i * 6) % 360},90%,62%)`; c.beginPath(); c.arc(p.x, p.y, u * 2, 0, TAU); c.fill();
+    }
+  }
+  if (calib && (Calib.step === 'fire' || Calib.step === 'done')){
+    const bx = cw / 2, by = ch * 0.42, br = ch * 0.13;
+    if (Calib.step === 'fire') drawBubbleRaw(c, bx, by, br * (1 + 0.05 * Math.sin(performance.now() / 200)), COLORS[1], true);
+    else {
+      const k = Math.min(1, Calib.popT / 0.6);
+      c.globalAlpha = 1 - k; c.strokeStyle = '#cfeaff'; c.lineWidth = br * 0.2 * (1 - k) + 1;
+      c.beginPath(); c.arc(bx, by, br * (1 + k * 1.5), 0, TAU); c.stroke();
+      for (let i = 0; i < 10; i++){
+        const a = i / 10 * TAU, d = br * (1 + k * 2);
+        c.fillStyle = i % 2 ? '#3fa9ff' : '#ffc23c';
+        c.beginPath(); c.arc(bx + Math.cos(a) * d, by + Math.sin(a) * d, br * 0.15 * (1 - k) + 1, 0, TAU); c.fill();
+      }
+      c.globalAlpha = 1;
+    }
+  }
+  const lm = Tracker.hand;
+  if (lm){
+    c.lineCap = 'round'; c.strokeStyle = 'rgba(255,255,255,0.85)'; c.lineWidth = u * 1.2; c.beginPath();
+    for (const [a, b] of HAND_LINKS){ const p = map(lm[a].x, lm[a].y), q = map(lm[b].x, lm[b].y); c.moveTo(p.x, p.y); c.lineTo(q.x, q.y); }
+    c.stroke();
+    c.fillStyle = '#a173ff';
+    for (const p0 of lm){ const p = map(p0.x, p0.y); c.beginPath(); c.arc(p.x, p.y, u * 1.4, 0, TAU); c.fill(); }
+    const tip = map(lm[8].x, lm[8].y), g = Tracker.g;
+    c.fillStyle = { point:'#3fa9ff', fist:'#ffc23c', open:'#3fd07a' }[g.pose] || '#ff5d8f'; c.strokeStyle = '#fff'; c.lineWidth = u;
+    c.beginPath(); c.arc(tip.x, tip.y, u * 4, 0, TAU); c.fill(); c.stroke();
+    if (g.charge > 0){
+      c.strokeStyle = '#ffc23c'; c.lineWidth = u * 2;
+      c.beginPath(); c.arc(tip.x, tip.y, u * 7, -Math.PI / 2, -Math.PI / 2 + TAU * g.charge); c.stroke();
+    }
+  }
+}
+function drawPreviews(){
+  if (state === 'calib') drawCam($('calCanvas'), true);
+  else if (!$('camBox').classList.contains('hidden')) drawCam($('camCanvas'), false);
+  const g = Tracker.g, pose = Tracker.hand ? g.pose : 'none', key = pose + (g.armed ? '+' : '');
+  if (key !== lastPoseKey){
+    lastPoseKey = key;
+    const txt = (g.armed && Tracker.hand) ? '⭐ Open now!' : POSE_LABEL[pose];
+    $('camState').textContent = txt; $('calBadge').textContent = txt;
+  }
+}
+
+function render(t){
+  ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+  drawBackground(t);
+  const game = inGame();
+  if (!game) aim.angle = Math.PI / 2 + Math.sin(t * 0.9) * 0.45;   // idle sway on menus
+  if (game){
+    drawBoardPanel(); drawGrid(); drawPopQueue();
+    if (state !== 'levelDone'){ drawHint(); drawPreview(); }
+    drawFalling();
+  }
+  drawCreature(t);
+  if (game){ drawNext(); drawShot(); if (state === 'play') drawCursor(); }
+  drawParticles(); drawFloaters(); drawToast();
+}
+function updateAmbient(dt){
+  updateBg(dt); updateParticles(dt);
+  for (let i = floaters.length - 1; i >= 0; i--){ floaters[i].life -= dt; if (floaters[i].life <= 0) floaters.splice(i, 1); }
+  if (toasts.length){ toasts[0].life -= dt; if (toasts[0].life <= 0) toasts.shift(); }
+  creature.happy = Math.max(0, creature.happy - dt); creature.recoil = Math.max(0, creature.recoil - dt * 5);
+  creature.blinkIn -= dt; if (creature.blinkIn <= 0){ creature.blinkT = 0.14; creature.blinkIn = rand(2.2, 5); }
+  creature.blinkT = Math.max(0, creature.blinkT - dt);
+  if (state === 'celebrate' && particles.length < 350 && Math.random() < 0.5) confetti(2);
+}
+
+/* =====================================================================
+   6. UI: layout, screens, HUD, buttons, touch and keyboard
+===================================================================== */
+function layout(){
+  const w = stage.clientWidth, h = stage.clientHeight;
+  if (!w || !h) return;
+  dpr = Math.min(2, window.devicePixelRatio || 1);
+  canvas.width = Math.round(w * dpr); canvas.height = Math.round(h * dpr);
+  const portrait = h >= w * 0.95;
+  document.body.classList.toggle('portrait', portrait); document.body.classList.toggle('landscape', !portrait);
+  const hudH = portrait ? 64 : 58;
+  document.documentElement.style.setProperty('--hud-h', hudH + 'px');
+  // Board width follows the shorter side so it fits phones, tablets and desktops in both orientations.
+  const W = Math.max(200, Math.min(w - 16, (h - hudH) * (portrait ? 0.78 : 0.7), 640));
+  const R = W / (COLS * 2), top = hudH + 6, launcherY = h - 10 - R * 2.7, dangerY = launcherY - R * 3.2, rowH = R * SQ3;
+  const maxRows = Math.max(5, Math.floor((dangerY - R - (top + R)) / rowH) + 1);
+  L = { w, h, W, R, left:(w - W) / 2, top, launcherX:w / 2, launcherY, dangerY, rowH, maxRows, portrait };
+  layoutVersion++; buildSprites(); aimDirty = true; simCache.key = ''; hint = null;
+  if (!bgBubbles.length) initBg();
+  if (inGame() && grid.length){
+    if (shot){ const s = shot; shot = null; land(s); }
+    else if (grid.length - 1 >= L.maxRows - 1) breeze(Math.max(1, grid.length - 1 - (L.maxRows - 4)));
+  }
+}
+
+const SCREENS = { title:'scrTitle', loading:'scrLoading', error:'scrError', calib:'scrCalib', paused:'scrPause', lost:'scrLost', levelDone:'scrLevel', celebrate:'scrCelebrate' };
+function inGame(s){ s = s || state; return s === 'play' || s === 'paused' || s === 'lost' || s === 'levelDone'; }
+function setState(s){
+  state = s;
+  for (const k in SCREENS) $(SCREENS[k]).classList.toggle('hidden', k !== s);
+  $('hud').classList.toggle('hidden', !inGame(s));
+  $('controls').classList.toggle('hidden', s !== 'play');
+  $('camBox').classList.toggle('hidden', !(inGame(s) && settings.ctrl === 'hand' && Tracker.ready));
+  syncUI();
+  keys.left = keys.right = false;
+  if (s === 'play') blurActive();
+  else if (SCREENS[s] && s !== 'title'){
+    const b = $(SCREENS[s]).querySelector('button:not(.hidden)');
+    if (b) setTimeout(() => { try { b.focus({ preventScroll:true }); } catch (e) {} }, 60);
+  }
+}
+function syncUI(){
+  document.querySelectorAll('.seg-btn').forEach(b => {
+    const on = b.dataset.ctrl === settings.ctrl;
+    b.classList.toggle('on', on); b.setAttribute('aria-checked', on ? 'true' : 'false');
+  });
+  $('optSeated').checked = settings.seated; $('optSound').checked = settings.sound; $('optVoice').checked = settings.voice;
+  $('btnSound').textContent = settings.sound ? '🔊' : '🔇';
+  $('btnRecal').classList.toggle('hidden', settings.ctrl !== 'hand');
+  $('btnSwitchCtrl').textContent = settings.ctrl === 'hand' ? '👆 Play with touch' : '✋ Play with hand camera';
+}
+function updateHud(){
+  if (!mode.def) return;
+  $('hudLevel').textContent = mode.practice ? 'Practice · Free play' : `${mode.def.name} · ${mode.def.title}`;
+  const st = $('hudStars'); st.classList.toggle('hidden', mode.practice);
+  if (!mode.practice){
+    const n = projectedStars();
+    [...st.children].forEach((s, i) => s.classList.toggle('on', i < n));
+    st.setAttribute('aria-label', `${n} of 3 stars`);
+  }
+  const num = $('hudNum'), show = numbersTotal > 0 && nextNumber <= numbersTotal;
+  num.classList.toggle('hidden', !show); if (show) num.textContent = `Next #${nextNumber}`;
+  $('swapDot').style.background = COLORS[next.c].base;
+}
+function showLevelDone(stars, bonus){
+  $('lvlTitle').textContent = `${mode.def.name} cleared!`;
+  const spans = $('lvlStars').children;
+  for (let i = 0; i < 3; i++) spans[i].classList.remove('on');
+  for (let i = 0; i < stars; i++) setTimeout(() => { spans[i].classList.add('on'); Sound.tone(700 + i * 180, 900 + i * 180, 0.18, 'triangle', 0.14); }, 450 + i * 380);
+  $('lvlStars').setAttribute('aria-label', `${stars} of 3 stars`);
+  $('lvlScore').textContent = `Score: ${score}  (level bonus +${bonus})`;
+  setState('levelDone');
+}
+function showCelebrate(){
+  const total = levelStars.reduce((a, b) => a + b, 0);
+  $('celStars').textContent = `★ ${total} / ${LEVELS.length * 3}`;
+  $('celScore').textContent = `Total score: ${score}`;
+  setState('celebrate'); Voice.say(TEXT.celebrate, true);
+}
+function showError(msg){ $('errText').textContent = msg; setState('error'); }
+function blurActive(){ const a = document.activeElement; if (a && a !== document.body && a.blur) a.blur(); }
+
+/* ---------- Flows: start, camera, calibration, fallbacks ---------- */
+async function handFlow(ctxName){
+  handCtx = ctxName;
+  const go = () => {
+    if (handCtx === 'resume'){
+      if (Tracker.calibrated){ Tracker.lastSeen = performance.now(); Tracker.resetGesture(); setState('play'); Voice.say(settings.seated ? TEXT.howToHandSeated : TEXT.howToHand, true); }
+      else Calib.start(true);
+    } else {
+      if (Tracker.calibrated) startPending(); else Calib.start(false);
+    }
+  };
+  if (Tracker.ready){ go(); return; }
+  setState('loading'); $('loadText').textContent = TEXT.loadCam;
+  try {
+    await Tracker.startCamera();
+    if (state !== 'loading') return;
+    $('loadText').textContent = TEXT.loadModel;
+    await Tracker.loadModel();
+    Tracker.ready = true; Tracker.lastSeen = performance.now();
+    if (state === 'loading') go();
+  } catch (e){
+    console.error(e);
+    if (state === 'loading') showError(e.friendly || TEXT.errGeneric);
+  }
+}
+function beginPlay(idx, practice){
+  Sound.unlock(); Voice.prime();
+  pending = { idx, practice:!!practice }; score = 0; displayScore = 0; levelStars = new Array(LEVELS.length).fill(0);
+  $('hudScore').textContent = '0';
+  if (settings.ctrl === 'hand') handFlow('start'); else startPending();
+}
+function useTouchFallback(){
+  settings.ctrl = 'touch'; saveSettings(); syncUI(); lastManual = performance.now();
+  if (handCtx === 'resume'){ setState('play'); Voice.say(TEXT.howToTouch, true); }
+  else startPending();
+}
+function switchCtrl(){
+  if (settings.ctrl === 'hand'){
+    settings.ctrl = 'touch'; saveSettings(); syncUI(); lastManual = performance.now();
+    setState('play'); Voice.say(TEXT.howToTouch, true);
+  } else {
+    settings.ctrl = 'hand'; saveSettings(); syncUI(); handFlow('resume');
+  }
+}
+function toggleSound(){ settings.sound = !settings.sound; saveSettings(); syncUI(); if (settings.sound){ Sound.unlock(); Sound.swap(); } }
+function goHome(){
+  Voice.stop(); shot = null; popQueue = []; falling = []; toasts = []; floaters = [];
+  pendingClear = pendingRegen = 0; Calib.step = 'off'; setState('title');
+}
+
+/* ---------- Buttons ---------- */
+$('btnPlay').onclick = () => beginPlay(0, false);
+$('btnPractice').onclick = () => beginPlay(0, true);
+document.querySelectorAll('.seg-btn').forEach(b => b.onclick = () => { settings.ctrl = b.dataset.ctrl; saveSettings(); syncUI(); Sound.unlock(); Sound.swap(); });
+$('optSeated').onchange = e => { settings.seated = e.target.checked; saveSettings(); Tracker.calibrated = false; };
+$('optSound').onchange = e => { settings.sound = e.target.checked; saveSettings(); syncUI(); if (settings.sound) Sound.unlock(); };
+$('optVoice').onchange = e => { settings.voice = e.target.checked; if (!settings.voice) Voice.stop(); saveSettings(); };
+$('btnPause').onclick = () => { if (state === 'lost') setState('paused'); else pause(); };
+$('btnHint').onclick = () => { showHint(false); blurActive(); };
+$('btnSound').onclick = () => { toggleSound(); blurActive(); };
+$('btnSwap').onclick = () => { swap(); lastManual = performance.now(); blurActive(); };
+$('btnShoot').onclick = () => { Sound.unlock(); fire('button'); blurActive(); };
+$('camBox').onclick = () => $('camBox').classList.toggle('big');
+$('btnResume').onclick = resume;
+$('btnRestart').onclick = restartLevel;
+$('btnRecal').onclick = () => Calib.start(true);
+$('btnSwitchCtrl').onclick = switchCtrl;
+$('btnHome').onclick = goHome;
+$('btnLoadTouch').onclick = useTouchFallback;
+$('btnErrRetry').onclick = () => handFlow(handCtx);
+$('btnErrTouch').onclick = useTouchFallback;
+$('btnErrHome').onclick = goHome;
+$('btnCalSkip').onclick = () => Calib.skip();
+$('btnCalBack').onclick = () => { const back = Calib.returnToGame; Calib.step = 'off'; if (back) setState('paused'); else goHome(); };
+$('btnLostTouch').onclick = () => { settings.ctrl = 'touch'; saveSettings(); syncUI(); lastManual = performance.now(); setState('play'); Voice.say(TEXT.howToTouch, true); };
+$('btnLostPause').onclick = () => setState('paused');
+$('btnNext').onclick = () => startLevel(mode.idx + 1, false);
+$('btnReplay').onclick = restartLevel;
+$('btnLvlHome').onclick = goHome;
+$('btnCelAgain').onclick = () => beginPlay(0, false);
+$('btnCelPractice').onclick = () => beginPlay(0, true);
+$('btnCelHome').onclick = goHome;
+
+/* ---------- Touch and mouse: drag to aim, release (or tap) to shoot ---------- */
+function toLocal(e){ const r = canvas.getBoundingClientRect(); return { x:e.clientX - r.left, y:e.clientY - r.top }; }
+const ptrHist = [];
+function aimAt(p){ aim.raw = clampAngle(Math.atan2(L.launcherY - p.y, p.x - L.launcherX)); aim.cursor = p; aim.source = 'pointer'; lastManual = performance.now();
+  const t = lastManual; ptrHist.push({ t, a:aim.raw }); while (ptrHist.length && t - ptrHist[0].t > 600) ptrHist.shift(); }
+canvas.addEventListener('pointerdown', e => {
+  Sound.unlock();
+  if (state !== 'play') return;
+  const p = toLocal(e), np = nextPos();
+  if (Math.hypot(p.x - np.x, p.y - np.y) < L.R * 1.3){ swap(); lastManual = performance.now(); return; }
+  if (p.y > L.launcherY + L.R * 0.5) return;   // ignore taps on Bubbo's feet area
+  pointer.active = true;
+  try { canvas.setPointerCapture(e.pointerId); } catch (err) {}
+  aimAt(p);
+});
+canvas.addEventListener('pointermove', e => {
+  if (state !== 'play') return;
+  if (pointer.active || e.pointerType === 'mouse'){
+    const p = toLocal(e);
+    if (!pointer.active && p.y > L.launcherY + L.R * 0.5) return;
+    aimAt(p);
+  }
+});
+canvas.addEventListener('pointerup', e => {
+  if (!pointer.active) return;
+  pointer.active = false;
+  if (state === 'play'){
+    // Finger lifting nudges the touch point; use the aim from just before the lift instead.
+    if (e.pointerType !== 'mouse'){ const cut = performance.now() - 120; let q = null; for (const h of ptrHist) if (h.t <= cut) q = h; if (q) aim.raw = q.a; }
+    else aimAt(toLocal(e));
+    fire('pointer');
+  }
+});
+canvas.addEventListener('pointercancel', () => { pointer.active = false; });
+canvas.addEventListener('contextmenu', e => e.preventDefault());
+window.addEventListener('pointerdown', () => Sound.unlock(), true);
+
+/* ---------- Keyboard ---------- */
+window.addEventListener('keydown', e => {
+  Sound.unlock();
+  const k = e.key;
+  if (state === 'play'){
+    if (k === 'ArrowLeft' || k === 'a' || k === 'A'){ keys.left = true; e.preventDefault(); }
+    else if (k === 'ArrowRight' || k === 'd' || k === 'D'){ keys.right = true; e.preventDefault(); }
+    else if (k === ' ' || k === 'Enter' || k === 'ArrowUp' || k === 'w' || k === 'W'){ e.preventDefault(); if (!e.repeat) fire('keys'); }
+    else if (k === 's' || k === 'S' || k === 'x' || k === 'X' || k === 'ArrowDown'){ e.preventDefault(); if (!e.repeat){ swap(); lastManual = performance.now(); } }
+    else if (k === 'h' || k === 'H'){ if (!e.repeat) showHint(false); }
+    else if (k === 'p' || k === 'P' || k === 'Escape'){ e.preventDefault(); pause(); }
+    else if (k === 'r' || k === 'R'){ if (!e.repeat) restartLevel(); }
+    else if (k === 'm' || k === 'M'){ if (!e.repeat) toggleSound(); }
+  } else if (state === 'paused' || state === 'lost'){
+    if (k === 'p' || k === 'P' || k === 'Escape'){ e.preventDefault(); resume(); }
+    else if (k === 'r' || k === 'R'){ if (!e.repeat) restartLevel(); }
+  }
+});
+window.addEventListener('keyup', e => {
+  const k = e.key;
+  if (k === 'ArrowLeft' || k === 'a' || k === 'A') keys.left = false;
+  if (k === 'ArrowRight' || k === 'd' || k === 'D') keys.right = false;
+});
+
+/* =====================================================================
+   7. MAIN LOOP AND START-UP
+===================================================================== */
+let lastT = performance.now();
+function loop(now){
+  requestAnimationFrame(loop);
+  const dt = clamp((now - lastT) / 1000, 0, 0.05); lastT = now;
+  if (!L) return;
+  const tracking = Tracker.ready && settings.ctrl === 'hand' && (state === 'calib' || inGame());
+  if (tracking) Tracker.update(now);
+  if (state === 'calib') Calib.update(now, dt);
+  else if (state === 'play') updateGame(dt, now);
+  else if (state === 'lost') updateLost(now);
+  updateAmbient(dt);
+  render(now / 1000);
+  if (tracking) drawPreviews();
+  if (displayScore !== score){
+    displayScore += (score - displayScore) * Math.min(1, dt * 10);
+    if (Math.abs(score - displayScore) < 0.6) displayScore = score;
+    $('hudScore').textContent = Math.round(displayScore);
+  }
+}
+
+Tracker.video = $('video');
+Tracker.onFire = () => {
+  if (state === 'calib') Calib.onFire();
+  else if (state === 'play' && settings.ctrl === 'hand') fire('hand');
+};
+syncUI();
+layout();
+if ('ResizeObserver' in window) new ResizeObserver(() => layout()).observe(stage);
+else window.addEventListener('resize', layout);
+window.addEventListener('orientationchange', () => setTimeout(layout, 250));
+document.addEventListener('visibilitychange', () => { if (document.hidden && state === 'play') pause(); });
+setState('title');
+requestAnimationFrame(loop);
+
+})();
+</script>
+</body>
+</html>

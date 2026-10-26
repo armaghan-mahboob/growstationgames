@@ -1,0 +1,1275 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Clean the Room</title>
+<style>
+/* =====================================================================
+   UI STYLES
+   ===================================================================== */
+:root{
+  --sat:env(safe-area-inset-top,0px); --sar:env(safe-area-inset-right,0px);
+  --sab:env(safe-area-inset-bottom,0px); --sal:env(safe-area-inset-left,0px);
+  --ink:#3b2a5c; --card:#fffdf7; --accent:#ff7a2f; --good:#3ecf7a; --sun:#ffd84d;
+  --font:"Baloo 2","Fredoka","Nunito","Comic Sans MS","Chalkboard SE","Trebuchet MS",system-ui,sans-serif;
+}
+*{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+html,body{margin:0;width:100%;height:100%;overflow:hidden;background:#ffe9c9;color:var(--ink);
+  font-family:var(--font);-webkit-user-select:none;user-select:none;touch-action:manipulation;overscroll-behavior:none}
+button{font-family:inherit;color:inherit;touch-action:manipulation}
+h1,h2,p{margin:0}
+/* The video is only a frame source. It is drawn (mirrored) onto canvases. */
+#video{position:fixed;left:0;top:0;width:2px;height:2px;opacity:.01;pointer-events:none}
+
+#app{position:fixed;inset:0;display:flex;flex-direction:column;padding:var(--sat) var(--sar) var(--sab) var(--sal)}
+
+/* ---------- HUD ---------- */
+#hud{flex:0 0 auto;display:grid;grid-template-columns:auto minmax(0,1fr) auto;
+  grid-template-areas:"left teacher right" "prog prog prog";align-items:center;
+  gap:clamp(4px,1vmin,10px) clamp(6px,1.4vw,16px);padding:clamp(4px,1.2vmin,12px) clamp(8px,1.6vw,20px);
+  background:linear-gradient(#fff9ec,#ffe7bd);border-bottom:4px solid #f0c27e;z-index:5}
+.hud-left{grid-area:left;display:flex;flex-wrap:wrap;gap:clamp(4px,.8vw,10px)}
+.hud-right{grid-area:right;display:flex;gap:clamp(4px,.8vw,10px)}
+.pill{background:#fff;border:3px solid #f0c27e;border-radius:999px;padding:.1em .65em;font-weight:800;
+  font-size:clamp(.95rem,1.1vw + 1.6vmin,1.9rem);white-space:nowrap;line-height:1.5}
+.pill.pop{animation:pop .35s}
+.pill.hot{background:#fff3b0;border-color:#ffb300}
+#teacher{grid-area:teacher;display:flex;align-items:center;justify-content:center;gap:.4em;min-width:0;
+  background:none;border:0;padding:0;cursor:pointer;font-size:clamp(1.15rem,3vw,2.5rem)}
+.owl{font-size:1.7em;line-height:1;animation:bob 2.4s ease-in-out infinite;flex:0 0 auto}
+.bubble{display:block;background:#fff;border:4px solid var(--ink);border-radius:1.1em;padding:.2em .8em;
+  font-weight:800;line-height:1.2;text-align:center;min-width:0}
+.bubble b{color:var(--accent);font-size:1.18em;letter-spacing:.03em}
+.icon-btn{width:clamp(44px,8vmin,68px);height:clamp(44px,8vmin,68px);border-radius:50%;border:3px solid var(--ink);
+  background:#fff;font-size:clamp(1.15rem,3.6vmin,1.9rem);line-height:1;cursor:pointer;padding:0;
+  display:grid;place-items:center;box-shadow:0 4px 0 rgba(59,42,92,.3)}
+.icon-btn:active{transform:translateY(3px);box-shadow:0 1px 0 rgba(59,42,92,.3)}
+#progress{grid-area:prog;height:clamp(10px,2vmin,18px);background:#fff;border:3px solid #f0c27e;border-radius:999px;overflow:hidden}
+#progressFill{height:100%;width:0;background:linear-gradient(90deg,#8be9a8,#3ecf7a);border-radius:999px;transition:width .4s}
+
+/* ---------- ROOM ---------- */
+#room{position:relative;flex:1 1 auto;min-height:0;overflow:hidden;background:#f1c48b;
+  --wallH:44%;--obj:90px;
+  --bin:clamp(58px,min(13.5vw,30vh),150px);--cur:clamp(56px,12vmin,96px);--cam:clamp(84px,18vmin,130px)}
+.wall{position:absolute;left:0;right:0;top:0;height:var(--wallH);
+  background:radial-gradient(circle at 20px 20px,rgba(255,255,255,.55) 6px,transparent 7px) 0 0/56px 56px,linear-gradient(#c9e9ff,#e6f6ff)}
+.wall::after{content:"";position:absolute;left:0;right:0;bottom:0;height:clamp(8px,2.2vmin,18px);background:#fff;border-top:3px solid #d9c7ae}
+.bunting{position:absolute;top:0;left:0;right:0;display:flex;height:clamp(14px,4vmin,40px)}
+.bunting i{flex:1;clip-path:polygon(0 0,100% 0,50% 100%);background:#ff8fa3}
+.bunting i:nth-child(4n+2){background:#ffd84d}
+.bunting i:nth-child(4n+3){background:#7be495}
+.bunting i:nth-child(4n){background:#8fb8ff}
+.poster{position:absolute;left:5%;top:16%;width:clamp(48px,11vmin,120px);aspect-ratio:1;display:grid;place-items:center;
+  font-size:clamp(1.6rem,7vmin,4.4rem);background:#fff;border:5px solid #ffb86b;border-radius:12px;transform:rotate(-4deg)}
+.window{position:absolute;top:14%;right:6%;width:clamp(64px,16vmin,180px);aspect-ratio:1;border:6px solid #fff;border-radius:14px;
+  background:linear-gradient(#8fd3ff,#dff4ff);box-shadow:0 0 0 4px #d9c2a3;overflow:hidden}
+.window::before{content:"";position:absolute;left:calc(50% - 3px);top:0;bottom:0;width:6px;background:#fff;z-index:1}
+.window::after{content:"";position:absolute;top:calc(50% - 3px);left:0;right:0;height:6px;background:#fff;z-index:1}
+.sun{position:absolute;left:12%;top:12%;width:40%;aspect-ratio:1;border-radius:50%;background:var(--sun);box-shadow:0 0 0 6px rgba(255,216,77,.4)}
+.floor{position:absolute;left:0;right:0;top:var(--wallH);bottom:0;
+  background:repeating-linear-gradient(90deg,#f1c48b 0 calc(12.5% - 3px),#e2ae72 calc(12.5% - 3px) 12.5%)}
+.rug{position:absolute;left:6%;top:20%;width:48%;height:66%;border-radius:50%;border:4px dashed #fff;opacity:.9;
+  background:radial-gradient(ellipse,#ffd9e2 0 38%,#ffbccd 39% 62%,#ff9db7 63% 100%)}
+.bed{position:absolute;right:3%;top:8%;width:36%;max-width:440px;height:72%;border-radius:18px;background:#7fb7ff;
+  border:5px solid #4d86d1;box-shadow:0 8px 0 rgba(0,0,0,.12)}
+.bed::before{content:"";position:absolute;left:14%;right:14%;top:6%;height:24%;background:#fff;border-radius:14px;border:4px solid #d7e6fb}
+.bed::after{content:"";position:absolute;left:0;right:0;top:38%;bottom:0;border-top:5px solid #4d86d1;border-radius:0 0 12px 12px;
+  background:repeating-linear-gradient(45deg,#ffd54d 0 14px,#ffc422 14px 28px)}
+
+/* Storage places (toy box, shelf, bin ...) */
+#furniture{position:absolute;left:2%;right:2%;bottom:calc(100% - var(--wallH) - 1.5%);display:grid;
+  grid-template-columns:repeat(6,auto);justify-content:space-evenly;align-items:end;row-gap:clamp(2px,.8vmin,8px);z-index:2;pointer-events:none}
+.bin{position:relative;width:var(--bin);height:var(--bin);transform-origin:50% 100%;transition:transform .25s,filter .25s}
+.bin svg.art{width:100%;height:100%;display:block;overflow:visible}
+.bin .tag{position:absolute;left:50%;bottom:5%;transform:translateX(-50%);background:#fff;border:3px solid var(--ink);
+  border-radius:999px;padding:0 .5em;font-weight:900;font-size:calc(var(--bin)*.15);line-height:1.4;white-space:nowrap}
+.bin .stash{position:absolute;left:6%;right:6%;top:10%;display:flex;flex-wrap:wrap;justify-content:center;
+  font-size:calc(var(--bin)*.2);line-height:1}
+.bin .stash span{display:inline-grid;place-items:center;width:1.05em;height:1.05em;animation:pop .35s}
+.bin .stash svg{width:1em;height:1em}
+.bin-books .stash{left:18%;right:18%;top:18%;row-gap:calc(var(--bin)*.16)}
+.bin-shoes .stash{top:26%}
+.bin-balls .stash{top:14%}
+.bin-trash .stash{top:5%}
+.bin.target{transform:scale(1.12);filter:drop-shadow(0 0 8px #fff) drop-shadow(0 0 14px var(--sun));z-index:3}
+.bin.target::after{content:"👇";position:absolute;left:50%;top:-14%;font-size:calc(var(--bin)*.26);line-height:1;
+  transform:translateX(-50%);animation:arrow .8s ease-in-out infinite}
+.bin.bump{animation:bump .4s}
+
+/* Messy objects */
+#objects,#fx,#cursors{position:absolute;inset:0;pointer-events:none}
+#objects{z-index:10} #fx{z-index:22} #cursors{z-index:25}
+.obj{position:absolute;width:var(--obj);height:var(--obj);margin:calc(var(--obj)/-2) 0 0 calc(var(--obj)/-2);
+  pointer-events:auto;cursor:pointer;touch-action:none}
+.obj.drop{animation:drop .45s cubic-bezier(.3,1.5,.5,1) both}
+.obj::before{content:"";position:absolute;left:12%;right:12%;bottom:2%;height:16%;background:rgba(60,30,0,.18);border-radius:50%}
+.obj .in{position:absolute;inset:0;display:grid;place-items:center;font-size:calc(var(--obj)*.74);line-height:1;
+  transform:rotate(var(--rot,0deg)) scale(var(--s,1));transition:transform .18s cubic-bezier(.3,1.6,.5,1);
+  filter:drop-shadow(0 3px 0 rgba(0,0,0,.12))}
+.obj .in svg{width:82%;height:82%}
+.obj .ring{position:absolute;inset:-8%;border-radius:50%;opacity:0;transition:opacity .15s;
+  background:conic-gradient(var(--sun) calc(var(--p,0)*1%),rgba(255,255,255,.6) 0);
+  -webkit-mask:radial-gradient(farthest-side,transparent 78%,#000 80%);mask:radial-gradient(farthest-side,transparent 78%,#000 80%)}
+.obj.hover{z-index:2} .obj.hover .in{--s:1.22} .obj.hover .ring{opacity:1}
+.obj.hint .in{animation:hintBounce .7s ease-in-out infinite;filter:drop-shadow(0 0 8px #fff) drop-shadow(0 0 12px var(--sun))}
+.obj.nope .in{animation:wobble .5s}
+.obj.fly{z-index:5;pointer-events:none} .obj.fly::before{display:none} .obj.fly .in{transition:none}
+
+/* Hand cursor */
+.cursor{position:absolute;left:0;top:0;width:var(--cur);height:var(--cur);margin:calc(var(--cur)/-2) 0 0 calc(var(--cur)/-2);
+  opacity:0;transition:opacity .25s;will-change:transform}
+.cursor.on{opacity:1}
+.cursor .glow{position:absolute;inset:0;border-radius:50%;
+  background:radial-gradient(circle,rgba(255,255,255,.95) 0 24%,rgba(255,221,87,.75) 25% 50%,rgba(255,221,87,0) 72%)}
+.cursor .cring{position:absolute;inset:4%;border-radius:50%;
+  background:conic-gradient(var(--good) calc(var(--p,0)*1%),rgba(255,255,255,.7) 0);
+  -webkit-mask:radial-gradient(farthest-side,transparent 74%,#000 76%);mask:radial-gradient(farthest-side,transparent 74%,#000 76%)}
+.cursor .hand{position:absolute;inset:0;display:grid;place-items:center;font-size:calc(var(--cur)*.46);line-height:1}
+
+/* Feedback effects */
+.float{position:absolute;transform:translate(-50%,-50%);background:var(--ink);color:#fff;font-weight:900;
+  font-size:clamp(1rem,4.2vmin,2.2rem);padding:.1em .6em;border-radius:999px;white-space:nowrap;animation:floatUp 1.3s ease-out forwards}
+.float.big{background:var(--accent);font-size:clamp(1.3rem,6vmin,3rem)}
+.spark{position:absolute;transform:translate(-50%,-50%);font-size:clamp(1.6rem,8vmin,4.5rem);line-height:1;animation:twinkle .9s ease-out forwards}
+#toast{position:absolute;left:50%;top:46%;z-index:24;transform:translate(-50%,-50%) scale(0);opacity:0;pointer-events:none;
+  background:#fff;border:5px solid var(--ink);border-radius:999px;padding:.15em .8em;font-weight:900;white-space:nowrap;
+  font-size:clamp(1.5rem,7.5vmin,4.2rem);max-width:96%}
+#toast.show{animation:toast 1.6s ease both}
+.shine{position:absolute;inset:0;z-index:21;pointer-events:none;transform:translateX(-120%);
+  background:linear-gradient(110deg,transparent 35%,rgba(255,255,255,.8) 50%,transparent 65%)}
+#confetti{position:absolute;inset:0;width:100%;height:100%;z-index:35;pointer-events:none;display:none}
+
+/* Final tidy-room animation */
+#room.tidy .shine{animation:sweep 1.8s ease-in-out 2}
+#room.tidy .bin{animation:happy .6s ease-in-out infinite alternate}
+#room.tidy .bin:nth-child(2n){animation-delay:.2s}
+#room.tidy .sun{animation:sunPulse 1.2s ease-in-out infinite alternate}
+#room.tidy .obj .in{animation:hintBounce .7s ease-in-out infinite}
+
+/* Camera preview in the corner */
+#camPreview{position:absolute;right:clamp(6px,1.5vmin,14px);bottom:clamp(6px,1.5vmin,14px);width:var(--cam);z-index:30;
+  border:4px solid #fff;border-radius:16px;overflow:hidden;background:#223;box-shadow:0 4px 12px rgba(0,0,0,.25);line-height:0}
+#camPreview canvas{display:block;width:100%;height:auto}
+
+/* In-room overlays */
+.veil{position:absolute;inset:0;z-index:40;display:none;align-items:center;justify-content:center;padding:10px;
+  background:rgba(60,45,110,.5);overflow:auto}
+.veil.show{display:flex}
+.veil.clear{background:transparent;align-items:flex-end}
+#veilLost{z-index:28}
+
+/* ---------- FULL SCREENS (start, loading, calibration, error) ---------- */
+.screen{position:fixed;inset:0;z-index:100;display:none;overflow:auto;
+  padding:calc(var(--sat) + 12px) calc(var(--sar) + 12px) calc(var(--sab) + 12px) calc(var(--sal) + 12px);
+  background:linear-gradient(#bfe6ff,#ffe9c9)}
+.screen.show{display:flex}
+.card{margin:auto;background:var(--card);border:5px solid var(--ink);border-radius:clamp(18px,4vmin,36px);
+  padding:clamp(12px,3.2vmin,34px);text-align:center;max-width:min(94vw,760px);box-shadow:0 10px 0 rgba(59,42,92,.2);
+  display:flex;flex-direction:column;align-items:center;gap:clamp(8px,2vmin,18px)}
+.card.final{flex-direction:row;flex-wrap:wrap;justify-content:center;max-width:96%}
+h1{font-size:clamp(2rem,9vmin,5rem);line-height:1}
+h2{font-size:clamp(1.4rem,6vmin,3.2rem);line-height:1.15}
+.lead{font-size:clamp(1.1rem,3.6vmin,1.9rem);font-weight:700}
+.fine{font-size:clamp(.85rem,2.4vmin,1.1rem);opacity:.8}
+.hero{display:flex;gap:.2em;font-size:clamp(2rem,9vmin,4.6rem);line-height:1}
+.hero span{animation:bob 1.6s ease-in-out infinite}
+.hero span:nth-child(2n){animation-delay:.3s}
+.hero span:nth-child(3n){animation-delay:.6s}
+.big-btn{font-weight:900;font-size:clamp(1.4rem,6vmin,3rem);padding:.3em 1.1em;min-height:56px;border-radius:999px;
+  border:5px solid var(--ink);background:var(--good);color:#fff;text-shadow:0 2px 0 rgba(0,0,0,.2);
+  box-shadow:0 8px 0 #24995a;cursor:pointer}
+.big-btn.alt{background:#ffb347;box-shadow:0 8px 0 #c9781b}
+.big-btn:active{transform:translateY(5px);box-shadow:0 3px 0 #24995a}
+.small-btn{font-weight:800;font-size:clamp(1rem,3vmin,1.4rem);padding:.4em 1em;min-height:44px;border-radius:999px;
+  border:3px solid var(--ink);background:#fff;cursor:pointer}
+.btn-row{display:flex;flex-wrap:wrap;gap:clamp(10px,2.5vmin,22px);justify-content:center}
+.spinner{font-size:clamp(3rem,14vmin,7rem);line-height:1;animation:sweepBroom 1s ease-in-out infinite alternate}
+.spinner.still{animation:bob 2s ease-in-out infinite}
+.bigstars{font-size:clamp(2.2rem,11vmin,6rem);line-height:1;animation:pop .5s}
+.result{font-size:clamp(1.6rem,7vmin,3.6rem);font-weight:900}
+
+/* Calibration */
+.calib{margin:auto;display:flex;flex-direction:column;align-items:center;gap:clamp(8px,2vmin,18px);width:100%;max-width:980px}
+.calib-cam{--ar:1.3333;width:min(92vw,calc(50vh * var(--ar)));aspect-ratio:var(--ar);border:6px solid #fff;border-radius:24px;
+  overflow:hidden;background:#223;box-shadow:0 8px 0 rgba(59,42,92,.2);flex:0 0 auto}
+.calib-cam canvas{display:block;width:100%;height:100%}
+.calib-side{display:flex;flex-direction:column;align-items:center;gap:clamp(6px,1.6vmin,14px);text-align:center;min-width:0}
+.checks{display:flex;flex-wrap:wrap;justify-content:center;gap:8px}
+.check{background:#fff;border:3px solid #d8d2e6;border-radius:999px;padding:.15em .8em;font-weight:800;
+  font-size:clamp(1rem,3.2vmin,1.6rem);opacity:.6}
+.check.ok{opacity:1;background:#d9f9e5;border-color:var(--good)}
+.check.ok::after{content:" ✅"}
+.meter{width:min(80vw,420px);height:clamp(14px,3vmin,24px);background:#fff;border:3px solid var(--ink);border-radius:999px;overflow:hidden}
+#calibFill{height:100%;width:0;background:linear-gradient(90deg,#ffe27a,#3ecf7a)}
+
+/* ---------- BREAKPOINTS ---------- */
+/* phone */
+@media (max-width:720px){
+  #hud{grid-template-columns:minmax(0,1fr) auto;grid-template-areas:"left right" "teacher teacher" "prog prog"}
+  #teacher{font-size:clamp(1.15rem,5.2vw,2rem)}
+}
+@media (max-width:420px){.pill .w{display:none}}
+/* tablet */
+@media (min-width:601px){#room{--cam:clamp(100px,17vmin,160px)}}
+/* laptop */
+@media (min-width:1025px){#room{--bin:clamp(90px,min(12vw,28vh),180px);--cam:clamp(130px,16vmin,190px);--cur:clamp(70px,10vmin,110px)}}
+/* desktop */
+@media (min-width:1440px){#hud{padding-left:28px;padding-right:28px}
+  #room{--bin:clamp(110px,min(11vw,27vh),210px);--cam:clamp(150px,16vmin,220px)}}
+/* portrait: two rows of three storage places */
+@media (orientation:portrait){
+  #room{--wallH:46%;--bin:clamp(64px,min(27vw,14.5vh),200px)}
+  #furniture{grid-template-columns:repeat(3,auto)}
+  .bed{width:46%}
+}
+/* short landscape screens (phones on their side) */
+@media (orientation:landscape) and (max-height:520px){
+  #hud{padding-top:3px;padding-bottom:3px;gap:3px 8px}
+  .icon-btn{width:44px;height:44px}
+  #teacher{font-size:clamp(1.05rem,2.6vw,1.6rem)}
+  .calib{flex-direction:row;justify-content:center}
+  .calib-cam{width:min(50vw,calc(74vh * var(--ar)))}
+  .meter{width:min(38vw,420px)}
+}
+@media (prefers-reduced-motion:reduce){.owl,.hero span,.spinner{animation:none}}
+
+/* ---------- KEYFRAMES ---------- */
+@keyframes bob{0%,100%{transform:translateY(0)}50%{transform:translateY(-8%)}}
+@keyframes pop{0%{transform:scale(.3)}60%{transform:scale(1.25)}100%{transform:scale(1)}}
+@keyframes drop{from{transform:translateY(-60px) scale(.3);opacity:0}to{transform:none;opacity:1}}
+@keyframes hintBounce{0%,100%{transform:rotate(var(--rot,0deg)) scale(1) translateY(0)}50%{transform:rotate(var(--rot,0deg)) scale(1.18) translateY(-14%)}}
+@keyframes wobble{0%,100%{transform:rotate(var(--rot,0deg))}20%{transform:rotate(calc(var(--rot,0deg) - 14deg))}
+  40%{transform:rotate(calc(var(--rot,0deg) + 14deg))}60%{transform:rotate(calc(var(--rot,0deg) - 8deg))}80%{transform:rotate(calc(var(--rot,0deg) + 8deg))}}
+@keyframes bump{0%,100%{transform:scale(1)}40%{transform:scale(1.2,.88)}70%{transform:scale(.94,1.1)}}
+@keyframes arrow{0%,100%{transform:translate(-50%,0)}50%{transform:translate(-50%,-22%)}}
+@keyframes floatUp{0%{opacity:0;transform:translate(-50%,-20%) scale(.6)}15%{opacity:1;transform:translate(-50%,-80%) scale(1.1)}
+  100%{opacity:0;transform:translate(-50%,-260%) scale(1)}}
+@keyframes twinkle{0%{opacity:0;transform:translate(-50%,-50%) scale(.2) rotate(0)}40%{opacity:1;transform:translate(-50%,-50%) scale(1.2) rotate(40deg)}
+  100%{opacity:0;transform:translate(-50%,-50%) scale(.6) rotate(90deg)}}
+@keyframes toast{0%{opacity:0;transform:translate(-50%,-50%) scale(.3)}15%{opacity:1;transform:translate(-50%,-50%) scale(1.1)}
+  25%,75%{opacity:1;transform:translate(-50%,-50%) scale(1)}100%{opacity:0;transform:translate(-50%,-90%) scale(.9)}}
+@keyframes sweep{from{transform:translateX(-120%)}to{transform:translateX(120%)}}
+@keyframes happy{from{transform:translateY(0) rotate(-3deg)}to{transform:translateY(-7%) rotate(3deg)}}
+@keyframes sunPulse{from{transform:scale(1);box-shadow:0 0 0 6px rgba(255,216,77,.4)}to{transform:scale(1.25);box-shadow:0 0 0 16px rgba(255,216,77,.35)}}
+@keyframes sweepBroom{from{transform:rotate(-18deg)}to{transform:rotate(18deg)}}
+</style>
+</head>
+<body>
+
+<video id="video" playsinline muted autoplay></video>
+
+<!-- =====================================================================
+     UI: GAME VIEW (HUD + bedroom)
+     ===================================================================== -->
+<div id="app">
+  <header id="hud">
+    <div class="hud-left">
+      <div class="pill" id="starPill">⭐ <span id="starCount">0</span></div>
+      <div class="pill">🧹 <span class="w">Round </span><span id="roundNum">1</span>/<span id="roundMax">4</span></div>
+      <div class="pill" id="streakPill">✨ <span id="streakNum">0</span></div>
+    </div>
+    <button id="teacher" aria-label="Say it again">
+      <span class="owl">🦉</span><span class="bubble" id="bubble">Let's clean the room!</span>
+    </button>
+    <div class="hud-right">
+      <button class="icon-btn" id="btnSound" aria-label="Sound">🔊</button>
+      <button class="icon-btn" id="btnPause" aria-label="Pause">⏸️</button>
+      <button class="icon-btn" id="btnRestart" aria-label="Restart">🔄</button>
+    </div>
+    <div id="progress"><div id="progressFill"></div></div>
+  </header>
+
+  <main id="room">
+    <div class="wall">
+      <div class="bunting" id="bunting"></div>
+      <div class="poster">🌈</div>
+      <div class="window"><div class="sun"></div></div>
+    </div>
+    <div class="floor" id="floor"><div class="rug"></div><div class="bed"></div></div>
+    <div id="furniture"></div>
+    <div id="objects"></div>
+    <div class="shine"></div>
+    <div id="fx"></div>
+    <div id="toast"></div>
+    <div id="cursors"></div>
+    <canvas id="confetti"></canvas>
+    <div id="camPreview"><canvas id="previewCanvas" width="240" height="180"></canvas></div>
+
+    <div class="veil" id="veilLost"><div class="card">
+      <div class="spinner still">🙈</div>
+      <h2>I can’t see you.<br>Step back so I can see you!</h2>
+      <button class="small-btn" id="btnLostTouch">👆 Play with touch</button>
+    </div></div>
+
+    <div class="veil" id="veilPause"><div class="card">
+      <h2>⏸️ Paused</h2>
+      <div class="btn-row">
+        <button class="big-btn" id="btnResume">▶ Play</button>
+        <button class="big-btn alt" id="btnRestart2">🔄 Restart</button>
+      </div>
+    </div></div>
+
+    <div class="veil" id="veilRound"><div class="card">
+      <div class="bigstars">⭐⭐⭐</div>
+      <h2 id="roundMsg">Nice cleaning!</h2>
+      <p class="lead" id="roundSub"></p>
+    </div></div>
+
+    <div class="veil clear" id="veilFinal"><div class="card final">
+      <h2>✨ The room is clean! ✨</h2>
+      <div class="result">⭐ <span id="finalStars">0</span> stars</div>
+      <button class="big-btn" id="btnAgain">🔄 Play again</button>
+    </div></div>
+  </main>
+</div>
+
+<!-- =====================================================================
+     UI: FULL SCREENS
+     ===================================================================== -->
+<section class="screen show" id="scrStart"><div class="card">
+  <div class="hero" aria-hidden="true"><span>🧸</span><span>📘</span><span>👟</span><span>⚽</span><span>👕</span></div>
+  <h1>Clean the Room</h1>
+  <p class="lead">Point at the mess with your hand to tidy up!</p>
+  <button class="big-btn" id="btnStart">▶ Start</button>
+  <p class="fine">📷 The camera picture stays on this device.</p>
+  <button class="small-btn" id="btnTouch">👆 Play with touch instead</button>
+</div></section>
+
+<section class="screen" id="scrLoad"><div class="card">
+  <div class="spinner">🧹</div>
+  <h2 id="loadMsg">Getting ready…</h2>
+</div></section>
+
+<section class="screen" id="scrCalib"><div class="calib">
+  <div class="calib-cam" id="calibCam"><canvas id="calibCanvas" width="480" height="360"></canvas></div>
+  <div class="calib-side">
+    <h2 id="calibMsg">Hold up your hand! ✋</h2>
+    <div class="checks">
+      <div class="check" id="chkSee">😀 I see you</div>
+      <div class="check" id="chkHand">✋ Hand in the circle</div>
+    </div>
+    <div class="meter"><div id="calibFill"></div></div>
+    <button class="small-btn" id="btnSkip">Skip ➜</button>
+  </div>
+</div></section>
+
+<section class="screen" id="scrError"><div class="card">
+  <div class="spinner still">🙈</div>
+  <h2 id="errTitle">Oops! I can’t use the camera.</h2>
+  <p class="lead" id="errMsg"></p>
+  <div class="btn-row">
+    <button class="big-btn" id="btnRetry">🔁 Try again</button>
+    <button class="big-btn alt" id="btnTouch2">👆 Play with touch</button>
+  </div>
+</div></section>
+
+<script>
+(() => {
+'use strict';
+
+/* ---------- small helpers ---------- */
+const $ = id => document.getElementById(id);
+const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
+const lerp = (a, b, t) => a + (b - a) * t;
+const rand = (a, b) => a + Math.random() * (b - a);
+const pickOne = arr => arr[Math.floor(Math.random() * arr.length)];
+const shuffle = arr => { const a = arr.slice(); for (let i = a.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [a[i], a[j]] = [a[j], a[i]]; } return a; };
+
+/* ---------- tuning (all thresholds are generous on purpose) ---------- */
+const CFG = {
+  camX: [0.14, 0.86],     // part of the camera picture that maps to the full room width
+  camY: [0.16, 0.84],     // same for height, so small arms can reach everything
+  dwellGood: 520,         // ms of pointing to pick a correct object
+  dwellOther: 1150,       // ms of pointing before a distractor reacts
+  hitGood: 0.9,           // hit radius (x object size) for correct objects
+  hitOther: 0.5,          // smaller radius for distractors
+  handGrace: 400,         // ms a hand may vanish before its cursor is dropped
+  lostAfter: 4000,        // ms without hand or face before pausing
+  lostAfterNoFace: 9000,  // same, when the face helper is not available
+  nudgeAfter: 6000,       // ms without a hand before "Hold up your hand!"
+  hintAfter: 7000,        // ms without a correct pick before a hint
+  flyTime: 650
+};
+
+/* =====================================================================
+   1. TRACKING SYSTEM  (webcam + MediaPipe Hand Landmarker,
+      plus a tiny Face Detector that helps with "is the child visible and centered")
+   ===================================================================== */
+const MP_BASE = 'https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.14';
+const HAND_MODEL = 'https://storage.googleapis.com/mediapipe-models/hand_landmarker/hand_landmarker/float16/1/hand_landmarker.task';
+const FACE_MODEL = 'https://storage.googleapis.com/mediapipe-models/face_detector/blaze_face_short_range/float16/1/blaze_face_short_range.tflite';
+const HAND_LINKS = [[0,1],[1,2],[2,3],[3,4],[0,5],[5,6],[6,7],[7,8],[5,9],[9,10],[10,11],[11,12],[9,13],[13,14],[14,15],[15,16],[13,17],[17,18],[18,19],[19,20],[0,17]];
+
+const Tracking = {
+  video: $('video'), stream: null, hand: null, face: null, ready: false,
+  lastVT: -1, lastHand: -1e9, lastFace: -1e9, lastFaceRun: 0, faceBox: null,
+  // two hand slots; rx/ry are smoothed, MIRRORED camera coordinates (0..1)
+  hands: [0, 1].map(() => ({ active: false, rx: .5, ry: .5, size: 0, seen: -1e9, lm: null, fresh: true })),
+
+  async init(status) {
+    if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+      const e = new Error('unsupported'); e.code = 'unsupported'; throw e;
+    }
+    status('📷 Say yes to the camera!');
+    if (!this.stream || !this.stream.active) {
+      this.stream = await navigator.mediaDevices.getUserMedia({
+        video: { facingMode: 'user', width: { ideal: 640 }, height: { ideal: 480 } }, audio: false
+      });
+    }
+    const v = this.video;
+    v.srcObject = this.stream;
+    await new Promise(res => { if (v.readyState >= 1) res(); else v.onloadedmetadata = () => res(); });
+    try { await v.play(); } catch (e) { /* autoplay quirks: frames still arrive */ }
+
+    if (!this.hand) {
+      status('🖐️ Waking up the hand finder…');
+      const vision = await import(MP_BASE + '/vision_bundle.mjs');
+      const files = await vision.FilesetResolver.forVisionTasks(MP_BASE + '/wasm');
+      const makeHand = delegate => vision.HandLandmarker.createFromOptions(files, {
+        baseOptions: { modelAssetPath: HAND_MODEL, delegate },
+        runningMode: 'VIDEO', numHands: 2,
+        minHandDetectionConfidence: 0.4, minHandPresenceConfidence: 0.4, minTrackingConfidence: 0.4
+      });
+      try { this.hand = await makeHand('GPU'); } catch (e) { this.hand = await makeHand('CPU'); }
+      // The face helper is optional. The game works without it.
+      try {
+        this.face = await vision.FaceDetector.createFromOptions(files, {
+          baseOptions: { modelAssetPath: FACE_MODEL, delegate: 'CPU' },
+          runningMode: 'VIDEO', minDetectionConfidence: 0.4
+        });
+      } catch (e) { this.face = null; }
+    }
+    this.ready = true;
+  },
+
+  // Called once per animation frame while tracking is needed.
+  step(now) {
+    const v = this.video;
+    if (v.readyState < 2 || !v.videoWidth || v.currentTime === this.lastVT) return;
+    this.lastVT = v.currentTime;
+    let res = null;
+    try { res = this.hand.detectForVideo(v, now); } catch (e) { return; }
+    this.consume(res, now);
+
+    if (this.face && now - this.lastFaceRun > 300) {
+      this.lastFaceRun = now;
+      try {
+        const fr = this.face.detectForVideo(v, now);
+        let best = null;
+        for (const d of (fr.detections || [])) {
+          const b = d.boundingBox;
+          if (b && (!best || b.width > best.width)) best = b;
+        }
+        if (best) {
+          this.faceBox = {
+            cx: 1 - (best.originX + best.width / 2) / v.videoWidth,   // mirrored
+            cy: (best.originY + best.height / 2) / v.videoHeight,
+            w: best.width / v.videoWidth, h: best.height / v.videoHeight
+          };
+          this.lastFace = now;
+        }
+      } catch (e) { this.face = null; }
+    }
+  },
+
+  // Turn raw landmarks into two stable, smoothed pointer slots.
+  consume(res, now) {
+    const list = (res && res.landmarks) || [];
+    const dets = list.map(lm => {
+      const tip = lm[8], knuckle = lm[5], wrist = lm[0], mid = lm[9];
+      return {
+        x: 1 - (tip.x * .75 + knuckle.x * .25),             // mirror so movement feels natural
+        y: tip.y * .75 + knuckle.y * .25,
+        size: Math.hypot(wrist.x - mid.x, wrist.y - mid.y), // rough "how close is the hand"
+        lm
+      };
+    });
+    const slots = this.hands, taken = [false, false];
+    for (const d of dets) {
+      let best = -1, bestD = 1e9;
+      for (let i = 0; i < slots.length; i++) {
+        if (taken[i] || !slots[i].active) continue;
+        const dd = Math.hypot(d.x - slots[i].rx, d.y - slots[i].ry);
+        if (dd < bestD) { bestD = dd; best = i; }
+      }
+      if (best < 0 || bestD > 0.4) {
+        let alt = -1;
+        for (let i = 0; i < slots.length; i++) if (!taken[i] && !slots[i].active) { alt = i; break; }
+        if (alt >= 0) best = alt;
+        else if (best < 0) for (let i = 0; i < slots.length; i++) if (!taken[i]) { best = i; break; }
+      }
+      if (best < 0) continue;
+      taken[best] = true;
+      const s = slots[best];
+      if (!s.active) { s.rx = d.x; s.ry = d.y; s.fresh = true; }
+      else {
+        // Adaptive smoothing: calm when the hand is still, quick when it moves fast.
+        const dist = Math.hypot(d.x - s.rx, d.y - s.ry);
+        const a = clamp(0.22 + dist * 7, 0.22, 0.9);
+        s.rx += (d.x - s.rx) * a; s.ry += (d.y - s.ry) * a;
+      }
+      s.active = true; s.seen = now; s.size = d.size; s.lm = d.lm;
+    }
+    slots.forEach((s, i) => { if (!taken[i] && s.active && now - s.seen > CFG.handGrace) { s.active = false; s.lm = null; } });
+    if (dets.length) this.lastHand = now;
+  }
+};
+
+// Keep a canvas at the camera's aspect ratio (phones give portrait video).
+function fitCanvas(cv, targetW) {
+  const v = Tracking.video;
+  if (!v.videoWidth) return false;
+  const h = Math.round(targetW * v.videoHeight / v.videoWidth);
+  if (cv.width !== targetW || cv.height !== h) { cv.width = targetW; cv.height = h; }
+  return true;
+}
+
+// Draw the mirrored camera picture plus the detected hand skeleton.
+function drawCam(ctx, cv, big, now) {
+  const v = Tracking.video, w = cv.width, h = cv.height;
+  ctx.save(); ctx.translate(w, 0); ctx.scale(-1, 1); ctx.drawImage(v, 0, 0, w, h); ctx.restore();
+  const lw = big ? 5 : 3;
+  if (big && Tracking.faceBox && now - Tracking.lastFace < 900) {
+    const f = Tracking.faceBox;
+    ctx.strokeStyle = 'rgba(255,216,77,.9)'; ctx.lineWidth = lw;
+    ctx.beginPath(); ctx.ellipse(f.cx * w, f.cy * h, f.w * w * .62, f.h * h * .72, 0, 0, Math.PI * 2); ctx.stroke();
+  }
+  for (const s of Tracking.hands) {
+    if (!s.active || !s.lm) continue;
+    ctx.strokeStyle = 'rgba(255,255,255,.9)'; ctx.lineWidth = lw; ctx.lineCap = 'round';
+    ctx.beginPath();
+    for (const [a, b] of HAND_LINKS) {
+      ctx.moveTo((1 - s.lm[a].x) * w, s.lm[a].y * h);
+      ctx.lineTo((1 - s.lm[b].x) * w, s.lm[b].y * h);
+    }
+    ctx.stroke();
+    ctx.fillStyle = '#ffd84d';
+    for (const p of s.lm) { ctx.beginPath(); ctx.arc((1 - p.x) * w, p.y * h, lw * .9, 0, Math.PI * 2); ctx.fill(); }
+    ctx.fillStyle = '#3ecf7a'; ctx.strokeStyle = '#fff'; ctx.lineWidth = lw * .7;
+    ctx.beginPath(); ctx.arc(s.rx * w, s.ry * h, lw * 2.4, 0, Math.PI * 2); ctx.fill(); ctx.stroke();
+  }
+}
+
+/* =====================================================================
+   2. SOUND + VOICE
+   ===================================================================== */
+const Sound = {
+  ctx: null, muted: false,
+  unlock() {
+    if (!this.ctx) { const AC = window.AudioContext || window.webkitAudioContext; if (AC) this.ctx = new AC(); }
+    if (this.ctx && this.ctx.state === 'suspended') this.ctx.resume();
+  },
+  tone(f, start, dur, type, vol, f2) {
+    if (!this.ctx || this.muted) return;
+    const t = this.ctx.currentTime + start, o = this.ctx.createOscillator(), g = this.ctx.createGain();
+    o.type = type || 'sine'; o.frequency.setValueAtTime(f, t);
+    if (f2) o.frequency.exponentialRampToValueAtTime(f2, t + dur);
+    g.gain.setValueAtTime(0.0001, t);
+    g.gain.exponentialRampToValueAtTime(vol || .18, t + 0.02);
+    g.gain.exponentialRampToValueAtTime(0.0001, t + dur);
+    o.connect(g); g.connect(this.ctx.destination); o.start(t); o.stop(t + dur + .05);
+  },
+  pop()     { this.tone(420, 0, .14, 'triangle', .22, 880); },
+  land()    { this.tone(784, 0, .12, 'sine', .2); this.tone(1047, .09, .18, 'sine', .2); },
+  nope()    { this.tone(330, 0, .18, 'sine', .12, 262); },                       // soft, never harsh
+  task()    { [523, 659, 784, 1047].forEach((f, i) => this.tone(f, i * .1, .22, 'triangle', .2)); },
+  round()   { [523, 659, 784, 659, 784, 1047].forEach((f, i) => this.tone(f, i * .13, .26, 'triangle', .2)); },
+  fanfare() { [523, 523, 659, 784, 1047, 784, 1047, 1319].forEach((f, i) => this.tone(f, i * .15, .3, 'triangle', .2)); },
+  sparkle() { [1319, 1568, 2093].forEach((f, i) => this.tone(f, i * .07, .15, 'sine', .12)); },
+  tumble()  { for (let i = 0; i < 6; i++) this.tone(rand(280, 620), i * .07, .1, 'triangle', .1); }
+};
+
+const Voice = {
+  voice: null,
+  init() {
+    if (!('speechSynthesis' in window)) return;
+    const choose = () => {
+      const en = speechSynthesis.getVoices().filter(v => /^en/i.test(v.lang));
+      this.voice = en.find(v => /Samantha|Google US English|Jenny|Aria|Zira|Female/i.test(v.name))
+                || en.find(v => /en[-_]US/i.test(v.lang)) || en[0] || null;
+    };
+    choose();
+    if (speechSynthesis.addEventListener) speechSynthesis.addEventListener('voiceschanged', choose);
+  },
+  // queue: wait for current speech; ifIdle: only speak when nothing is being said
+  say(text, opt) {
+    opt = opt || {};
+    if (Sound.muted || !('speechSynthesis' in window)) return;
+    try {
+      if (opt.ifIdle && (speechSynthesis.speaking || speechSynthesis.pending)) return;
+      if (!opt.queue && !opt.ifIdle) speechSynthesis.cancel();
+      const u = new SpeechSynthesisUtterance(text);
+      u.lang = 'en-US'; u.rate = .92; u.pitch = 1.2;
+      if (this.voice) u.voice = this.voice;
+      speechSynthesis.speak(u);
+    } catch (e) {}
+  },
+  stop() { try { speechSynthesis.cancel(); } catch (e) {} }
+};
+
+/* =====================================================================
+   3. GAME DATA  (art, categories, rounds)
+   ===================================================================== */
+const ART = {
+  paper: `<svg viewBox="0 0 100 100"><path d="M22 38 40 16l22 4 20 16 4 24-16 22-26 6-24-16-8-20z" fill="#f7f4ea" stroke="#b5ae9c" stroke-width="4" stroke-linejoin="round"/><path d="M40 16l8 24-26-2m26 2 34-4M48 40l8 24 30-4M56 64 44 88m12-24L20 72" fill="none" stroke="#cfc8b6" stroke-width="3" stroke-linejoin="round"/></svg>`,
+  core: `<svg viewBox="0 0 100 100"><path d="M50 18q6-12 14-10" stroke="#7a4b21" stroke-width="5" fill="none" stroke-linecap="round"/><path d="M26 22Q50 10 74 22 60 34 60 50q0 16 14 30Q50 92 26 80 40 66 40 50 40 34 26 22z" fill="#fff6d8" stroke="#d9c58a" stroke-width="3"/><path d="M26 22Q50 10 74 22q-8 6-12 14-12-6-24 0-4-8-12-14z" fill="#e5393b"/><path d="M26 80q24 12 48 0-8-6-12-14-12 6-24 0-4 8-12 14z" fill="#e5393b"/><ellipse cx="46" cy="50" rx="2.5" ry="4" fill="#5a3516"/><ellipse cx="55" cy="52" rx="2.5" ry="4" fill="#5a3516"/></svg>`,
+  peel: `<svg viewBox="0 0 100 100"><path d="M50 30Q20 40 10 78q20-12 36-22z" fill="#ffd93b" stroke="#c99a12" stroke-width="3" stroke-linejoin="round"/><path d="M50 30q30 10 40 48-20-12-36-22z" fill="#ffd93b" stroke="#c99a12" stroke-width="3" stroke-linejoin="round"/><path d="M44 34q2 32 6 56 4-24 6-56z" fill="#ffe97a" stroke="#c99a12" stroke-width="3" stroke-linejoin="round"/><rect x="45" y="16" width="10" height="18" rx="3" fill="#8a6a1a"/></svg>`
+};
+
+const BIN_ART = {
+  toys: `<svg class="art" viewBox="0 0 100 100"><rect x="10" y="40" width="80" height="50" rx="8" fill="#ff8a5b" stroke="#c9562b" stroke-width="4"/><rect x="6" y="30" width="88" height="16" rx="6" fill="#ffb347" stroke="#c9562b" stroke-width="4"/><path d="M50 50l4 8 9 1-7 6 2 9-8-4-8 4 2-9-7-6 9-1z" fill="#fff3b0"/></svg>`,
+  books: `<svg class="art" viewBox="0 0 100 100"><rect x="10" y="8" width="80" height="86" rx="6" fill="#c98b4e" stroke="#8a5a2b" stroke-width="4"/><rect x="18" y="16" width="64" height="30" rx="3" fill="#7a4c22"/><rect x="18" y="54" width="64" height="32" rx="3" fill="#7a4c22"/></svg>`,
+  trash: `<svg class="art" viewBox="0 0 100 100"><path d="M22 34h56l-6 56H28z" fill="#8fd3a8" stroke="#3f8f63" stroke-width="4" stroke-linejoin="round"/><rect x="16" y="24" width="68" height="12" rx="6" fill="#6cc08d" stroke="#3f8f63" stroke-width="4"/><path d="M38 46v22M50 46v22M62 46v22" stroke="#3f8f63" stroke-width="4" stroke-linecap="round"/></svg>`,
+  clothes: `<svg class="art" viewBox="0 0 100 100"><path d="M14 40h72l-8 50H22z" fill="#f6c6e0" stroke="#c0669a" stroke-width="4" stroke-linejoin="round"/><rect x="8" y="32" width="84" height="12" rx="6" fill="#f09cc8" stroke="#c0669a" stroke-width="4"/><path d="M30 52l3 18M50 52v18M70 52l-3 18M22 62h56" stroke="#c0669a" stroke-width="3" stroke-linecap="round"/></svg>`,
+  shoes: `<svg class="art" viewBox="0 0 100 100"><path d="M14 20v72M86 20v72" stroke="#5b7fbf" stroke-width="6" stroke-linecap="round"/><rect x="10" y="48" width="80" height="8" rx="4" fill="#8fb0ea" stroke="#5b7fbf" stroke-width="3"/><rect x="10" y="84" width="80" height="8" rx="4" fill="#8fb0ea" stroke="#5b7fbf" stroke-width="3"/></svg>`,
+  balls: `<svg class="art" viewBox="0 0 100 100"><path d="M16 36h68l-10 54H26z" fill="#ffe08a" stroke="#c99a12" stroke-width="4" stroke-linejoin="round"/><ellipse cx="50" cy="36" rx="36" ry="9" fill="#fff3c4" stroke="#c99a12" stroke-width="4"/><path d="M30 48l5 22M50 48v22M70 48l-5 22M22 60h56" stroke="#c99a12" stroke-width="2.5" stroke-linecap="round" opacity=".7"/></svg>`
+};
+
+const CATS = {
+  toys:    { label: 'TOYS',    word: 'toys',    kind: 'a toy',   say: 'Put the toys away!',             html: 'Put the <b>TOYS</b> away!',
+             items: [['🧸','Teddy bear'],['🚗','Car'],['🚂','Train'],['🤖','Robot'],['🦖','Dinosaur'],['🚀','Rocket'],['🧩','Puzzle'],['✈️','Plane']] },
+  books:   { label: 'BOOKS',   word: 'books',   kind: 'a book',  say: 'Put the books on the shelf.',    html: 'Put the <b>BOOKS</b> on the shelf!',
+             items: [['📕','Red book'],['📗','Green book'],['📘','Blue book'],['📙','Orange book'],['📖','Open book'],['📓','Notebook']] },
+  trash:   { label: 'TRASH',   word: 'trash',   kind: 'trash',   say: 'Put the trash in the bin.',      html: 'Put the <b>TRASH</b> in the bin!',
+             items: [[ART.paper,'Paper'],[ART.core,'Apple core'],[ART.peel,'Banana peel'],['🥤','Empty cup']] },
+  clothes: { label: 'CLOTHES', word: 'clothes', kind: 'clothes', say: 'Put the clothes in the basket.', html: 'Put the <b>CLOTHES</b> in the basket!',
+             items: [['👕','Shirt'],['👖','Pants'],['🧦','Socks'],['👗','Dress'],['🧢','Cap'],['🧥','Coat']] },
+  shoes:   { label: 'SHOES',   word: 'shoes',   kind: 'a shoe',  say: 'Put the shoes on the rack.',     html: 'Put the <b>SHOES</b> on the rack!',
+             items: [['👟','Sneaker'],['👞','Shoe'],['🥾','Boot'],['👢','Tall boot'],['👡','Sandal']] },
+  balls:   { label: 'BALLS',   word: 'balls',   kind: 'a ball',  say: 'Put the balls in the ball bin.', html: 'Put the <b>BALLS</b> in the ball bin!',
+             items: [['⚽','Soccer ball'],['🏀','Basketball'],['🏈','Football'],['🎾','Tennis ball'],['🏐','Volleyball'],['⚾','Baseball']] }
+};
+const BIN_ORDER = ['books', 'balls', 'toys', 'clothes', 'shoes', 'trash'];
+
+// Pets are friendly distractors. They live in the room and never get put away.
+const PETS = [
+  { e: '🐱', name: 'Kitty', say: 'Meow! The kitty stays here.' },
+  { e: '🐶', name: 'Puppy', say: 'Woof! The puppy stays here.' }
+];
+
+// Each round: more mess, more categories. Balls always come before toys so they are never confused.
+const ROUNDS = [
+  { tasks: [['toys', 3], ['books', 3]], pets: 0 },
+  { tasks: [['trash', 3], ['clothes', 3], ['shoes', 3]], pets: 1 },
+  { tasks: [['balls', 3], ['books', 3], ['trash', 3], ['toys', 3]], pets: 2 },
+  { tasks: [['clothes', 3], ['balls', 2], ['shoes', 2], ['books', 3], ['trash', 2], ['toys', 3]], pets: 2 }
+];
+const PRAISE = ['Nice cleaning!', 'Great job!', 'So tidy!', 'Super helper!', 'Wow, well done!'];
+
+/* =====================================================================
+   4. UI HELPERS  (screens, HUD, room layout, effects)
+   ===================================================================== */
+const room = $('room'), floorEl = $('floor'), objLayer = $('objects'), fxLayer = $('fx'), furniture = $('furniture');
+const R = { w: 1, h: 1, left: 0, top: 0, wallFrac: .44, layW: 1, layH: 1 };
+
+const G = {
+  state: 'start',          // start | loading | calib | error | playing | paused | lost | final
+  mode: 'camera',          // camera | touch
+  round: 0, taskIdx: -1, cat: null, objs: [], objSize: 90,
+  stars: 0, streak: 0, roundTotal: 0, roundDone: 0,
+  inputOn: false, idle: 0, timers: [], resumeAt: 0, lastNudge: 0, foundFor: 0
+};
+
+function measure() {
+  const r = room.getBoundingClientRect();
+  R.w = Math.max(1, r.width); R.h = Math.max(1, r.height); R.left = r.left; R.top = r.top;
+  R.wallFrac = floorEl.offsetTop / R.h;
+}
+
+const SCREENS = ['scrStart', 'scrLoad', 'scrCalib', 'scrError'];
+function showScreen(id) { SCREENS.forEach(s => $(s).classList.toggle('show', s === id)); }
+const VEILS = ['veilLost', 'veilPause', 'veilRound', 'veilFinal'];
+function showVeil(id) { $(id).classList.add('show'); }
+function hideVeil(id) { $(id).classList.remove('show'); }
+function hideAllVeils() { VEILS.forEach(hideVeil); }
+
+function setBubble(html) { $('bubble').innerHTML = html; }
+function setBins(cat) { BIN_ORDER.forEach(c => bins[c].classList.toggle('target', c === cat)); }
+
+let shownStars = -1;
+function updateHud() {
+  $('starCount').textContent = G.stars;
+  if (G.stars !== shownStars) {
+    shownStars = G.stars;
+    const p = $('starPill'); p.classList.remove('pop'); void p.offsetWidth; p.classList.add('pop');
+  }
+  $('roundNum').textContent = G.round + 1;
+  $('streakNum').textContent = G.streak;
+  $('streakPill').classList.toggle('hot', G.streak >= 3);
+  $('progressFill').style.width = (G.roundTotal ? G.roundDone / G.roundTotal * 100 : 0) + '%';
+}
+
+function toast(text) {
+  const t = $('toast'); t.textContent = text;
+  t.classList.remove('show'); void t.offsetWidth; t.classList.add('show');
+}
+function floatText(x, y, text, big) {
+  const el = document.createElement('div');
+  el.className = 'float' + (big ? ' big' : ''); el.textContent = text;
+  el.style.left = clamp(x, .14, .86) * 100 + '%'; el.style.top = clamp(y, .12, .95) * 100 + '%';
+  fxLayer.appendChild(el); el.addEventListener('animationend', () => el.remove());
+}
+function sparkle(x, y) {
+  const el = document.createElement('div');
+  el.className = 'spark'; el.textContent = pickOne(['✨', '⭐', '🌟']);
+  el.style.left = x * 100 + '%'; el.style.top = y * 100 + '%';
+  fxLayer.appendChild(el); el.addEventListener('animationend', () => el.remove());
+}
+
+// Build static room pieces: bunting flags, storage places, two hand cursors.
+(function buildRoom() {
+  let flags = ''; for (let i = 0; i < 16; i++) flags += '<i></i>';
+  $('bunting').innerHTML = flags;
+  $('roundMax').textContent = ROUNDS.length;
+})();
+const bins = {};
+BIN_ORDER.forEach(cat => {
+  const el = document.createElement('div');
+  el.className = 'bin bin-' + cat;
+  el.innerHTML = BIN_ART[cat] + '<div class="stash"></div><div class="tag">' + CATS[cat].label + '</div>';
+  furniture.appendChild(el); bins[cat] = el;
+});
+const cursors = [0, 1].map(() => {
+  const el = document.createElement('div');
+  el.className = 'cursor';
+  el.innerHTML = '<div class="glow"></div><div class="cring"></div><div class="hand">👆</div>';
+  $('cursors').appendChild(el);
+  return { el, x: .5, y: .5, target: null, pp: -1 };
+});
+
+function binCenter(cat) {
+  const r = room.getBoundingClientRect(), b = bins[cat].getBoundingClientRect();
+  return { x: (b.left + b.width / 2 - r.left) / r.width, y: (b.top + b.height * .42 - r.top) / r.height };
+}
+function addToStash(o) {
+  const st = bins[o.cat].querySelector('.stash'), s = document.createElement('span');
+  s.innerHTML = o.html; st.appendChild(s);
+  while (st.children.length > 4) st.firstChild.remove();
+}
+
+// Scatter the mess over the floor on a loose grid. Object size shrinks only if the screen needs it.
+function layoutObjects() {
+  measure();
+  const list = G.objs.filter(o => o.state === 'floor');
+  const n = list.length; if (!n) return;
+  const W = R.w, H = R.h, floorTop = H * R.wallFrac;
+  let cam = null;
+  if (G.mode === 'camera') {
+    const c = $('camPreview').getBoundingClientRect();
+    cam = { l: c.left - R.left, r: c.right - R.left, t: c.top - R.top, b: c.bottom - R.top };
+  }
+  const cellsFor = size => {
+    const x0 = size * .62, x1 = W - size * .62, y0 = floorTop + size * .42, y1 = H - size * .6;
+    const zw = Math.max(1, x1 - x0), zh = Math.max(1, y1 - y0), cell = size * 1.1;
+    const cols = Math.floor(zw / cell) + 1, rows = Math.floor(zh / cell) + 1;
+    const jx = cols > 1 ? Math.max(0, (zw / (cols - 1) - size * 1.02) / 2) : Math.min(zw / 2, size * .4);
+    const jy = rows > 1 ? Math.max(0, (zh / (rows - 1) - size * 1.02) / 2) : Math.min(zh / 2, size * .3);
+    const out = [];
+    for (let r = 0; r < rows; r++) for (let c = 0; c < cols; c++) {
+      const cx = cols > 1 ? x0 + zw * c / (cols - 1) : (x0 + x1) / 2;
+      const cy = rows > 1 ? y0 + zh * r / (rows - 1) : (y0 + y1) / 2;
+      const m = size * .55;
+      if (cam && cx > cam.l - m && cx < cam.r + m && cy > cam.t - m && cy < cam.b + m) continue;
+      out.push({ x: clamp(cx + rand(-jx, jx), x0, x1), y: clamp(cy + rand(-jy, jy), y0, y1) });
+    }
+    return out;
+  };
+  let size = clamp(Math.min(W * .2, (H - floorTop) * .38), 46, 170), cells = [];
+  for (let i = 0; i < 40; i++) {
+    cells = cellsFor(size);
+    if (cells.length >= n || size <= 40) break;
+    size *= .94;
+  }
+  if (!cells.length) cells = [{ x: W / 2, y: (floorTop + H) / 2 }];
+  cells = shuffle(cells);
+  list.forEach((o, i) => {
+    const c = cells[i % cells.length];
+    o.x = c.x / W; o.y = c.y / H;
+    o.el.style.left = o.x * 100 + '%'; o.el.style.top = o.y * 100 + '%';
+  });
+  G.objSize = size; room.style.setProperty('--obj', size.toFixed(1) + 'px');
+  R.layW = W; R.layH = H;
+}
+
+// Confetti for the final celebration.
+const Confetti = {
+  cv: $('confetti'), ctx: null, parts: [], on: false,
+  start() {
+    this.ctx = this.cv.getContext('2d'); this.cv.width = R.w; this.cv.height = R.h; this.parts = [];
+    const cols = ['#ff8fa3', '#ffd84d', '#7be495', '#8fb8ff', '#c79bff', '#ffb347'];
+    for (let i = 0; i < 130; i++) this.parts.push({
+      x: rand(0, R.w), y: rand(-R.h, 0), vx: rand(-.05, .05), vy: rand(.09, .22),
+      s: rand(7, 15), r: rand(0, 6.28), vr: rand(-.006, .006), c: pickOne(cols), laps: 0
+    });
+    this.on = true; this.cv.style.display = 'block';
+  },
+  stop() {
+    this.on = false; this.parts = [];
+    if (this.ctx) this.ctx.clearRect(0, 0, this.cv.width, this.cv.height);
+    this.cv.style.display = 'none';
+  },
+  update(dt) {
+    if (!this.on) return;
+    const c = this.ctx, W = this.cv.width, H = this.cv.height;
+    c.clearRect(0, 0, W, H);
+    let alive = 0;
+    for (const p of this.parts) {
+      p.x += p.vx * dt; p.y += p.vy * dt; p.r += p.vr * dt;
+      if (p.y > H + 20) { if (p.laps < 2) { p.laps++; p.y = -20; p.x = rand(0, W); } else continue; }
+      alive++;
+      c.save(); c.translate(p.x, p.y); c.rotate(p.r); c.fillStyle = p.c;
+      c.fillRect(-p.s / 2, -p.s / 3, p.s, p.s * .66); c.restore();
+    }
+    if (!alive) this.stop();
+  }
+};
+
+/* =====================================================================
+   5. CALIBRATION / SETUP
+   Checks that the child is visible, roughly centered, not too close,
+   and can hold a hand inside a big circle for about a second.
+   ===================================================================== */
+const Calib = {
+  hold: 0, need: 1100, done: false, lastMsg: '', lastSpoke: 0, ar: '',
+  start() {
+    this.hold = 0; this.done = false; this.lastMsg = ''; this.lastSpoke = 0;
+    $('chkSee').classList.remove('ok'); $('chkHand').classList.remove('ok');
+    $('calibFill').style.width = '0%';
+    G.state = 'calib'; showScreen('scrCalib');
+    this.msg('Hold up your hand! ✋', 'Hold up your hand and put it in the circle!', performance.now(), true);
+  },
+  msg(text, spoken, now, force) {
+    if (text === this.lastMsg) return;
+    this.lastMsg = text; $('calibMsg').textContent = text;
+    if (force || now - this.lastSpoke > 3500) { this.lastSpoke = now; Voice.say(spoken || text); }
+  },
+  update(dt, now) {
+    const T = Tracking, v = T.video, cv = $('calibCanvas');
+    if (!fitCanvas(cv, 480)) return;
+    const ar = (v.videoWidth / v.videoHeight).toFixed(4);
+    if (ar !== this.ar) { this.ar = ar; $('calibCam').style.setProperty('--ar', ar); }
+
+    const vw = v.videoWidth, vh = v.videoHeight, rad = .3 * Math.min(vw, vh);
+    const hands = T.hands.filter(h => h.active);
+    const face = (now - T.lastFace < 900) ? T.faceBox : null;
+    let inCircle = false, handClose = false;
+    for (const h of hands) {
+      if (h.size > .3) handClose = true;
+      if (Math.hypot((h.rx - .5) * vw, (h.ry - .5) * vh) < rad * 1.15) inCircle = true;   // forgiving edge
+    }
+    const faceClose = !!face && face.w > .5;
+    const offCenter = !!face && (face.cx < .2 || face.cx > .8);
+
+    if (!this.done) {
+      if (inCircle && !handClose) this.hold = Math.min(this.need, this.hold + dt);
+      else this.hold = Math.max(0, this.hold - dt * .6);
+
+      $('chkSee').classList.toggle('ok', hands.length > 0 || (!!face && !offCenter && !faceClose));
+      $('chkHand').classList.toggle('ok', inCircle && !handClose);
+      $('calibFill').style.width = (this.hold / this.need * 100) + '%';
+
+      if (!hands.length && !face) this.msg('I can’t see you. Step back so I can see you!', "I can't see you. Step back so I can see you!", now);
+      else if (inCircle && !handClose) this.msg('Hold it there… ⭐', 'Hold it there!', now);
+      else if (handClose || faceClose) this.msg('Too close! Take a step back.', 'Too close! Take a step back.', now);
+      else if (offCenter) this.msg('Move to the middle!', 'Move to the middle!', now);
+      else if (!hands.length) this.msg('Hold up your hand! ✋', 'Hold up your hand!', now);
+      else this.msg('Put your hand in the circle!', 'Put your hand in the circle!', now);
+
+      if (this.hold >= this.need) this.finish();
+    }
+
+    const ctx = cv.getContext('2d');
+    drawCam(ctx, cv, true, now);
+    const cx = cv.width / 2, cy = cv.height / 2, r = .3 * Math.min(cv.width, cv.height);
+    ctx.lineWidth = 8; ctx.setLineDash([18, 14]);
+    ctx.strokeStyle = (inCircle || this.done) ? '#3ecf7a' : '#ffffff';
+    ctx.beginPath(); ctx.arc(cx, cy, r, 0, Math.PI * 2); ctx.stroke(); ctx.setLineDash([]);
+    if (this.hold > 0) {
+      ctx.strokeStyle = '#ffd84d'; ctx.lineWidth = 12; ctx.lineCap = 'round';
+      ctx.beginPath(); ctx.arc(cx, cy, r + 12, -Math.PI / 2, -Math.PI / 2 + Math.PI * 2 * this.hold / this.need); ctx.stroke();
+    }
+  },
+  finish() {
+    this.done = true;
+    $('chkSee').classList.add('ok'); $('chkHand').classList.add('ok'); $('calibFill').style.width = '100%';
+    $('calibMsg').textContent = 'Great! I can see you! 🎉';
+    Sound.task(); Voice.say("Great! I can see you! Let's clean the room!");
+    setTimeout(() => { if (G.state === 'calib') startGame(); }, 1500);
+  }
+};
+
+/* =====================================================================
+   6. GAME LOGIC
+   ===================================================================== */
+// Pause-safe timers: they only tick while the game is running.
+function after(ms, fn) { G.timers.push({ t: ms, fn }); }
+function runTimers(dt) {
+  const due = [];
+  G.timers = G.timers.filter(tm => { tm.t -= dt; if (tm.t <= 0) { due.push(tm.fn); return false; } return true; });
+  due.forEach(f => f());
+}
+
+function makeObj(cat, html, name, pet) {
+  const el = document.createElement('div');
+  el.className = 'obj';
+  el.innerHTML = '<div class="ring"></div><div class="in">' + html + '</div>';
+  const o = { cat, html, name, pet: pet || null, el, x: .5, y: .7, rot: pet ? 0 : rand(-28, 28),
+              state: 'floor', dwell: 0, need: 1, p: 0, pp: -1, cool: 0, hover: false, fly: null };
+  el.style.setProperty('--rot', o.rot + 'deg');
+  // Touch and mouse work too: a tap picks the object straight away.
+  el.addEventListener('pointerdown', ev => { ev.preventDefault(); if (G.state === 'playing') choose(o); });
+  objLayer.appendChild(el);
+  return o;
+}
+function clearObjects() { G.objs.forEach(o => o.el.remove()); G.objs = []; }
+
+function startGame() {
+  hideAllVeils(); showScreen(null);
+  room.classList.remove('tidy'); Confetti.stop();
+  fxLayer.innerHTML = '';
+  G.timers = []; G.stars = 0; G.streak = 0;
+  G.state = 'playing'; G.resumeAt = G.lastNudge = performance.now();
+  $('btnPause').textContent = '⏸️';
+  BIN_ORDER.forEach(c => { bins[c].querySelector('.stash').innerHTML = ''; });
+  $('camPreview').style.display = G.mode === 'camera' ? '' : 'none';
+  measure();
+  startRound(0);
+  requestWakeLock();
+}
+function restartGame() { Voice.stop(); startGame(); }
+
+function startRound(r) {
+  G.round = r; G.taskIdx = -1; G.cat = null; G.inputOn = false;
+  clearObjects();
+  const def = ROUNDS[r], list = [];
+  def.tasks.forEach(([cat, n]) => {
+    shuffle(CATS[cat].items).slice(0, n).forEach(([html, name]) => list.push(makeObj(cat, html, name)));
+  });
+  shuffle(PETS).slice(0, def.pets).forEach(p => list.push(makeObj('pet', p.e, p.name, p)));
+  G.objs = list; G.roundTotal = list.filter(o => !o.pet).length; G.roundDone = 0;
+  layoutObjects();
+  list.forEach((o, i) => { o.el.style.animationDelay = (i * 45) + 'ms'; o.el.classList.add('drop'); });
+  setBins(null); updateHud();
+  const intro = r === 0 ? ['Uh oh! What a mess!', "Uh oh! What a mess! Let's clean up!"]
+              : r === ROUNDS.length - 1 ? ['Last round! Big mess!', 'Last round! What a big mess!']
+              : ['Round ' + (r + 1) + '! More mess!', 'Round ' + (r + 1) + '! More mess!'];
+  setBubble(intro[0]); Voice.say(intro[1], { queue: true }); Sound.tumble();
+  after(1900, nextTask);
+}
+
+function nextTask() {
+  G.taskIdx++;
+  const def = ROUNDS[G.round];
+  if (G.taskIdx >= def.tasks.length) { roundComplete(); return; }
+  G.cat = def.tasks[G.taskIdx][0];
+  const c = CATS[G.cat];
+  setBubble(c.html); setBins(G.cat);
+  Voice.say(c.say, { queue: true });
+  G.objs.forEach(o => { o.dwell = 0; o.p = 0; });
+  G.inputOn = true; G.idle = 0;
+}
+
+// Which object is under this point? Correct objects have a bigger hit area and always win ties.
+function pickUnder(px, py) {
+  let best = null, bestScore = 1;
+  for (const o of G.objs) {
+    if (o.state !== 'floor') continue;
+    const good = o.cat === G.cat;
+    const r = G.objSize * (good ? CFG.hitGood : CFG.hitOther);
+    const d = Math.hypot(px - o.x * R.w, py - o.y * R.h) / r;
+    if (d < 1) {
+      const score = good ? d * .5 : .5 + d * .5;
+      if (score < bestScore) { bestScore = score; best = o; }
+    }
+  }
+  return best;
+}
+
+function choose(o) {
+  if (!G.inputOn || o.state !== 'floor') return;
+  if (o.cat === G.cat) putAway(o); else notThis(o);
+}
+
+function putAway(o) {
+  o.state = 'fly'; o.hover = false;
+  o.el.classList.remove('hover', 'hint', 'nope', 'drop'); o.el.classList.add('fly');
+  const b = binCenter(o.cat);
+  o.fly = { t: 0, sx: o.x, sy: o.y, ex: b.x, ey: b.y };
+  G.stars++; G.streak++; G.idle = 0;
+  Sound.pop(); floatText(o.x, o.y - .06, '⭐ ' + o.name);
+  Voice.say(o.name + '!', { ifIdle: true });          // object vocabulary
+  if (G.streak % 3 === 0) {
+    G.stars++;
+    after(350, () => { floatText(.5, .3, '✨ Super streak! +⭐', true); Sound.sparkle(); });
+  }
+  updateHud();
+  // Last one of this kind: stop reacting to other objects while it flies home.
+  if (!G.objs.some(x => x.cat === G.cat && x.state === 'floor')) { G.inputOn = false; }
+}
+
+function stepFly(o, dt) {
+  const f = o.fly; f.t += dt / CFG.flyTime;
+  const t = Math.min(1, f.t), e = t < .5 ? 2 * t * t : 1 - Math.pow(-2 * t + 2, 2) / 2;
+  o.el.style.left = lerp(f.sx, f.ex, e) * 100 + '%';
+  o.el.style.top = (lerp(f.sy, f.ey, e) - Math.sin(Math.PI * t) * .14) * 100 + '%';
+  o.el.style.setProperty('--s', (1.2 - .8 * e).toFixed(3));
+  o.el.style.setProperty('--rot', (o.rot + 360 * e).toFixed(1) + 'deg');
+  if (t >= 1) landed(o);
+}
+
+function landed(o) {
+  o.state = 'done'; o.el.remove();
+  addToStash(o);
+  const b = bins[o.cat]; b.classList.remove('bump'); void b.offsetWidth; b.classList.add('bump');
+  sparkle(o.fly.ex, o.fly.ey); Sound.land();
+  G.roundDone++; updateHud();
+  if (!G.objs.some(x => x.cat === G.cat && x.state !== 'done')) taskDone();
+}
+
+// A distractor was chosen. Gentle wiggle, kind words, no points lost.
+function notThis(o) {
+  o.cool = performance.now() + 2200; o.dwell = 0; o.p = 0;
+  G.streak = 0; updateHud();
+  o.el.classList.remove('nope', 'drop'); void o.el.offsetWidth; o.el.classList.add('nope');
+  Sound.nope();
+  const c = CATS[G.cat];
+  if (o.pet) { floatText(o.x, o.y - .06, o.pet.e + ' ' + o.pet.name + ' stays!'); Voice.say(o.pet.say + ' Find the ' + c.word + '!'); }
+  else { const k = CATS[o.cat].kind; floatText(o.x, o.y - .06, "That's " + k + '!'); Voice.say("That's " + k + '. Find the ' + c.word + '!'); }
+}
+
+function taskDone() {
+  setBins(null);
+  const last = G.taskIdx >= ROUNDS[G.round].tasks.length - 1;
+  if (last) { after(500, roundComplete); return; }
+  const praise = pickOne(PRAISE);
+  toast(praise); Voice.say(praise); Sound.task();
+  after(1500, nextTask);
+}
+
+function roundComplete() {
+  G.inputOn = false; setBins(null);
+  if (G.round >= ROUNDS.length - 1) { finale(); return; }
+  $('roundMsg').textContent = 'Nice cleaning!';
+  $('roundSub').textContent = 'Round ' + (G.round + 2) + ' is next!';
+  showVeil('veilRound'); Sound.round();
+  Voice.say('Nice cleaning! Round ' + (G.round + 1) + ' is done!');
+  after(2800, () => { hideVeil('veilRound'); startRound(G.round + 1); });
+}
+
+// Final tidy-room celebration.
+function finale() {
+  G.state = 'final'; G.inputOn = false;
+  room.classList.add('tidy');
+  setBubble('✨ The room is <b>CLEAN</b>! ✨');
+  Sound.fanfare(); Voice.say('Wow! The room is so clean! You are a super cleaner!');
+  Confetti.start();
+  for (let i = 0; i < 16; i++) after(i * 240, () => { sparkle(rand(.06, .94), rand(.1, .9)); if (i % 4 === 0) Sound.sparkle(); });
+  $('finalStars').textContent = G.stars;
+  after(2600, () => showVeil('veilFinal'));
+}
+
+function hint() {
+  const list = G.objs.filter(o => o.state === 'floor' && o.cat === G.cat);
+  list.forEach(o => o.el.classList.add('hint'));
+  after(2600, () => list.forEach(o => o.el.classList.remove('hint')));
+  if (G.cat) Voice.say(CATS[G.cat].say, { ifIdle: true });
+}
+
+// Per-frame game update: flying objects, pointing with dwell, hints.
+function updateGame(dt, now) {
+  for (const o of G.objs) if (o.state === 'fly') stepFly(o, dt);
+
+  const hovered = new Set();
+  cursors.forEach((c, i) => {
+    c.target = null;
+    if (!G.inputOn || G.mode !== 'camera' || !Tracking.hands[i].active) return;
+    const o = pickUnder(c.x * R.w, c.y * R.h);
+    if (o && now > o.cool) { c.target = o; hovered.add(o); }
+  });
+
+  for (const o of G.objs) {
+    if (o.state !== 'floor') continue;
+    const isH = hovered.has(o);
+    if (isH) {
+      o.need = o.cat === G.cat ? CFG.dwellGood : CFG.dwellOther;
+      o.dwell = Math.min(o.need, o.dwell + dt);
+    } else if (o.dwell > 0) {
+      o.dwell = Math.max(0, o.dwell - dt * 1.5);    // fades slowly, so a little jitter does not reset it
+    }
+    o.p = o.dwell / o.need;
+    if (o.hover !== isH) { o.hover = isH; o.el.classList.toggle('hover', isH); }
+    const pp = Math.round(o.p * 100);
+    if (pp !== o.pp) { o.pp = pp; o.el.style.setProperty('--p', pp); }
+    if (isH && o.p >= 1) { o.dwell = 0; o.p = 0; choose(o); }
+  }
+  cursors.forEach(c => {
+    const pp = c.target ? Math.round(c.target.p * 100) : 0;
+    if (pp !== c.pp) { c.pp = pp; c.el.style.setProperty('--p', pp); }
+  });
+
+  if (G.inputOn) { G.idle += dt; if (G.idle > CFG.hintAfter) { G.idle = 0; hint(); } }
+}
+
+// Tracking lost: pause kindly, and come back by itself when the child is visible again.
+function checkLost(now) {
+  if (G.mode !== 'camera') return;
+  const T = Tracking;
+  const lastSeen = Math.max(T.lastHand, T.lastFace, G.resumeAt);
+  if (now - lastSeen > (T.face ? CFG.lostAfter : CFG.lostAfterNoFace)) {
+    G.state = 'lost'; G.foundFor = 0; showVeil('veilLost');
+    Voice.say("I can't see you. Step back so I can see you!");
+    return;
+  }
+  if (G.inputOn && now - Math.max(T.lastHand, G.resumeAt, G.lastNudge) > CFG.nudgeAfter) {
+    G.lastNudge = now; toast('✋ Hold up your hand!'); Voice.say('Hold up your hand!', { ifIdle: true });
+  }
+}
+function checkFound(dt, now) {
+  const T = Tracking;
+  const seeing = T.hands.some(h => h.active && now - h.seen < 250) || (now - T.lastFace < 500);
+  G.foundFor = seeing ? G.foundFor + dt : 0;
+  if (G.foundFor > 500) {
+    hideVeil('veilLost'); G.state = 'playing'; G.resumeAt = G.lastNudge = now;
+    Sound.sparkle(); Voice.say('There you are!');
+    if (G.cat && G.inputOn) Voice.say(CATS[G.cat].say, { queue: true });
+  }
+}
+
+function pauseGame() {
+  if (G.state !== 'playing' && G.state !== 'lost') return;
+  hideVeil('veilLost'); G.state = 'paused'; Voice.stop();
+  showVeil('veilPause'); $('btnPause').textContent = '▶️';
+}
+function resumeGame() {
+  if (G.state !== 'paused') return;
+  hideVeil('veilPause'); G.state = 'playing'; G.resumeAt = G.lastNudge = performance.now();
+  $('btnPause').textContent = '⏸️';
+  if (G.cat && G.inputOn) Voice.say(CATS[G.cat].say);
+}
+
+/* =====================================================================
+   7. MAIN LOOP + CURSOR RENDERING
+   ===================================================================== */
+function updateCursors(dt) {
+  const k = 1 - Math.exp(-dt / 45);                  // frame-rate independent interpolation
+  Tracking.hands.forEach((s, i) => {
+    const c = cursors[i];
+    if (s.active) {
+      const tx = clamp((s.rx - CFG.camX[0]) / (CFG.camX[1] - CFG.camX[0]), .02, .98);
+      const ty = clamp((s.ry - CFG.camY[0]) / (CFG.camY[1] - CFG.camY[0]), .02, .98);
+      if (s.fresh) { c.x = tx; c.y = ty; s.fresh = false; }
+      else { c.x += (tx - c.x) * k; c.y += (ty - c.y) * k; }
+    }
+    const show = s.active && G.state === 'playing' && G.mode === 'camera';
+    c.el.classList.toggle('on', show);
+    if (show) c.el.style.transform = 'translate(' + (c.x * R.w).toFixed(1) + 'px,' + (c.y * R.h).toFixed(1) + 'px)';
+  });
+}
+
+let lastT = performance.now();
+function frame(now) {
+  const dt = clamp(now - lastT, 0, 60); lastT = now;
+  try {
+    const camOn = G.mode === 'camera' && Tracking.ready;
+    if (camOn && (G.state === 'calib' || G.state === 'playing' || G.state === 'lost')) Tracking.step(now);
+    if (G.state === 'calib') Calib.update(dt, now);
+    else if (G.state === 'playing') { runTimers(dt); updateGame(dt, now); checkLost(now); }
+    else if (G.state === 'lost') checkFound(dt, now);
+    else if (G.state === 'final') runTimers(dt);
+    updateCursors(dt);
+    if (camOn && (G.state === 'playing' || G.state === 'lost')) {
+      const cv = $('previewCanvas');
+      if (fitCanvas(cv, 240)) drawCam(cv.getContext('2d'), cv, false, now);
+    }
+    Confetti.update(dt);
+  } catch (e) { console.error(e); }
+  requestAnimationFrame(frame);
+}
+
+/* =====================================================================
+   8. STARTUP, PERMISSIONS, BUTTONS
+   ===================================================================== */
+async function beginCamera() {
+  Sound.unlock(); Voice.say("Let's get ready!");
+  G.mode = 'camera'; G.state = 'loading';
+  $('loadMsg').textContent = 'Getting ready…'; showScreen('scrLoad');
+  try {
+    await Tracking.init(msg => { $('loadMsg').textContent = msg; });
+    Calib.start();
+  } catch (err) { console.warn(err); showError(err); }
+}
+
+function beginTouch() {
+  Sound.unlock();
+  G.mode = 'touch';
+  Tracking.hands.forEach(h => { h.active = false; h.lm = null; });
+  startGame();
+}
+
+// Friendly messages for every way the camera can fail.
+function showError(err) {
+  G.state = 'error';
+  const n = (err && err.name) || '';
+  let title = 'Oops! I can’t use the camera.', msg;
+  if (err && err.code === 'unsupported') msg = 'This browser can’t open the camera here. Open the page over https or from localhost.';
+  else if (n === 'NotAllowedError' || n === 'SecurityError' || n === 'PermissionDeniedError') msg = 'The camera is blocked. Ask a grown-up to allow the camera, then try again.';
+  else if (n === 'NotFoundError' || n === 'DevicesNotFoundError' || n === 'OverconstrainedError') msg = 'I can’t find a camera on this device.';
+  else if (n === 'NotReadableError' || n === 'TrackStartError' || n === 'AbortError') msg = 'The camera is busy. Close other apps that use it, then try again.';
+  else { title = 'Oops! Something didn’t load.'; msg = 'I couldn’t load the hand finder. Check the internet and try again.'; }
+  $('errTitle').textContent = title; $('errMsg').textContent = msg;
+  showScreen('scrError');
+}
+
+let wakeLock = null;
+function requestWakeLock() {
+  try { if (navigator.wakeLock && navigator.wakeLock.request) navigator.wakeLock.request('screen').then(w => { wakeLock = w; }).catch(() => {}); } catch (e) {}
+}
+
+$('btnStart').addEventListener('click', beginCamera);
+$('btnRetry').addEventListener('click', beginCamera);
+$('btnTouch').addEventListener('click', beginTouch);
+$('btnTouch2').addEventListener('click', beginTouch);
+$('btnSkip').addEventListener('click', () => { if (G.state === 'calib') { Voice.stop(); startGame(); } });
+$('btnPause').addEventListener('click', () => { if (G.state === 'paused') resumeGame(); else pauseGame(); });
+$('btnResume').addEventListener('click', resumeGame);
+$('btnRestart').addEventListener('click', () => { if (['playing', 'paused', 'lost', 'final'].includes(G.state)) restartGame(); });
+$('btnRestart2').addEventListener('click', restartGame);
+$('btnAgain').addEventListener('click', restartGame);
+$('btnLostTouch').addEventListener('click', () => {
+  if (G.state !== 'lost') return;
+  G.mode = 'touch'; hideVeil('veilLost'); G.state = 'playing';
+  $('camPreview').style.display = 'none';
+  if (G.cat && G.inputOn) Voice.say(CATS[G.cat].say);
+});
+$('btnSound').addEventListener('click', () => {
+  Sound.muted = !Sound.muted; $('btnSound').textContent = Sound.muted ? '🔇' : '🔊';
+  if (Sound.muted) Voice.stop(); else Sound.unlock();
+});
+$('teacher').addEventListener('click', () => { if (G.state === 'playing' && G.cat) Voice.say(CATS[G.cat].say); });
+
+document.addEventListener('visibilitychange', () => {
+  if (document.hidden) pauseGame(); else if (G.state !== 'start') requestWakeLock();
+});
+
+// Keep the layout right on resize and rotation. Only reshuffle the mess when the room really changed.
+let relayoutTimer = null;
+function onRoomResize() {
+  measure();
+  if (Confetti.on) { Confetti.cv.width = R.w; Confetti.cv.height = R.h; }
+  if (!G.objs.length) return;
+  if (Math.abs(R.w - R.layW) / R.layW > .12 || Math.abs(R.h - R.layH) / R.layH > .12) {
+    clearTimeout(relayoutTimer); relayoutTimer = setTimeout(layoutObjects, 180);
+  }
+}
+if (window.ResizeObserver) new ResizeObserver(onRoomResize).observe(room);
+window.addEventListener('resize', onRoomResize);
+window.addEventListener('orientationchange', () => setTimeout(onRoomResize, 250));
+
+Voice.init();
+measure();
+requestAnimationFrame(frame);
+})();
+</script>
+</body>
+</html>

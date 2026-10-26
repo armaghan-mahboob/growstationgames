@@ -1,0 +1,1298 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no">
+<meta name="theme-color" content="#CFEFFF">
+<title>Freeze Dance</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Fredoka:wght@500;600;700&display=swap">
+<style>
+:root{
+  --ink:#2F3B63; --ink-soft:#5F6B95; --sky:#CFEFFF; --pink:#FF8FB8; --sun:#FFD36E; --ice:#9EDCFF; --lilac:#C9B6FF;
+  --go-top:#62E29E; --go-bot:#2FBF70; --go-edge:#1F9A57;
+  --font:'Fredoka','Baloo 2','Arial Rounded MT Bold','Varela Round','Comic Sans MS',system-ui,sans-serif;
+  --st:env(safe-area-inset-top,0px); --sr:env(safe-area-inset-right,0px); --sb:env(safe-area-inset-bottom,0px); --sl:env(safe-area-inset-left,0px);
+}
+*{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+html,body{margin:0;width:100%;height:100%;overflow:hidden;background:var(--sky);color:var(--ink);font-family:var(--font);-webkit-user-select:none;user-select:none;-webkit-touch-callout:none;overscroll-behavior:none;touch-action:manipulation}
+#cam{position:fixed;inset:0;width:100%;height:100%;object-fit:cover;transform:scaleX(-1);opacity:0;transition:opacity .6s ease;background:#232a48}
+#cam.on{opacity:1}
+#stage{position:fixed;inset:0;width:100%;height:100%;display:block;touch-action:none}
+button{font-family:var(--font);color:var(--ink);cursor:pointer}
+button:focus-visible{outline:5px solid var(--pink);outline-offset:5px}
+
+.screen{position:fixed;inset:0;display:none;flex-direction:column;align-items:center;justify-content:center;gap:clamp(8px,2.2vmin,28px);padding:calc(var(--st) + 3vmin) calc(var(--sr) + 4vmin) calc(var(--sb) + 3vmin) calc(var(--sl) + 4vmin);text-align:center;pointer-events:none}
+.screen.active{display:flex}
+.screen button{pointer-events:auto}
+.title{font-weight:700;font-size:clamp(30px,8.5vmin,104px);line-height:1;color:var(--ink);text-shadow:0 .05em 0 #fff,0 -.05em 0 #fff,.05em 0 0 #fff,-.05em 0 0 #fff,.04em .04em 0 #fff,-.04em -.04em 0 #fff,.04em -.04em 0 #fff,-.04em .04em 0 #fff,0 .16em .2em rgba(47,59,99,.18)}
+.emoji-row{font-size:clamp(26px,7vmin,84px);display:flex;gap:1.6vmin;line-height:1}
+.emoji-row span{display:inline-block;animation:hop 2.4s ease-in-out infinite}
+.emoji-row span:nth-child(2){animation-delay:.2s}.emoji-row span:nth-child(3){animation-delay:.4s}
+.emoji-row span:nth-child(4){animation-delay:.6s}.emoji-row span:nth-child(5){animation-delay:.8s}
+@keyframes hop{0%,60%,100%{transform:translateY(0)}30%{transform:translateY(-22%)}}
+.mascot-spot{flex:0 1 auto;width:min(46vmin,70vw);height:clamp(90px,30vh,380px)}
+.mascot-spot.small{height:clamp(80px,24vh,300px)}
+.label{font-weight:700;font-size:clamp(26px,7vmin,84px);line-height:1.05;padding:.15em .6em .2em;background:#fff;border-radius:999px;box-shadow:0 .6vmin 0 rgba(47,59,99,.12)}
+.label.sm{font-size:clamp(20px,5vmin,60px)}
+.note{max-width:min(720px,92vw);font-weight:500;font-size:clamp(14px,2.4vmin,22px);line-height:1.35;color:var(--ink-soft);background:rgba(255,255,255,.88);padding:.6em 1em;border-radius:18px}
+.note:empty{display:none}
+.row{display:flex;gap:3vmin;align-items:center;justify-content:center;flex-wrap:wrap}
+.hidden{display:none!important}
+
+.big{font-weight:700;font-size:clamp(40px,10.5vmin,128px);line-height:1;color:#fff;background:linear-gradient(var(--go-top),var(--go-bot));border:clamp(5px,1.1vmin,12px) solid #fff;border-radius:999px;padding:.32em 1.05em .38em;min-height:max(16vh,84px);min-width:max(40vmin,220px);box-shadow:0 1.3vmin 0 var(--go-edge),0 2.6vmin 4vmin rgba(40,50,90,.28);text-shadow:0 .05em 0 rgba(0,0,0,.18);transition:transform .12s}
+.big:active{transform:translateY(1vmin) scale(.98)}
+.pulse{animation:pulse 1.6s ease-in-out infinite}
+@keyframes pulse{0%,100%{transform:scale(1)}50%{transform:scale(1.07)}}
+.mid{font-size:clamp(30px,7.5vmin,90px);min-width:max(30vmin,170px)}
+.blue{background:linear-gradient(#8FD3FF,#4FB3F6);box-shadow:0 1.3vmin 0 #2E8FD1,0 2.6vmin 4vmin rgba(40,50,90,.28);min-width:max(18vmin,110px)}
+
+#hud{position:fixed;inset:0;pointer-events:none;z-index:5}
+#starbar{position:absolute;top:calc(var(--st) + 1.4vmin);left:50%;transform:translateX(-50%);display:none;gap:clamp(2px,.6vmin,8px);padding:clamp(4px,.9vmin,12px) clamp(8px,1.8vmin,22px);background:rgba(255,255,255,.85);border-radius:999px;box-shadow:0 .8vmin 2vmin rgba(47,59,99,.15)}
+#hud.game #starbar{display:flex}
+.slot{font-size:clamp(17px,4.2vmin,50px);line-height:1;filter:grayscale(1);opacity:.32;transition:opacity .3s,filter .3s}
+.slot.on{filter:none;opacity:1;animation:starpop .7s cubic-bezier(.3,1.7,.5,1)}
+@keyframes starpop{0%{transform:scale(.2) rotate(-40deg)}100%{transform:scale(1) rotate(0)}}
+.hbtn{pointer-events:auto;position:absolute;display:grid;place-items:center;border:none;border-radius:50%;background:#fff;box-shadow:0 .8vmin 0 rgba(47,59,99,.15),0 1.4vmin 3vmin rgba(47,59,99,.18);padding:0;line-height:1}
+#btnSay{right:calc(var(--sr) + 2.6vmin);bottom:calc(var(--sb) + 2.6vmin);width:clamp(64px,15vmin,160px);height:clamp(64px,15vmin,160px);font-size:clamp(30px,8vmin,84px);border:clamp(4px,.9vmin,10px) solid var(--sun)}
+#btnMute{right:calc(var(--sr) + 2vmin);top:calc(var(--st) + 1.4vmin);width:clamp(44px,8.5vmin,86px);height:clamp(44px,8.5vmin,86px);font-size:clamp(20px,4.4vmin,44px)}
+#grown{pointer-events:auto;position:absolute;left:var(--sl);top:var(--st);width:clamp(56px,10vmin,96px);height:clamp(56px,10vmin,96px);display:grid;place-items:center;touch-action:none;-webkit-touch-callout:none}
+#grown .lock{font-size:clamp(14px,2.6vmin,24px);opacity:.28;position:relative}
+#grown .ring{position:absolute;inset:16%;border-radius:50%;background:conic-gradient(var(--pink) calc(var(--p,0) * 1turn),rgba(255,255,255,.5) 0);opacity:0;transition:opacity .2s}
+#grown.holding .ring{opacity:1}
+#grown.holding .lock{opacity:1}
+
+#panel{position:fixed;inset:0;z-index:20;display:none;align-items:center;justify-content:center;background:rgba(47,59,99,.5);padding:calc(var(--st) + 16px) 16px calc(var(--sb) + 16px);-webkit-user-select:auto;user-select:auto}
+#panel.open{display:flex}
+.pcard{width:min(560px,100%);max-height:100%;overflow:auto;background:#fff;border-radius:24px;padding:22px 22px 18px;box-shadow:0 20px 60px rgba(30,20,60,.35);font-size:17px}
+.pcard h2{margin:0 0 4px;font-size:24px}
+.pcard .sub{margin:0 0 10px;color:var(--ink-soft);font-size:14px;line-height:1.4}
+.field{display:flex;flex-direction:column;gap:6px;margin:12px 0}
+.field>span{font-weight:600}
+.seg{display:flex;gap:6px;flex-wrap:wrap}
+.seg button{flex:1;min-width:90px;padding:10px 8px;border-radius:14px;border:2px solid #D6E8FF;background:#F2F8FF;font-size:16px;font-weight:600}
+.seg button.on{background:var(--ink);color:#fff;border-color:var(--ink)}
+.pcard select{font:inherit;font-size:16px;padding:10px;border-radius:12px;border:2px solid #D6E8FF;background:#F8FBFF;color:var(--ink);width:100%}
+.check{display:flex;gap:10px;align-items:center;margin:10px 0;font-weight:500}
+.check input{width:22px;height:22px;accent-color:var(--pink)}
+.pnote{font-size:14px;color:var(--ink-soft);margin:2px 0 0;line-height:1.4}
+.pnote:empty{display:none}
+.pactions{display:flex;gap:8px;flex-wrap:wrap;margin-top:16px}
+.pactions button{flex:1;min-width:120px;padding:12px;border-radius:14px;border:2px solid #D6E8FF;background:#F2F8FF;font-size:16px;font-weight:600}
+.pactions .primary{background:var(--go-bot);border-color:var(--go-bot);color:#fff}
+.pactions .warn{background:#FFE9F1;border-color:#FFC2D8}
+@media (prefers-reduced-motion: reduce){.pulse,.emoji-row span{animation:none}}
+@media (max-height:460px){.title{font-size:clamp(24px,7vmin,60px)}.emoji-row{display:none}}
+</style>
+</head>
+<body>
+<video id="cam" playsinline muted autoplay></video>
+<canvas id="stage"></canvas>
+
+<section class="screen active" data-screen="start">
+  <div class="title">Freeze Dance</div>
+  <div class="emoji-row" aria-hidden="true"><span>🐧</span><span>🎵</span><span>❄️</span><span>🍦</span><span>⭐</span></div>
+  <div class="mascot-spot"></div>
+  <button id="btnPlay" class="big pulse" aria-label="Play">▶ PLAY</button>
+</section>
+
+<section class="screen" data-screen="perm">
+  <div class="mascot-spot small"></div>
+  <div id="permLabel" class="label">Camera, please!</div>
+  <div id="permNote" class="note"></div>
+  <div id="permBtns" class="row hidden">
+    <button id="btnTouch" class="big mid" aria-label="Play with touch">👆 Touch</button>
+    <button id="btnRetry" class="big mid blue" aria-label="Try the camera again">🔄</button>
+  </div>
+</section>
+
+<section class="screen" data-screen="rest">
+  <div class="label">Great job!</div>
+  <div class="mascot-spot"></div>
+  <div class="label sm">Drink some water 💧</div>
+  <button id="btnAgain" class="big pulse" aria-label="Play again">▶ Play again</button>
+</section>
+
+<div id="hud">
+  <div id="starbar" aria-label="Stars"></div>
+  <button id="btnMute" class="hbtn" aria-label="Sound on or off">🔔</button>
+  <button id="btnSay" class="hbtn" aria-label="Say it again">🔊</button>
+  <div id="grown" aria-label="Grown-up corner, press and hold for 3 seconds"><div class="ring"></div><span class="lock">🔒</span></div>
+</div>
+
+<div id="panel" role="dialog" aria-modal="true" aria-label="Grown-up corner">
+  <div class="pcard">
+    <h2>Grown-up corner</h2>
+    <p class="sub">The game is paused. The camera only measures movement on this device; nothing is recorded or uploaded.</p>
+    <div class="field"><span>Difficulty (how long to freeze, how still to be)</span>
+      <div class="seg" id="segDiff"><button data-v="easy">Easy</button><button data-v="normal">Normal</button><button data-v="hard">Big kid</button></div>
+    </div>
+    <label class="field"><span>Camera</span><select id="selCam"></select></label>
+    <p id="camNote" class="pnote"></p>
+    <label class="field"><span>Microphone (optional: singing along makes music notes)</span><select id="selMic"></select></label>
+    <p id="micNote" class="pnote"></p>
+    <label class="check"><input type="checkbox" id="chkTouch"> Touch mode, no camera</label>
+    <label class="check"><input type="checkbox" id="chkBox"> Show movement box</label>
+    <div class="pactions">
+      <button id="btnRestart">Restart game</button>
+      <button id="btnExit" class="warn">Exit and turn off camera</button>
+      <button id="btnClose" class="primary">Back to game</button>
+    </div>
+  </div>
+</div>
+<script>
+(() => {
+'use strict';
+
+/* ======================= CONFIG ======================= */
+const ROUNDS = 10;
+const TAU = Math.PI * 2;
+const EMOJI_FONT = '"Apple Color Emoji","Segoe UI Emoji","Noto Color Emoji","Twemoji Mozilla",sans-serif';
+const UI_FONT = 'Fredoka, "Baloo 2", "Arial Rounded MT Bold", "Varela Round", "Comic Sans MS", system-ui, sans-serif';
+const PALETTE = ['#FF8FB8', '#FFC46B', '#7FD99A', '#6CC4FF', '#B79CFF', '#FFE066', '#FF9F80', '#7EE0D6'];
+const PRAISE = ['Amazing!', 'You did it!', 'Super star!', 'Wow! You froze like a statue!', 'Fantastic!', 'Hooray!', 'So still! Great job!', 'You are a freeze champion!'];
+const DANCE_LINES = ['Dance!', 'Wiggle, wiggle!', 'Shake it!', 'Dance, dance, dance!', 'Go, go, go!'];
+const SHH_LINES = ['Shhh, freeze like a statue!', 'Shhh! Stay still, like a statue!', 'Shhh, freeze like a statue! Not even a wiggle!'];
+const NUMW = ['Zero', 'One', 'Two', 'Three', 'Four', 'Five'];
+const DIFF = {
+  easy:   { k: 1.5,  holds: [2, 2, 2, 2.5, 2.5, 3, 3, 3.5, 3.5, 4], dance: [4, 7] },
+  normal: { k: 1.0,  holds: [2, 2, 2.5, 3, 3, 3.5, 4, 4, 4.5, 5],   dance: [4, 8] },
+  hard:   { k: 0.75, holds: [2, 3, 3, 3.5, 4, 4, 4.5, 5, 5, 5],     dance: [4, 8] }
+};
+const SPRINKLES = [[-0.07, -1.0], [0.08, -0.95], [0, -1.09], [-0.13, -0.78], [0.11, -0.72], [0, -0.87], [0.16, -0.85], [-0.2, -0.5], [0.2, -0.52], [0, -0.69]];
+
+/* ======================= CHIPTUNE LOOP ======================= */
+const BPM = 124, STEP_SEC = 60 / BPM / 4, BARS = 8, STEPS = BARS * 16;
+const NOTE_NUM = { C: 0, D: 2, E: 4, F: 5, G: 7, A: 9, B: 11 };
+// ==MUSIC-START==
+function parseMelody(src) {
+  const out = new Array(STEPS).fill(null); let i = 0;
+  src.replace(/\|/g, ' ').trim().split(/\s+/).forEach(tok => {
+    const parts = tok.split(':'), len = parseInt(parts[1], 10) || 2, n = parts[0];
+    if (n !== 'R' && i < STEPS) out[i] = { m: NOTE_NUM[n[0]] + 12 * (parseInt(n[1], 10) + 1), len };
+    i += len;
+  });
+  return { notes: out, total: i };
+}
+const MELODY = parseMelody(
+  'E5:2 G5:2 A5:2 G5:2 E5:2 D5:2 C5:2 D5:2 | E5:2 E5:2 D5:2 C5:2 D5:6 R:2 | E5:2 G5:2 A5:2 G5:2 E5:2 D5:2 C5:2 D5:2 | E5:2 D5:2 C5:2 D5:2 C5:6 R:2 | ' +
+  'G5:2 G5:2 A5:2 B5:2 C6:4 B5:2 A5:2 | G5:2 E5:2 G5:2 A5:2 G5:6 R:2 | E5:2 G5:2 A5:2 G5:2 E5:2 D5:2 C5:2 D5:2 | E5:2 D5:2 C5:4 C5:2 R:6');
+const ROOTS = [48, 43, 45, 48, 43, 48, 41, 48];
+// ==MUSIC-END==
+const mtof = (m) => 440 * Math.pow(2, (m - 69) / 12);
+
+const Music = {
+  on: false, paused: false, step: 0, nextT: 0, timer: 0, startT: 0, gain: null, duck: null, frozenBeat: 0, lastDuck: 1,
+  node() {
+    const a = audio(); if (!a) return null;
+    if (!this.gain) { this.gain = a.createGain(); this.gain.gain.value = 0; this.duck = a.createGain(); this.duck.gain.value = 1; this.gain.connect(this.duck); this.duck.connect(master); }
+    return a;
+  },
+  start(fromStep) {
+    const a = this.node(); if (!a) return;
+    this.stopTimer(); this.paused = false;
+    this.step = fromStep || 0; this.nextT = a.currentTime + 0.06; this.startT = this.nextT - this.step * STEP_SEC; this.on = true;
+    const g = this.gain.gain; g.cancelScheduledValues(a.currentTime); g.setValueAtTime(g.value, a.currentTime); g.linearRampToValueAtTime(1, a.currentTime + 0.2);
+    this.timer = setInterval(() => this.tick(), 30); this.tick();
+  },
+  stop() {
+    this.stopTimer();
+    if (this.on && ac && this.gain) { const g = this.gain.gain; this.frozenBeat = this.beat(); g.cancelScheduledValues(ac.currentTime); g.setValueAtTime(g.value, ac.currentTime); g.linearRampToValueAtTime(0, ac.currentTime + 0.05); }
+    this.on = false; this.paused = false;
+  },
+  pause() { if (!this.on || this.paused) return; this.stopTimer(); this.paused = true; },
+  resume() { if (!this.paused) return; this.start(this.step); },
+  stopTimer() { clearInterval(this.timer); this.timer = 0; },
+  tick() {
+    if (!ac || !this.on || this.paused) return;
+    let n = 0;
+    while (this.nextT < ac.currentTime + 0.16 && n++ < 32) { this.play(this.step, this.nextT); this.step = (this.step + 1) % STEPS; this.nextT += STEP_SEC; }
+  },
+  beat() { if (!this.on || this.paused || !ac) return this.frozenBeat; return Math.max(0, (ac.currentTime - this.startT) / (STEP_SEC * 4)); },
+  setDuck(v) { if (!this.duck || !ac || v === this.lastDuck) return; this.lastDuck = v; this.duck.gain.setTargetAtTime(v, ac.currentTime, 0.08); },
+  play(step, t) {
+    const bar = Math.floor(step / 16), s = step % 16, n = MELODY.notes[step];
+    if (n) this.lead(mtof(n.m), t, n.len * STEP_SEC);
+    if (s % 2 === 0) { const r = ROOTS[bar]; this.bass(mtof(s === 12 ? r + 7 : (s % 4 === 0 ? r : r + 12)), t, STEP_SEC * 1.7); }
+    if (s === 0 || s === 8 || (bar % 2 === 1 && s === 10)) this.kick(t);
+    if (s === 4 || s === 12) this.snare(t);
+    if (s % 2 === 0) this.hat(t, s === 14);
+  },
+  lead(f, t, dur) {
+    const o = ac.createOscillator(), g = ac.createGain(), fl = ac.createBiquadFilter();
+    o.type = 'square'; o.frequency.value = f; fl.type = 'lowpass'; fl.frequency.value = 2400;
+    g.gain.setValueAtTime(0.0001, t); g.gain.exponentialRampToValueAtTime(0.085, t + 0.008); g.gain.exponentialRampToValueAtTime(0.045, t + dur * 0.5); g.gain.exponentialRampToValueAtTime(0.0001, t + dur * 0.95);
+    o.connect(fl); fl.connect(g); g.connect(this.gain); o.start(t); o.stop(t + dur);
+  },
+  bass(f, t, dur) {
+    const o = ac.createOscillator(), g = ac.createGain();
+    o.type = 'triangle'; o.frequency.value = f;
+    g.gain.setValueAtTime(0.0001, t); g.gain.exponentialRampToValueAtTime(0.17, t + 0.01); g.gain.exponentialRampToValueAtTime(0.0001, t + dur);
+    o.connect(g); g.connect(this.gain); o.start(t); o.stop(t + dur);
+  },
+  kick(t) {
+    const o = ac.createOscillator(), g = ac.createGain();
+    o.type = 'sine'; o.frequency.setValueAtTime(170, t); o.frequency.exponentialRampToValueAtTime(45, t + 0.1);
+    g.gain.setValueAtTime(0.4, t); g.gain.exponentialRampToValueAtTime(0.0001, t + 0.15);
+    o.connect(g); g.connect(this.gain); o.start(t); o.stop(t + 0.16);
+  },
+  snare(t) {
+    const src = ac.createBufferSource(), fl = ac.createBiquadFilter(), g = ac.createGain();
+    src.buffer = getNoise(); fl.type = 'bandpass'; fl.frequency.value = 1900; fl.Q.value = 0.7;
+    g.gain.setValueAtTime(0.13, t); g.gain.exponentialRampToValueAtTime(0.0001, t + 0.1);
+    src.connect(fl); fl.connect(g); g.connect(this.gain); src.start(t); src.stop(t + 0.11);
+    const o = ac.createOscillator(), g2 = ac.createGain(); o.type = 'sine'; o.frequency.value = 185;
+    g2.gain.setValueAtTime(0.12, t); g2.gain.exponentialRampToValueAtTime(0.0001, t + 0.07); o.connect(g2); g2.connect(this.gain); o.start(t); o.stop(t + 0.08);
+  },
+  hat(t, open) {
+    const src = ac.createBufferSource(), fl = ac.createBiquadFilter(), g = ac.createGain(), d = open ? 0.09 : 0.03;
+    src.buffer = getNoise(); fl.type = 'highpass'; fl.frequency.value = 7500;
+    g.gain.setValueAtTime(0.05, t); g.gain.exponentialRampToValueAtTime(0.0001, t + d);
+    src.connect(fl); fl.connect(g); g.connect(this.gain); src.start(t); src.stop(t + d + 0.01);
+  }
+};
+
+/* ======================= MOTION DETECTOR (frame difference) =======================
+   Works on a 96-px-wide copy of the mirrored video. frac = share of pixels that
+   changed since the last frame, after removing global brightness drift (auto
+   exposure). An activity map (slow EMA of changed pixels) gives a stable box
+   around the person, used to place the ice cream and the ice crystals. */
+// ==DETECTOR-START==
+class MotionDetector {
+  constructor(w, h) {
+    this.w = w; this.h = h; this.n = w * h;
+    this.prev = new Uint8Array(this.n); this.cur = new Uint8Array(this.n); this.act = new Float32Array(this.n);
+    this.col = new Float32Array(w); this.row = new Float32Array(h); this.dif = new Uint8Array(this.n); this.hist = new Uint32Array(64); this.noise = 0;
+    this.has = false; this.frac = 0; this.flat = false; this.seen = false; this.frames = 0;
+    this.cx = 0.5; this.cy = 0.5; this.bw = 0.3; this.bh = 0.6;
+  }
+  process(data) {
+    const n = this.n, w = this.w, h = this.h, cur = this.cur, prev = this.prev, act = this.act;
+    let sum = 0, sq = 0;
+    for (let i = 0, j = 0; i < n; i++, j += 4) { const y = (data[j] * 77 + data[j + 1] * 151 + data[j + 2] * 28) >> 8; cur[i] = y; sum += y; sq += y * y; }
+    const mean = sum / n, std = Math.sqrt(Math.max(0, sq / n - mean * mean));
+    this.flat = std < 6;
+    if (!this.has) { prev.set(cur); this.has = true; this.frac = 0; return 0; }
+    let ds = 0; for (let i = 0; i < n; i++) ds += cur[i] - prev[i];
+    const shift = ds / n, dif = this.dif, hist = this.hist; hist.fill(0);
+    for (let i = 0; i < n; i++) { let d = cur[i] - prev[i] - shift; if (d < 0) d = -d; if (d > 255) d = 255; dif[i] = d; hist[d > 63 ? 63 : d | 0]++; }
+    let acc = 0, med = 0; for (let b = 0; b < 64; b++) { acc += hist[b]; if (acc >= n / 2) { med = b; break; } }
+    const thr = Math.max(14, 4.7 * med + 2); // ~3.2 sigma of the sensor noise
+    this.noise = med;
+    let cnt = 0;
+    for (let i = 0; i < n; i++) { const mv = dif[i] > thr ? 1 : 0; cnt += mv; act[i] += (mv - act[i]) * 0.12; }
+    this.frac = cnt / n; prev.set(cur); this.frames++;
+    if (this.frac > 0.006) {
+      const col = this.col, row = this.row; col.fill(0); row.fill(0); let tot = 0;
+      for (let y = 0, i = 0; y < h; y++) for (let x = 0; x < w; x++, i++) { const a = act[i]; if (a > 0.05) { col[x] += a; row[y] += a; tot += a; } }
+      if (tot > 0) {
+        const lo = tot * 0.06; let acc, x0 = 0, x1 = w - 1, y0 = 0, y1 = h - 1;
+        acc = 0; for (let x = 0; x < w; x++) { acc += col[x]; if (acc >= lo) { x0 = x; break; } }
+        acc = 0; for (let x = w - 1; x >= 0; x--) { acc += col[x]; if (acc >= lo) { x1 = x; break; } }
+        acc = 0; for (let y = 0; y < h; y++) { acc += row[y]; if (acc >= lo) { y0 = y; break; } }
+        acc = 0; for (let y = h - 1; y >= 0; y--) { acc += row[y]; if (acc >= lo) { y1 = y; break; } }
+        const a = this.seen ? 0.25 : 1;
+        this.cx += ((x0 + x1 + 1) / 2 / w - this.cx) * a; this.cy += ((y0 + y1 + 1) / 2 / h - this.cy) * a;
+        this.bw += ((x1 - x0 + 1) / w - this.bw) * a; this.bh += ((y1 - y0 + 1) / h - this.bh) * a;
+        this.seen = true;
+      }
+    }
+    return this.frac;
+  }
+}
+// ==DETECTOR-END==
+
+/* ======================= HELPERS & STATE ======================= */
+const $ = (s) => document.querySelector(s);
+const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
+const rand = (a, b) => a + Math.random() * (b - a);
+const pick = (arr) => arr[Math.floor(Math.random() * arr.length)];
+const ease = (t) => t < 0.5 ? 2 * t * t : 1 - Math.pow(-2 * t + 2, 2) / 2;
+const easeOutBack = (t) => { const c1 = 1.70158, c3 = c1 + 1; return 1 + c3 * Math.pow(t - 1, 3) + c1 * Math.pow(t - 1, 2); };
+
+const video = $('#cam'), cv = $('#stage'), ctx = cv.getContext('2d');
+const hud = $('#hud'), starbar = $('#starbar'), grown = $('#grown'), panel = $('#panel');
+
+const S = { screen: 'start', mode: 'camera', prefTouch: false, muted: false, hidden: false, panel: false, diff: 'normal',
+  showBox: false, camId: '', micId: '', run: 0, permKind: 'ask', speechReady: false, speechUnlocked: false,
+  lastInteract: 0, idleRepeats: 0, lastTouchGT: -99, camSuspended: false, sampAcc: 0 };
+const R = { tok: 0, idx: 0, stars: 0, phase: 'none', phaseT: 0, danceDur: 6, fz: null, misses: 0, hint: false, nudged: false,
+  stepBack: false, lastStepSay: -99, finStars: [] };
+const motion = { frac: 0, flat: false, lastActive: -99, danceE: 0.05, peak: 0 };
+let gt = 0; // game clock in seconds, frozen while paused
+let W = 1, H = 1, DPR = 1, spot = null, starBottom = 60, insets = { t: 0, r: 0, b: 0, l: 0 };
+
+/* ----- pause-aware timers, tied to the current segment token ----- */
+const timers = [];
+function newSeg() { return ++R.tok; }
+function afterSeg(sec, fn) { timers.push({ at: gt + sec, fn, tok: R.tok }); }
+function clearTimers() { timers.length = 0; }
+function runTimers() {
+  for (let i = 0; i < timers.length; i++) {
+    const tm = timers[i];
+    if (tm.tok !== R.tok) { timers.splice(i--, 1); continue; }
+    if (gt >= tm.at) { timers.splice(i--, 1); try { tm.fn(); } catch (e) { console.error(e); } }
+  }
+}
+function isPaused() { return S.hidden || S.panel; }
+
+/* ======================= AUDIO (Web Audio only) ======================= */
+let ac = null, master = null, noiseBuf = null, sfxBusyUntil = 0;
+function audio() {
+  if (!ac) {
+    const A = window.AudioContext || window.webkitAudioContext;
+    if (!A) return null;
+    try {
+      ac = new A();
+      master = ac.createGain(); master.gain.value = S.muted ? 0 : 0.55;
+      const comp = ac.createDynamicsCompressor(); comp.threshold.value = -18; comp.ratio.value = 4;
+      master.connect(comp); comp.connect(ac.destination);
+    } catch (e) { ac = null; return null; }
+  }
+  if (ac.state === 'suspended' && !S.hidden && !S.panel) ac.resume().catch(() => {});
+  return ac;
+}
+function getNoise() {
+  if (!noiseBuf) { noiseBuf = ac.createBuffer(1, Math.floor(ac.sampleRate * 1.2), ac.sampleRate); const d = noiseBuf.getChannelData(0); for (let i = 0; i < d.length; i++) d[i] = Math.random() * 2 - 1; }
+  return noiseBuf;
+}
+function tone(type, f0, f1, delay, dur, vol, o) {
+  o = o || {};
+  const a = audio(); if (!a || S.muted) return;
+  const t = a.currentTime + 0.01 + delay;
+  const osc = a.createOscillator(); osc.type = type;
+  osc.frequency.setValueAtTime(f0, t);
+  if (f1 && f1 !== f0) osc.frequency.exponentialRampToValueAtTime(f1, t + (o.glide || dur));
+  const g = a.createGain();
+  const at = o.attack != null ? o.attack : 0.012, rel = o.release != null ? o.release : Math.min(0.12, dur * 0.5);
+  const v = Math.max(0.0002, vol);
+  g.gain.setValueAtTime(0.0001, t);
+  g.gain.exponentialRampToValueAtTime(v, t + at);
+  g.gain.setValueAtTime(v, t + Math.max(at, dur - rel));
+  g.gain.exponentialRampToValueAtTime(0.0001, t + dur);
+  let node = osc; const lfos = [];
+  if (o.vib) { const l = a.createOscillator(), lg = a.createGain(); l.frequency.value = o.vib[0]; lg.gain.value = o.vib[1]; l.connect(lg); lg.connect(osc.frequency); lfos.push(l); }
+  if (o.filter) { const fl = a.createBiquadFilter(); fl.type = o.filter[0]; fl.frequency.value = o.filter[1]; fl.Q.value = o.filter[2] || 1; node.connect(fl); node = fl; }
+  node.connect(g); g.connect(master);
+  osc.start(t); osc.stop(t + dur + 0.05);
+  lfos.forEach(l => { l.start(t); l.stop(t + dur + 0.05); });
+  sfxBusyUntil = Math.max(sfxBusyUntil, t + dur + 0.25);
+}
+function noise(delay, dur, vol, filt, o) {
+  o = o || {};
+  const a = audio(); if (!a || S.muted) return;
+  const t = a.currentTime + 0.01 + delay;
+  const src = a.createBufferSource(); src.buffer = getNoise(); src.loop = true;
+  const fl = a.createBiquadFilter(); fl.type = filt[0]; fl.frequency.value = filt[1]; fl.Q.value = filt[2] || 0.7;
+  const g = a.createGain(), at = o.attack || 0.02, rel = o.release || 0.2;
+  g.gain.setValueAtTime(0.0001, t); g.gain.exponentialRampToValueAtTime(vol, t + at);
+  g.gain.setValueAtTime(vol, t + Math.max(at, dur - rel)); g.gain.exponentialRampToValueAtTime(0.0001, t + dur);
+  src.connect(fl); fl.connect(g); g.connect(master); src.start(t); src.stop(t + dur + 0.05);
+  sfxBusyUntil = Math.max(sfxBusyUntil, t + dur + 0.25);
+}
+const STAR_STEPS = [0, 2, 4, 7, 9, 12, 14, 16, 19, 21];
+const sfx = {
+  click() { tone('sine', 700, 900, 0, 0.07, 0.08); },
+  freeze() {
+    tone('sawtooth', 420, 60, 0, 0.28, 0.12, { glide: 0.26, filter: ['lowpass', 1400, 0.8], release: 0.1 });
+    [2093, 2637, 3136, 3951].forEach((f, i) => tone('sine', f, f, 0.22 + i * 0.07, 0.3, 0.05));
+  },
+  wobble() { tone('sine', 330, 300, 0, 0.45, 0.1, { vib: [6, 40], release: 0.25 }); tone('triangle', 165, 150, 0, 0.3, 0.05, { vib: [6, 20] }); },
+  tick(i) { const f = 1046 * Math.pow(2, ((i || 0) % 8) * 2 / 12); tone('sine', f, f, 0, 0.09, 0.045); tone('sine', f * 2, f * 2, 0.02, 0.08, 0.02); },
+  pop(n) { const b = 523.25 * Math.pow(2, ((n || 1) - 1) * 4 / 12); tone('triangle', b, b * 1.5, 0, 0.16, 0.2, { glide: 0.06 }); tone('sine', b * 2, b * 2, 0.03, 0.12, 0.05); },
+  jingle() {
+    [523.25, 659.25, 783.99, 1046.5].forEach((f, i) => { const d = i === 3 ? 0.5 : 0.18; tone('triangle', f, f, i * 0.11, d, 0.18); tone('sine', f * 2, f * 2, i * 0.11, d, 0.04); });
+    [1568, 2093, 2637].forEach((f, i) => tone('sine', f, f, 0.55 + i * 0.07, 0.15, 0.035));
+  },
+  chime() { tone('triangle', 659.25, 659.25, 0, 0.18, 0.15); tone('triangle', 987.77, 987.77, 0.12, 0.35, 0.15); },
+  star(i) { const f = 784 * Math.pow(2, STAR_STEPS[(i || 0) % 10] / 12); tone('sine', f, f, 0, 0.22, 0.08); tone('triangle', f * 1.5, f * 1.5, 0.04, 0.2, 0.035); },
+  sparkle() { [1760, 2217, 2637].forEach((f, i) => tone('sine', f, f, i * 0.06, 0.12, 0.04)); },
+  fanfare() {
+    [523.25, 659.25, 783.99, 1046.5, 1318.5, 1568].forEach((f, i) => tone('triangle', f, f, i * 0.12, 0.22, 0.15));
+    [523.25, 659.25, 783.99, 1046.5].forEach(f => tone('triangle', f, f, 0.8, 0.9, 0.07));
+  }
+};
+
+/* ======================= VOICE (speechSynthesis) ======================= */
+const hasSpeech = 'speechSynthesis' in window && 'SpeechSynthesisUtterance' in window;
+let voice = null, lastSpokeGT = -99, speakTimer = 0;
+function pickVoice() {
+  const vs = (hasSpeech && speechSynthesis.getVoices()) || [];
+  const en = vs.filter(v => /^en([-_]|$)/i.test(v.lang));
+  const prefs = ['Samantha', 'Google US English', 'Microsoft Aria', 'Microsoft Jenny', 'Karen', 'Tessa', 'Moira', 'Serena', 'Microsoft Zira', 'Google UK English Female', 'Fiona', 'Victoria'];
+  for (const p of prefs) { const v = en.find(x => x.name.indexOf(p) >= 0); if (v) return v; }
+  return en.find(v => /female|woman|girl/i.test(v.name)) || en.find(v => /en-US/i.test(v.lang)) || en[0] || null;
+}
+if (hasSpeech) { voice = pickVoice(); speechSynthesis.onvoiceschanged = () => { voice = pickVoice(); }; }
+function say(text, opt) {
+  if (!text) return;
+  lastSpokeGT = gt;
+  if (S.muted || !hasSpeech) return;
+  try {
+    const u = new SpeechSynthesisUtterance(text);
+    u.rate = 0.85; u.pitch = 1.2; u.volume = 1;
+    if (voice) { u.voice = voice; u.lang = voice.lang; } else u.lang = 'en-US';
+    if (opt && opt.queue) { speechSynthesis.speak(u); return; }
+    speechSynthesis.cancel(); clearTimeout(speakTimer);
+    speakTimer = setTimeout(() => { try { speechSynthesis.speak(u); } catch (e) {} }, 70);
+  } catch (e) {}
+}
+function cancelSpeech() { clearTimeout(speakTimer); if (hasSpeech) try { speechSynthesis.cancel(); } catch (e) {} }
+function speaking() { return hasSpeech && (speechSynthesis.speaking || speechSynthesis.pending); }
+function unlock() {
+  audio();
+  if (hasSpeech && !S.speechUnlocked) { try { const u = new SpeechSynthesisUtterance(' '); u.volume = 0; speechSynthesis.speak(u); } catch (e) {} S.speechUnlocked = true; }
+  S.speechReady = true;
+}
+
+/* ======================= CAMERA + MOTION LOOP ======================= */
+let stream = null, det = null, dcv = null, dctx = null, detRaf = 0, detOn = false, detLast = 0, detErr = 0;
+async function startCamera(run) {
+  stopCamera();
+  if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) throw Object.assign(new Error('no camera api'), { name: 'NoMedia' });
+  const size = { width: { ideal: 640 }, height: { ideal: 480 } };
+  const base = Object.assign({ facingMode: 'user' }, size);
+  let s;
+  try { s = await navigator.mediaDevices.getUserMedia({ audio: false, video: S.camId ? Object.assign({ deviceId: { exact: S.camId } }, size) : base }); }
+  catch (e) {
+    if (S.camId && (e.name === 'OverconstrainedError' || e.name === 'NotFoundError')) { S.camId = ''; s = await navigator.mediaDevices.getUserMedia({ audio: false, video: base }); }
+    else throw e;
+  }
+  if (run !== S.run) { s.getTracks().forEach(t => t.stop()); throw Object.assign(new Error('stale'), { name: 'Stale' }); }
+  stream = s; video.srcObject = s; video.muted = true;
+  try { await video.play(); } catch (e) {}
+  await new Promise((res) => { if (video.videoWidth) return res(); const done = () => { video.removeEventListener('loadedmetadata', done); res(); }; video.addEventListener('loadedmetadata', done); setTimeout(res, 3000); });
+  video.classList.add('on');
+  s.getVideoTracks().forEach(t => t.addEventListener('ended', () => { if (stream === s) cameraLost(); }));
+  startDetect();
+}
+function stopCamera() {
+  stopDetect();
+  if (stream) { stream.getTracks().forEach(t => t.stop()); stream = null; }
+  try { video.pause(); } catch (e) {}
+  video.srcObject = null; video.classList.remove('on');
+}
+function startDetect() { if (detOn) return; detOn = true; detErr = 0; detRaf = requestAnimationFrame(detTick); }
+function stopDetect() { detOn = false; cancelAnimationFrame(detRaf); det = null; }
+function detTick() {
+  if (!detOn) return;
+  detRaf = requestAnimationFrame(detTick);
+  if (S.hidden || !stream || video.readyState < 2 || !video.videoWidth) return;
+  const now = performance.now(); if (now - detLast < 64) return; detLast = now;
+  const vw = video.videoWidth, vh = video.videoHeight, dw = 96, dh = Math.max(24, Math.round(dw * vh / vw));
+  try {
+    if (!det || det.w !== dw || det.h !== dh) {
+      det = new MotionDetector(dw, dh);
+      if (!dcv) dcv = document.createElement('canvas');
+      dcv.width = dw; dcv.height = dh; dctx = dcv.getContext('2d', { willReadFrequently: true });
+    }
+    dctx.drawImage(video, 0, 0, dw, dh);
+    det.process(dctx.getImageData(0, 0, dw, dh).data);
+    detErr = 0; onMotionSample(det.frac, det.flat);
+  } catch (e) { if (++detErr > 30) { console.warn(e); cameraLost(); } }
+}
+function freezeThr() {
+  if (S.mode === 'touch') return 0.1;
+  return clamp(0.25 * Math.max(0.02, motion.danceE) * DIFF[S.diff].k, 0.008, 0.07);
+}
+function onMotionSample(frac, flat) {
+  motion.frac = frac; motion.flat = !!flat;
+  if (frac > 0.003) motion.lastActive = gt;
+  if (S.screen !== 'game' || isPaused()) return;
+  if (R.phase === 'dance') {
+    const e = motion.danceE; motion.danceE = frac > e ? e + 0.3 * (frac - e) : e + 0.03 * (frac - e);
+  } else if (R.phase === 'freeze' && R.fz) {
+    const fz = R.fz;
+    if (fz.grace > 0 || fz.wob || flat) { fz.over = 0; return; }
+    const thr = freezeThr();
+    if (frac > thr * 2.2) fz.over += 2; else if (frac > thr) fz.over += 1; else if (frac < thr * 0.6) fz.over = 0;
+    if (frac > motion.peak) motion.peak = frac;
+    if (fz.over >= 3) onWobble();
+  }
+}
+
+/* ======================= SCREENS & PERMISSION ======================= */
+const PERM = {
+  ask:      { icon: '📷', label: 'Camera, please!', btns: false, note: 'Tap “Allow” so Pingo can see your child dance and freeze. Video stays on this device.', line: "Hi! I'm Pingo! I want to see you dance! Ask a grown-up to let me use the camera." },
+  denied:   { icon: '🙈', label: 'I can’t see you', btns: true, note: 'The camera was blocked. Tap the camera icon in the address bar, choose Allow, then tap 🔄. Or play with touch.', line: "Oh! I can't see you. That's okay! Ask a grown-up for help, or tap the hand to play with touch!" },
+  nocam:    { icon: '🙈', label: 'No camera', btns: true, note: 'No camera was found. Connect one and tap 🔄, or play with touch.', line: "I can't find a camera. That's okay! Tap the hand to play with touch!" },
+  busy:     { icon: '🙈', label: 'Camera is busy', btns: true, note: 'Another app or tab is using the camera. Close it, then tap 🔄. Or play with touch.', line: "The camera is busy. Ask a grown-up for help, or tap the hand to play with touch!" },
+  insecure: { icon: '🙈', label: 'No camera here', btns: true, note: 'This browser only allows the camera on https:// pages or localhost. Open the game from a secure address, or play with touch.', line: "I can't use the camera here. That's okay! Tap the hand to play with touch!" }
+};
+function setPerm(kind) {
+  S.permKind = kind; const p = PERM[kind] || PERM.ask;
+  $('#permLabel').textContent = p.label; $('#permNote').textContent = p.note;
+  $('#permBtns').classList.toggle('hidden', !p.btns);
+}
+function errKind(e) {
+  const n = (e && e.name) || '';
+  if (n === 'NotAllowedError' || n === 'PermissionDeniedError' || n === 'SecurityError') return 'denied';
+  if (n === 'NotFoundError' || n === 'DevicesNotFoundError' || n === 'OverconstrainedError') return 'nocam';
+  if (n === 'NotReadableError' || n === 'TrackStartError' || n === 'AbortError') return 'busy';
+  if (n === 'NoMedia') return 'insecure';
+  return 'denied';
+}
+function showScreen(name) {
+  S.screen = name;
+  document.querySelectorAll('.screen').forEach(s => s.classList.toggle('active', s.dataset.screen === name));
+  hud.classList.toggle('game', name === 'game');
+  S.idleRepeats = 0; S.lastInteract = gt;
+  requestAnimationFrame(updateSpot);
+}
+function screenLine() {
+  switch (S.screen) {
+    case 'start': return "Hi! I'm Pingo! Tap the big green play button!";
+    case 'perm': return (PERM[S.permKind] || PERM.ask).line;
+    case 'rest': return 'Great job! Time to drink some water, and rest. Tap play to play again!';
+    case 'finale': return 'Hooray! You got all the sprinkles!';
+    default: return currentInstruction();
+  }
+}
+function sayScreen() { say(screenLine()); }
+function introLine() {
+  return S.mode === 'touch'
+    ? "Let's play Freeze Dance! Wiggle your finger on the screen to dance. When the music stops, take your hands off, and freeze like a statue!"
+    : "Let's play Freeze Dance! Dance when the music plays. When the music stops, freeze like a statue!";
+}
+function currentInstruction() {
+  switch (R.phase) {
+    case 'dance': return S.mode === 'touch' ? 'Dance! Wiggle your finger on the screen! When the music stops, hands off, and freeze!' : 'Dance to the music! When the music stops, freeze like a statue!';
+    case 'freeze': return S.mode === 'touch' ? 'Freeze! Hands off the screen. Stay still like a statue!' : 'Freeze! Stay still, like a statue!';
+    case 'together': return "Let's freeze together!";
+    case 'success': return pick(PRAISE);
+    default: return introLine();
+  }
+}
+
+/* ======================= FLOW ======================= */
+async function goCamera(resume) {
+  const run = ++S.run;
+  S.mode = 'camera';
+  showScreen('perm'); setPerm('ask'); sayScreen();
+  try { await startCamera(run); }
+  catch (e) { if (run !== S.run || e.name === 'Stale') return; console.warn('Camera:', e); setPerm(errKind(e)); sayScreen(); return; }
+  if (run !== S.run) return;
+  if (S.micId) startMic(S.micId).catch(() => { S.micId = ''; });
+  if (resume && R.phase !== 'none' && R.idx < ROUNDS) { showScreen('game'); startDance(); }
+  else startGame();
+}
+function goTouch() { S.run++; S.mode = 'touch'; stopCamera(); startGame(); }
+function cameraLost() {
+  if (S.mode !== 'camera') return;
+  stopCamera(); S.mode = 'touch';
+  if (S.screen === 'game') { say("Oh! The camera stopped. Let's play with touch!"); afterSeg(3.5, () => say(currentInstruction(), { queue: true })); }
+}
+function exitToStart() {
+  S.run++; newSeg(); clearTimers(); Music.stop(); stopCamera(); stopMic(); cancelSpeech();
+  S.panel = false; panel.classList.remove('open');
+  R.phase = 'none'; R.fz = null; parts.length = 0; flyers.length = 0; bursts.length = 0;
+  showScreen('start');
+}
+function level() { return R.idx < 3 ? 1 : R.idx < 7 ? 2 : 3; }
+function startGame() {
+  clearTimers(); newSeg(); Music.stop();
+  R.idx = 0; R.stars = 0; R.phase = 'welcome'; R.phaseT = 0; R.fz = null; R.hint = false; R.misses = 0; R.stepBack = false;
+  ice.stars = 0; ice.init = false; ice.wob = 0; ice.glow = 0; penguin.init = false; penguin.frozen = null; penguin.shh = 0; penguin.cheer = 0;
+  motion.danceE = 0.05; motion.lastActive = gt; parts.length = 0; flyers.length = 0; bursts.length = 0; bigNum = null;
+  buildStars(); showScreen('game');
+  say(introLine());
+  afterSeg(S.mode === 'touch' ? 8 : 6.2, startDance);
+}
+function startDance() {
+  newSeg(); R.phase = 'dance'; R.phaseT = 0; R.nudged = false; R.stepBack = false; R.fz = null; R.hint = false;
+  const d = DIFF[S.diff].dance; R.danceDur = rand(d[0], level() === 1 ? Math.min(d[1], 6) : d[1]);
+  penguin.frozen = null; penguin.cheer = 0; penguin.shh = 0;
+  Music.start(0); burst('🎵', 'Dance!', '#FF8FB8');
+  say(R.idx === 0 ? 'Dance!' : pick(DANCE_LINES));
+}
+function startFreeze() {
+  newSeg(); R.phase = 'freeze'; R.phaseT = 0; R.misses = 0; R.hint = false;
+  R.fz = { grace: 1.0, hold: 0, need: DIFF[S.diff].holds[R.idx], over: 0, wob: false, lastTick: 0 };
+  Music.stop(); sfx.freeze(); motion.peak = 0;
+  penguin.frozen = Object.assign({}, penguin.pose || basePose(), { face: 'wide' });
+  burst('❄️', 'FREEZE!', '#6CC4FF');
+  say('Freeze!');
+}
+function onWobble() {
+  const fz = R.fz; if (R.phase !== 'freeze' || !fz || fz.wob) return;
+  R.misses++; fz.hold = 0; fz.over = 0; fz.wob = true; fz.lastTick = 0;
+  ice.wob = 1; sfx.wobble(); penguin.shh = 1;
+  if (R.misses >= 4) { together(); return; }
+  if (R.misses >= 2) {
+    const first = !R.hint; R.hint = true; fz.need = Math.max(2, fz.need * 0.75);
+    say(first ? "Shhh, freeze like a statue! Watch me. I'm a statue! Don't move, not even a wiggle!" : pick(SHH_LINES));
+    afterSeg(first ? 4.6 : 2.8, resumeHold);
+  } else { say(pick(SHH_LINES)); afterSeg(2.8, resumeHold); }
+}
+function resumeHold() {
+  if (R.phase !== 'freeze' || !R.fz) return;
+  const fz = R.fz; fz.wob = false; fz.grace = 0.8; fz.hold = 0; fz.over = 0; fz.lastTick = 0; penguin.shh = 0;
+}
+function together() {
+  newSeg(); R.phase = 'together'; R.phaseT = 0; penguin.shh = 0; R.fz = null;
+  say("Let's freeze together! Ready?");
+  for (let i = 1; i <= 3; i++) afterSeg(2.0 + (i - 1) * 1.3, () => { say(NUMW[i] + '!'); bigNum = { n: i, t: 0 }; sfx.tick(i * 2); });
+  afterSeg(2.0 + 3 * 1.3 - 0.2, () => freezeSuccess(true));
+}
+function freezeSuccess(tog) {
+  newSeg(); R.phase = 'success'; R.phaseT = 0; R.hint = false; R.fz = null;
+  sfx.jingle(); confettiBurst(); ice.glow = 1; penguin.frozen = null; penguin.shh = 0; penguin.cheer = 1;
+  say(pick(PRAISE));
+  launchStar(); crystalsBurst();
+  afterSeg(3.8, () => { R.idx++; if (R.idx >= ROUNDS) finale(); else startDance(); });
+}
+function finale() {
+  newSeg(); R.phase = 'finale'; R.phaseT = 0; R.finStars = []; R.stepBack = false;
+  showScreen('finale'); sfx.fanfare(); confettiRain(160); penguin.frozen = null; penguin.cheer = 1;
+  say('Hooray! You got all ten sprinkles! You are a freeze dance champion!');
+  for (let i = 0; i < ROUNDS; i++) afterSeg(0.6 + i * 0.2, () => { R.finStars[i] = gt; sfx.star(i); });
+  afterSeg(1.6, () => Music.start(0));
+  afterSeg(9.5, goRest);
+}
+function goRest() {
+  newSeg(); S.run++; Music.stop(); stopCamera(); stopMic(); R.phase = 'none'; R.fz = null;
+  showScreen('rest'); sfx.chime();
+  say('Great job! Time to drink some water, and rest. Tap play to play again!');
+}
+function setDifficulty(v) { if (DIFF[v]) S.diff = v; }
+
+/* ======================= STARS, PARTICLES, BURSTS ======================= */
+const ice = { x: 0, y: 0, s: 100, wob: 0, glow: 0, stars: 0, init: false, lock: false };
+const penguin = { x: 0, y: 0, s: 100, init: false, frozen: null, shh: 0, cheer: 0, pose: null };
+const parts = [], flyers = [], bursts = [];
+let bigNum = null;
+function buildStars() {
+  starbar.innerHTML = '';
+  for (let i = 0; i < ROUNDS; i++) { const s = document.createElement('span'); s.className = 'slot'; s.textContent = '⭐'; starbar.appendChild(s); }
+}
+function sprinklePos(i) { const p = SPRINKLES[i % SPRINKLES.length]; return { x: ice.x + p[0] * ice.s, y: ice.y + p[1] * ice.s }; }
+function launchStar() {
+  const idx = R.stars++; const b = badgePos(), tgt = sprinklePos(idx);
+  flyers.push({ x0: b.x, y0: b.y, x1: tgt.x, y1: tgt.y, t: 0, dur: 1.0, idx });
+}
+function burst(e, label, color) { bursts.push({ e, label, color, t: 0 }); }
+function addConf(x, y, n, power) {
+  for (let i = 0; i < n && parts.length < 520; i++) {
+    const a = rand(-Math.PI * 0.95, -Math.PI * 0.05), sp = rand(0.35, 1.0) * (power || 1) * H;
+    parts.push({ k: 'c', x, y, vx: Math.cos(a) * sp * 0.8, vy: Math.sin(a) * sp, g: H * 1.5, rot: rand(0, 6), vr: rand(-8, 8),
+      w: rand(0.01, 0.02) * H, h: rand(0.006, 0.012) * H, col: pick(PALETTE), circ: Math.random() < 0.35, life: 0, max: rand(1.8, 2.8) });
+  }
+}
+function confettiBurst() { addConf(W * 0.2, H * 0.65, 60, 1.1); addConf(W * 0.8, H * 0.65, 60, 1.1); addConf(ice.x, ice.y - ice.s * 0.6, 40, 0.8); }
+function confettiRain(n) {
+  for (let i = 0; i < n && parts.length < 520; i++) parts.push({ k: 'c', x: rand(0, W), y: rand(-H * 0.4, 0), vx: rand(-0.05, 0.05) * H, vy: rand(0.1, 0.3) * H,
+    g: H * 0.25, rot: rand(0, 6), vr: rand(-6, 6), w: rand(0.01, 0.02) * H, h: rand(0.006, 0.012) * H, col: pick(PALETTE), circ: Math.random() < 0.35, life: 0, max: rand(3, 4.5) });
+}
+function addEmojiParts(e, x, y, n, size, up) {
+  for (let i = 0; i < n && parts.length < 520; i++) parts.push({ k: 'e', e, x: x + rand(-1, 1) * size, y: y + rand(-0.5, 0.5) * size,
+    vx: rand(-0.12, 0.12) * H, vy: (up ? rand(-0.35, -0.15) : rand(-0.2, 0.05)) * H, g: H * 0.1, rot: rand(-0.4, 0.4), vr: rand(-1, 1), w: size * rand(0.6, 1), life: 0, max: rand(1.0, 1.6) });
+}
+function crystalsBurst() {
+  const kb = kidBox();
+  if (kb) { addEmojiParts('❄️', kb.x + kb.w / 2, kb.y + kb.h * 0.3, 10, Math.min(W, H) * 0.06, true); }
+  addEmojiParts('✨', ice.x, ice.y - ice.s * 0.7, 8, ice.s * 0.12, true);
+}
+
+/* ======================= MICROPHONE (optional bonus) ======================= */
+let micStream = null, micAnalyser = null, micBuf = null, micLevel = 0, micLoud = 0, micLastFx = -9;
+async function startMic(id) {
+  stopMic();
+  const a = audio();
+  if (!a || !navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) throw new Error('no mic api');
+  const c = (id && id !== 'any') ? { deviceId: { exact: id }, echoCancellation: true } : { echoCancellation: true };
+  micStream = await navigator.mediaDevices.getUserMedia({ audio: c, video: false });
+  const src = a.createMediaStreamSource(micStream);
+  micAnalyser = a.createAnalyser(); micAnalyser.fftSize = 512; micBuf = new Uint8Array(micAnalyser.fftSize);
+  src.connect(micAnalyser);
+}
+function stopMic() { if (micStream) { micStream.getTracks().forEach(t => t.stop()); micStream = null; } micAnalyser = null; }
+function updateMic(dt) {
+  if (!micAnalyser || S.screen !== 'game' || R.phase !== 'dance') return;
+  micAnalyser.getByteTimeDomainData(micBuf);
+  let s = 0; for (let i = 0; i < micBuf.length; i++) { const v = (micBuf[i] - 128) / 128; s += v * v; }
+  micLevel += (Math.sqrt(s / micBuf.length) - micLevel) * 0.3;
+  micLoud = (!speaking() && micLevel > 0.09) ? micLoud + dt : Math.max(0, micLoud - dt);
+  if (micLoud > 0.25 && gt - micLastFx > 1.2) { micLastFx = gt; micLoud = 0; const b = badgePos(); addEmojiParts('🎵', b.x, b.y, 5, b.r * 0.6, true); sfx.sparkle(); }
+}
+
+/* ======================= UPDATE ======================= */
+function update(dt) {
+  gt += dt;
+  runTimers();
+  if (S.screen === 'game') {
+    R.phaseT += dt;
+    const cam = S.mode === 'camera' && !!stream;
+    if (S.mode === 'touch') { S.sampAcc += dt; while (S.sampAcc > 1 / 15) { S.sampAcc -= 1 / 15; onMotionSample(gt - S.lastTouchGT < 0.2 ? 0.3 : 0, false); } }
+    const quiet = gt - motion.lastActive;
+    R.stepBack = cam && (R.phase === 'dance' || R.phase === 'welcome') && (quiet > 5 || (motion.flat && R.phaseT > 1));
+    if (R.stepBack && !speaking() && gt - R.lastStepSay > 9) { say('Step back so I can see you! Then dance!'); R.lastStepSay = gt; }
+    if (R.phase === 'dance') {
+      if (cam && !R.nudged && R.phaseT > 3.5 && quiet > 3 && !R.stepBack && !speaking()) { R.nudged = true; say(pick(['Dance! Wiggle, wiggle!', 'Come on, dance with me!'])); }
+      if (R.phaseT >= R.danceDur) startFreeze();
+    } else if (R.phase === 'freeze' && R.fz) {
+      const fz = R.fz;
+      if (fz.grace > 0) fz.grace -= dt;
+      else if (!fz.wob) {
+        fz.hold += dt;
+        const sec = Math.floor(fz.hold);
+        if (sec > fz.lastTick && sec < fz.need) { fz.lastTick = sec; sfx.tick(sec); }
+        if (fz.hold >= fz.need) freezeSuccess(false);
+      }
+    }
+    ice.lock = R.phase === 'freeze' || R.phase === 'together';
+  } else if (S.screen === 'finale') {
+    R.phaseT += dt;
+  } else if (S.speechReady && S.idleRepeats < 2 && gt - S.lastInteract > 8 && gt - lastSpokeGT > 8 && !speaking()) {
+    S.idleRepeats++; sayScreen();
+  }
+  Music.setDuck(speaking() ? 0.35 : 1);
+  updateMic(dt);
+  updateIce(dt);
+  penguin.shh = Math.max(0, penguin.shh - dt * 0.3);
+  penguin.cheer = Math.max(0, penguin.cheer - dt * 0.25);
+  if (bigNum) { bigNum.t += dt; if (bigNum.t > 1.2) bigNum = null; }
+  for (let i = bursts.length - 1; i >= 0; i--) { bursts[i].t += dt; if (bursts[i].t > 1.5) bursts.splice(i, 1); }
+  for (let i = parts.length - 1; i >= 0; i--) {
+    const p = parts[i]; p.life += dt;
+    if (p.life > p.max) { parts.splice(i, 1); continue; }
+    p.vy += p.g * dt; p.vx *= Math.pow(0.5, dt);
+    if (p.k === 'c' && p.vy > 0.32 * H) p.vy = 0.32 * H;
+    p.x += (p.vx + (p.k === 'c' ? Math.sin(p.life * 5 + p.rot) * 0.04 * H : 0)) * dt; p.y += p.vy * dt; p.rot += p.vr * dt;
+  }
+  for (let i = flyers.length - 1; i >= 0; i--) {
+    const f = flyers[i]; f.t += dt;
+    const tgt = sprinklePos(f.idx); f.x1 = tgt.x; f.y1 = tgt.y;
+    if (f.t >= f.dur) { flyers.splice(i, 1); ice.stars = Math.max(ice.stars, f.idx + 1); const s = starbar.children[f.idx]; if (s) s.classList.add('on'); sfx.star(f.idx); addEmojiParts('✨', f.x1, f.y1, 4, ice.s * 0.1, true); }
+  }
+}
+function iceTarget() {
+  const s = clamp(Math.min(H * 0.26, W * 0.3), 60, 440);
+  const kb = S.mode === 'camera' ? kidBox() : null;
+  let x, y;
+  if (kb) {
+    const side = (kb.x + kb.w / 2) < W / 2 ? 1 : -1;
+    x = kb.x + kb.w / 2 + side * (kb.w / 2 + s * 0.42); y = kb.y + kb.h / 2 + s * 0.6;
+  } else { x = Math.min(W * 0.74, W - s * 0.45); y = H * 0.68; }
+  x = clamp(x, s * 0.42, W - s * 0.42); y = clamp(y, starBottom + s * 1.3, H - insets.b - s * 0.05);
+  if (y > H * 0.62) x = Math.max(x, insets.l + Math.min(H * 0.3, W * 0.36) * 0.9 + s * 0.4);
+  return { x, y, s };
+}
+function updateIce(dt) {
+  const t = iceTarget();
+  if (!ice.init) { ice.x = t.x; ice.y = t.y; ice.s = t.s; ice.init = true; }
+  if (!ice.lock) { const k = 1 - Math.exp(-dt * 3); ice.x += (t.x - ice.x) * k; ice.y += (t.y - ice.y) * k; }
+  ice.s += (t.s - ice.s) * (1 - Math.exp(-dt * 4));
+  ice.wob = Math.max(0, ice.wob - dt * 0.8);
+  ice.glow = Math.max(0, ice.glow - dt * 0.5);
+}
+
+/* ======================= DRAWING HELPERS ======================= */
+const emojiCache = new Map();
+function emojiImg(e) {
+  let c = emojiCache.get(e); if (c) return c;
+  c = document.createElement('canvas'); const s = 192; c.width = c.height = s;
+  const g = c.getContext('2d');
+  if (g) { g.font = `${s * 0.78}px ${EMOJI_FONT}`; g.textAlign = 'center'; g.textBaseline = 'middle'; g.fillText(e, s / 2, s / 2 + s * 0.05); }
+  emojiCache.set(e, c); return c;
+}
+function drawEmoji(e, x, y, size, rot, sx, sy, alpha) {
+  if (!(size > 1)) return;
+  ctx.save(); ctx.translate(x, y); if (rot) ctx.rotate(rot); ctx.scale(sx || 1, sy || 1);
+  if (alpha != null) ctx.globalAlpha *= alpha;
+  ctx.drawImage(emojiImg(e), -size / 2, -size / 2, size, size); ctx.restore();
+}
+function rr(x, y, w, h, r) {
+  r = Math.max(0, Math.min(r, w / 2, h / 2));
+  ctx.beginPath(); ctx.moveTo(x + r, y); ctx.arcTo(x + w, y, x + w, y + h, r); ctx.arcTo(x + w, y + h, x, y + h, r);
+  ctx.arcTo(x, y + h, x, y, r); ctx.arcTo(x, y, x + w, y, r); ctx.closePath();
+}
+function circle(x, y, r, fill, stroke, lw) { ctx.beginPath(); ctx.arc(x, y, Math.max(0.5, r), 0, TAU); if (fill) { ctx.fillStyle = fill; ctx.fill(); } if (stroke) { ctx.lineWidth = lw; ctx.strokeStyle = stroke; ctx.stroke(); } }
+function oval(x, y, rx, ry, fill, stroke, lw, rot) { ctx.beginPath(); ctx.ellipse(x, y, Math.max(0.5, rx), Math.max(0.5, ry), rot || 0, 0, TAU); if (fill) { ctx.fillStyle = fill; ctx.fill(); } if (stroke) { ctx.lineWidth = lw; ctx.strokeStyle = stroke; ctx.stroke(); } }
+function pillText(text, x, y, size, bg, fg, border) {
+  ctx.font = `700 ${size}px ${UI_FONT}`;
+  const w = ctx.measureText(text).width + size * 1.1, h = size * 1.45;
+  rr(x - w / 2, y - h / 2, w, h, h / 2); ctx.fillStyle = bg; ctx.fill();
+  if (border) { ctx.lineWidth = Math.max(2, size * 0.12); ctx.strokeStyle = border; ctx.stroke(); }
+  ctx.fillStyle = fg; ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.fillText(text, x, y + size * 0.05);
+}
+
+/* ======================= PINGO, THE PENGUIN ======================= */
+const PG = { body: '#2F3B63', statue: '#6B7BB0', line: '#1E2747', belly: '#FFFFFF', beak: '#FFA53B', beakDark: '#E07F1E', cheek: 'rgba(255,120,160,0.45)', eye: '#1E2747', hat: '#FF8FB8', hatLine: '#E86A9A', pom: '#FFE066' };
+function basePose() { return { by: 0, dx: 0, tilt: 0, fl: 0.3, fr: 0.3, feet: 0, face: 'smile', squash: 1, look: 0 }; }
+function dancePose(beat) {
+  const P = basePose(), ph = beat * Math.PI, bar = Math.floor(beat / 4) % 4, sw = Math.sin(beat * Math.PI / 2);
+  P.by = -0.1 * Math.abs(Math.sin(ph)); P.dx = 0.07 * sw; P.tilt = 0.13 * sw; P.feet = Math.sin(ph); P.look = 0.6 * sw;
+  if (bar === 2) { P.fl = 2.5 + 0.3 * Math.sin(ph * 2); P.fr = 2.5 + 0.3 * Math.cos(ph * 2); }
+  else { P.fl = 1.0 + 0.8 * Math.sin(ph + 0.3); P.fr = 1.0 + 0.8 * Math.sin(ph + Math.PI + 0.3); }
+  P.face = 'grin'; P.squash = 1 + 0.04 * Math.sin(ph * 2);
+  return P;
+}
+function cheerPose(time) { const P = basePose(), ph = time * TAU / 0.7; P.by = -0.16 * Math.abs(Math.sin(ph / 2)); P.fl = 2.6 + 0.25 * Math.sin(ph); P.fr = 2.6 - 0.25 * Math.sin(ph); P.tilt = 0.12 * Math.sin(ph / 2); P.face = 'grin'; return P; }
+function wavePose(time) { const P = basePose(); P.fr = 2.4 + 0.35 * Math.sin(time * TAU / 0.9); P.by = -0.02 * Math.abs(Math.sin(time * TAU / 1.8)); return P; }
+function idlePose(time) { const P = basePose(); P.squash = 1 + 0.015 * Math.sin(time * TAU / 2.4); return P; }
+function statuePose() { return Object.assign(basePose(), { face: 'wide', fl: 2.4, fr: 1.3, tilt: -0.08, feet: 0.8 }); }
+function shhPose(base) { const P = Object.assign({}, base); P.face = 'shh'; P.fr = -2.05; P.fl = 0.4; P.by = 0; P.tilt = 0.05; P.dx = 0; P.squash = 1; return P; }
+function drawPenguin(x, y, s, P, time, bubble, glow, statue) {
+  if (!(s > 8)) return;
+  ctx.save();
+  if (glow) {
+    const gy = y - 0.45 * s, gr = ctx.createRadialGradient(x, gy, s * 0.1, x, gy, s * 0.85);
+    gr.addColorStop(0, 'rgba(255,240,150,0.85)'); gr.addColorStop(1, 'rgba(255,240,150,0)');
+    ctx.fillStyle = gr; ctx.beginPath(); ctx.arc(x, gy, s * 0.85, 0, TAU); ctx.fill();
+  }
+  const lift = Math.min(0, P.by || 0) * s, ow = Math.max(1.5, 0.02 * s), sq = P.squash || 1;
+  const shK = Math.max(0.4, 1 + lift / (s * 0.9));
+  oval(x + (P.dx || 0) * s, y, 0.3 * s * shK, 0.05 * s * shK, 'rgba(47,59,99,0.16)');
+  ctx.translate(x + (P.dx || 0) * s, y); ctx.rotate(P.tilt || 0); ctx.translate(0, lift);
+  for (const sd of [-1, 1]) oval(sd * (0.12 + 0.03 * Math.abs(P.feet || 0)) * s, -0.015 * s + (sd * (P.feet || 0) > 0 ? -0.01 * s : 0), 0.1 * s, 0.045 * s, PG.beak, PG.beakDark, ow * 0.8);
+  const ry = 0.42 * s * sq, rx = 0.3 * s * (1 + (1 - sq) * 0.8), cy = -ry;
+  oval(0, cy, rx, ry, statue ? PG.statue : PG.body, PG.line, ow);
+  oval(0, cy + ry * 0.2, rx * 0.62, ry * 0.68, PG.belly);
+  const ht = cy - ry;
+  ctx.beginPath(); ctx.moveTo(-0.12 * s, ht + 0.03 * s); ctx.lineTo(0.12 * s, ht + 0.03 * s); ctx.lineTo(0.03 * s, ht - 0.26 * s); ctx.closePath();
+  ctx.fillStyle = PG.hat; ctx.fill(); ctx.lineWidth = ow; ctx.lineJoin = 'round'; ctx.strokeStyle = PG.hatLine; ctx.stroke();
+  circle(0.03 * s, ht - 0.26 * s, 0.045 * s, PG.pom, PG.hatLine, ow * 0.7);
+  const ey = cy - ry * 0.38, look = (P.look || 0) * 0.02 * s, blink = (time % 4.1) < 0.12 && P.face !== 'wide';
+  for (const sd of [-1, 1]) {
+    const ex = sd * 0.1 * s;
+    if (P.face === 'shh' || P.face === 'happy' || blink) {
+      ctx.beginPath(); ctx.arc(ex, ey + 0.015 * s, 0.06 * s, Math.PI * 1.15, Math.PI * 1.85); ctx.lineWidth = Math.max(2, 0.022 * s); ctx.lineCap = 'round'; ctx.strokeStyle = '#fff'; ctx.stroke();
+    } else {
+      const wide = P.face === 'wide', er = wide ? 0.088 * s : 0.075 * s, pr = wide ? 0.028 * s : 0.038 * s;
+      circle(ex, ey, er, '#fff', PG.line, ow * 0.6);
+      circle(ex + look, ey + 0.012 * s, pr, PG.eye); circle(ex + look + 0.012 * s, ey - 0.008 * s, 0.011 * s, '#fff');
+    }
+    oval(sd * 0.19 * s, ey + 0.12 * s, 0.045 * s, 0.028 * s, PG.cheek);
+  }
+  const by = ey + 0.1 * s;
+  ctx.lineWidth = ow * 0.7; ctx.strokeStyle = PG.beakDark; ctx.lineJoin = 'round';
+  if (P.face === 'wide') circle(0, by + 0.045 * s, 0.045 * s, PG.beak, PG.beakDark, ow * 0.7);
+  else {
+    ctx.beginPath(); ctx.moveTo(-0.07 * s, by); ctx.lineTo(0.07 * s, by); ctx.lineTo(0, by + (P.face === 'grin' ? 0.05 : 0.08) * s); ctx.closePath(); ctx.fillStyle = PG.beak; ctx.fill(); ctx.stroke();
+    if (P.face === 'grin') { ctx.beginPath(); ctx.moveTo(-0.055 * s, by + 0.04 * s); ctx.lineTo(0.055 * s, by + 0.04 * s); ctx.lineTo(0, by + 0.1 * s); ctx.closePath(); ctx.fillStyle = PG.beakDark; ctx.fill(); }
+  }
+  for (const sd of [-1, 1]) {
+    const a = sd < 0 ? P.fl : P.fr, sx0 = sd * rx * 0.9, sy0 = cy - ry * 0.1, L = 0.3 * s;
+    const dx = Math.sin(a) * sd, dy = Math.cos(a);
+    oval(sx0 + dx * L / 2, sy0 + dy * L / 2, L / 2, 0.055 * s, statue ? PG.statue : PG.body, PG.line, ow, Math.atan2(dy, dx));
+  }
+  ctx.restore();
+  if (statue) { [[-0.42, -0.95], [0.46, -0.6], [-0.3, -0.2]].forEach(([ox, oy], i) => drawEmoji('❄️', x + ox * s, y + oy * s + Math.sin(time * 1.5 + i) * 0.02 * s, 0.13 * s, time * 0.4 + i, 1, 1, 0.9)); }
+  if (bubble) {
+    const lw = Math.max(1.5, 0.014 * s);
+    circle(x + 0.25 * s, y - 0.95 * s, 0.03 * s, '#fff', '#CFE6FF', lw);
+    circle(x + 0.33 * s, y - 1.05 * s, 0.05 * s, '#fff', '#CFE6FF', lw);
+    const bx = x + 0.47 * s, by2 = y - 1.2 * s, r = 0.18 * s;
+    circle(bx, by2, r, '#fff', '#CFE6FF', Math.max(2, 0.018 * s));
+    drawEmoji(bubble, bx, by2, r * 1.4);
+  }
+}
+
+/* ======================= THE ICE CREAM CHARACTER ======================= */
+const IC = { cone: '#EBA95B', coneLine: '#C47F3A', waffle: 'rgba(170,105,45,0.45)', scoop: ['#FFB3C7', '#B5F0C8', '#FFF3C2'], scoopLine: ['#F08CA8', '#86D9A4', '#F2D97E'], cherry: '#FF5C7A', cherryLine: '#D9405F', face: '#5B3A6B' };
+const DOTS = [[-0.14, -0.6, '#6CC4FF'], [0.12, -0.44, '#B79CFF'], [-0.05, -0.8, '#FF9F80'], [0.14, -0.78, '#6CC4FF'], [0.07, -1.03, '#FF8FB8'], [-0.1, -0.96, '#7FD99A'], [0.19, -0.6, '#FFE066'], [-0.18, -0.44, '#7EE0D6']];
+function drawIceCream(x, y, s, time, o) {
+  o = o || {};
+  if (!(s > 6)) return;
+  const stars = o.stars != null ? o.stars : ice.stars, face = o.face || 'smile', wob = o.wob || 0, glow = o.glow || 0, ow = Math.max(1.5, 0.018 * s);
+  oval(x, y + 0.03 * s, 0.22 * s, 0.045 * s, 'rgba(47,59,99,0.16)');
+  ctx.save(); ctx.translate(x, y); ctx.rotate(Math.sin(time * 11) * 0.13 * wob);
+  if (glow > 0) { const gr = ctx.createRadialGradient(0, -0.7 * s, s * 0.1, 0, -0.7 * s, s * 0.8); gr.addColorStop(0, `rgba(255,240,150,${0.85 * glow})`); gr.addColorStop(1, 'rgba(255,240,150,0)'); ctx.fillStyle = gr; ctx.beginPath(); ctx.arc(0, -0.7 * s, s * 0.8, 0, TAU); ctx.fill(); }
+  ctx.beginPath(); ctx.moveTo(0, 0); ctx.lineTo(-0.215 * s, -0.47 * s); ctx.quadraticCurveTo(0, -0.55 * s, 0.215 * s, -0.47 * s); ctx.closePath();
+  ctx.fillStyle = IC.cone; ctx.fill(); ctx.lineWidth = ow; ctx.lineJoin = 'round'; ctx.strokeStyle = IC.coneLine; ctx.stroke();
+  ctx.save(); ctx.clip(); ctx.strokeStyle = IC.waffle; ctx.lineWidth = Math.max(1, 0.012 * s);
+  for (let k = -5; k <= 5; k++) { ctx.beginPath(); ctx.moveTo(k * 0.09 * s - 0.5 * s, 0.1 * s); ctx.lineTo(k * 0.09 * s + 0.3 * s, -0.7 * s); ctx.stroke(); ctx.beginPath(); ctx.moveTo(k * 0.09 * s + 0.5 * s, 0.1 * s); ctx.lineTo(k * 0.09 * s - 0.3 * s, -0.7 * s); ctx.stroke(); }
+  ctx.restore();
+  circle(0, -0.52 * s, 0.24 * s, IC.scoop[0], IC.scoopLine[0], ow);
+  circle(0, -0.76 * s, 0.21 * s, IC.scoop[1], IC.scoopLine[1], ow);
+  circle(0, -0.98 * s, 0.18 * s, IC.scoop[2], IC.scoopLine[2], ow);
+  circle(-0.08 * s, -1.05 * s, 0.045 * s, 'rgba(255,255,255,0.55)');
+  ctx.beginPath(); ctx.moveTo(0, -1.15 * s); ctx.quadraticCurveTo(0.04 * s, -1.25 * s, 0.09 * s, -1.3 * s); ctx.lineWidth = ow; ctx.strokeStyle = '#7CB36B'; ctx.lineCap = 'round'; ctx.stroke();
+  circle(0, -1.2 * s, 0.055 * s, IC.cherry, IC.cherryLine, ow * 0.8); circle(-0.018 * s, -1.22 * s, 0.014 * s, 'rgba(255,255,255,0.8)');
+  DOTS.forEach(([dx, dy, col]) => circle(dx * s, dy * s, 0.018 * s, col));
+  const ey = -0.57 * s, fl = Math.max(2, 0.022 * s);
+  ctx.strokeStyle = IC.face; ctx.lineWidth = fl; ctx.lineCap = 'round';
+  for (const sd of [-1, 1]) {
+    const ex = sd * 0.085 * s;
+    if (face === 'happy') { ctx.beginPath(); ctx.arc(ex, ey + 0.015 * s, 0.045 * s, Math.PI * 1.15, Math.PI * 1.85); ctx.stroke(); }
+    else if (face === 'wob') { ctx.beginPath(); ctx.moveTo(ex - 0.035 * s, ey - 0.03 * s); ctx.lineTo(ex + 0.035 * s, ey + 0.03 * s); ctx.moveTo(ex + 0.035 * s, ey - 0.03 * s); ctx.lineTo(ex - 0.035 * s, ey + 0.03 * s); ctx.stroke(); }
+    else { circle(ex, ey, face === 'focus' ? 0.03 * s : 0.036 * s, IC.face); circle(ex + 0.012 * s, ey - 0.012 * s, 0.011 * s, '#fff'); }
+    oval(sd * 0.16 * s, ey + 0.08 * s, 0.04 * s, 0.025 * s, 'rgba(255,120,160,0.45)');
+  }
+  const my = ey + 0.08 * s; ctx.beginPath();
+  if (face === 'focus') oval(0, my + 0.01 * s, 0.022 * s, 0.03 * s, IC.face);
+  else if (face === 'wob') { ctx.moveTo(-0.06 * s, my + 0.01 * s); ctx.quadraticCurveTo(-0.03 * s, my - 0.02 * s, 0, my + 0.01 * s); ctx.quadraticCurveTo(0.03 * s, my + 0.04 * s, 0.06 * s, my + 0.01 * s); ctx.stroke(); }
+  else if (face === 'happy') { ctx.moveTo(-0.07 * s, my - 0.01 * s); ctx.quadraticCurveTo(0, my + 0.1 * s, 0.07 * s, my - 0.01 * s); ctx.closePath(); ctx.fillStyle = '#C2496F'; ctx.fill(); }
+  else { ctx.moveTo(-0.05 * s, my); ctx.quadraticCurveTo(0, my + 0.05 * s, 0.05 * s, my); ctx.stroke(); }
+  for (let i = 0; i < Math.min(stars, SPRINKLES.length); i++) { const p = SPRINKLES[i]; drawEmoji('⭐', p[0] * s, p[1] * s, 0.11 * s, Math.sin(time * 1.3 + i) * 0.15); }
+  ctx.restore();
+}
+
+/* ======================= SCENE PIECES ======================= */
+let bg = null;
+function buildBg() {
+  bg = document.createElement('canvas'); bg.width = cv.width; bg.height = cv.height;
+  const g = bg.getContext('2d'); if (!g) return;
+  g.setTransform(DPR, 0, 0, DPR, 0, 0);
+  const gr = g.createLinearGradient(0, 0, 0, H); gr.addColorStop(0, '#BFE6FF'); gr.addColorStop(0.55, '#E8F5FF'); gr.addColorStop(1, '#FFE4F1');
+  g.fillStyle = gr; g.fillRect(0, 0, W, H);
+  const m = Math.min(W, H);
+  g.fillStyle = 'rgba(255,230,128,0.35)'; g.beginPath(); g.arc(W * 0.86, H * 0.15, m * 0.13, 0, TAU); g.fill();
+  g.fillStyle = '#FFE680'; g.beginPath(); g.arc(W * 0.86, H * 0.15, m * 0.085, 0, TAU); g.fill();
+  g.fillStyle = '#DDF3FF'; g.beginPath(); g.moveTo(0, H * 0.82); g.quadraticCurveTo(W * 0.25, H * 0.66, W * 0.55, H * 0.8); g.quadraticCurveTo(W * 0.8, H * 0.9, W, H * 0.76); g.lineTo(W, H); g.lineTo(0, H); g.closePath(); g.fill();
+  g.fillStyle = '#F6FBFF'; g.beginPath(); g.moveTo(0, H * 0.92); g.quadraticCurveTo(W * 0.35, H * 0.8, W * 0.7, H * 0.9); g.quadraticCurveTo(W * 0.88, H * 0.95, W, H * 0.88); g.lineTo(W, H); g.lineTo(0, H); g.closePath(); g.fill();
+  for (let i = 0; i < 14; i++) { g.fillStyle = PALETTE[i % PALETTE.length]; g.beginPath(); g.arc((i + 0.5) / 14 * W, H * (0.93 + 0.04 * ((i * 37) % 10) / 10), m * 0.009, 0, TAU); g.fill(); }
+}
+function drawClouds(time) {
+  const m = Math.min(W, H);
+  for (let i = 0; i < 4; i++) {
+    const span = W + m * 0.8, x = ((time * W * 0.012 * (1 + i * 0.35) + i * span / 4) % span) - m * 0.4, y = H * (0.1 + 0.08 * i), r = m * (0.045 + 0.015 * (i % 2));
+    ctx.fillStyle = 'rgba(255,255,255,0.92)';
+    [[0, 0, 1], [1.1, 0.15, 0.85], [-1.05, 0.2, 0.75], [0.3, -0.45, 0.8]].forEach(([ox, oy, k]) => { ctx.beginPath(); ctx.arc(x + ox * r, y + oy * r, r * k, 0, TAU); ctx.fill(); });
+  }
+}
+const FLOAT = [['🎵', 0.08, 0.22], ['❄️', 0.92, 0.3], ['⭐', 0.07, 0.6], ['🎶', 0.93, 0.66], ['❄️', 0.14, 0.88], ['🎵', 0.86, 0.9]];
+function drawFloaters(time) { const m = Math.min(W, H); FLOAT.forEach(([e, x, y], i) => drawEmoji(e, x * W, y * H + Math.sin(time * 1.3 + i) * m * 0.015, m * 0.08, Math.sin(time * 0.9 + i) * 0.12, 1, 1, 0.85)); }
+function drawSpotMascot(time) {
+  if (!spot || !spot.height) return;
+  const s = Math.min(spot.height / 1.25, spot.width / 1.3);
+  const x = spot.left + spot.width / 2 - s * 0.18, y = spot.top + spot.height;
+  let P, bubble = null;
+  if (S.screen === 'perm') { P = S.permKind === 'ask' ? wavePose(time) : idlePose(time); bubble = (PERM[S.permKind] || PERM.ask).icon; }
+  else if (S.screen === 'rest') { P = idlePose(time); bubble = '💧'; }
+  else { P = cheerPose(time); bubble = '🎵'; }
+  drawPenguin(x, y, s, P, time, bubble, false, false);
+  if (S.screen === 'start' || S.screen === 'rest') drawIceCream(x + s * 0.95, y, s * 0.62, time, { stars: S.screen === 'rest' ? R.stars : 3, face: 'smile' });
+}
+function mapPt(nx, ny) {
+  const vw = video.videoWidth, vh = video.videoHeight;
+  if (!vw || !vh) return { x: W - nx * W, y: ny * H };
+  const sc = Math.max(W / vw, H / vh), dw = vw * sc, dh = vh * sc;
+  return { x: W - ((W - dw) / 2 + nx * dw), y: (H - dh) / 2 + ny * dh };
+}
+const KB = { x: 0, y: 0, w: 0, h: 0, init: false };
+function kidBox() { return (S.mode === 'camera' && KB.init) ? KB : null; }
+function updateKidBox(dt) {
+  if (S.mode !== 'camera' || !det || !det.seen || !video.videoWidth) return;
+  const p1 = mapPt(det.cx - det.bw / 2, det.cy - det.bh / 2), p2 = mapPt(det.cx + det.bw / 2, det.cy + det.bh / 2);
+  const w = Math.abs(p2.x - p1.x) * 1.2, h = Math.abs(p2.y - p1.y) * 1.2, x = Math.min(p1.x, p2.x) - w / 12, y = Math.min(p1.y, p2.y) - h / 12;
+  if (!KB.init) { KB.x = x; KB.y = y; KB.w = w; KB.h = h; KB.init = true; return; }
+  const a = 1 - Math.exp(-dt * 6);
+  KB.x += (x - KB.x) * a; KB.y += (y - KB.y) * a; KB.w += (w - KB.w) * a; KB.h += (h - KB.h) * a;
+}
+function drawMirrorFrame() {
+  const m = Math.min(W, H), lw = m * 0.022;
+  const g = ctx.createLinearGradient(0, 0, W, H); g.addColorStop(0, '#FFB3D1'); g.addColorStop(0.5, '#C9B6FF'); g.addColorStop(1, '#9EDCFF');
+  ctx.save(); ctx.lineWidth = lw; ctx.strokeStyle = g; ctx.globalAlpha = 0.9; rr(lw / 2, lw / 2, W - lw, H - lw, m * 0.05); ctx.stroke(); ctx.restore();
+}
+function drawFrost(p) {
+  if (p <= 0.01) return;
+  const m = Math.min(W, H) * (0.12 + 0.3 * p), c0 = 'rgba(214,240,255,0.95)', c1 = 'rgba(214,240,255,0)';
+  ctx.save(); ctx.globalAlpha = Math.min(0.92, 0.25 + p * 0.75);
+  let g = ctx.createLinearGradient(0, 0, 0, m); g.addColorStop(0, c0); g.addColorStop(1, c1); ctx.fillStyle = g; ctx.fillRect(0, 0, W, m);
+  g = ctx.createLinearGradient(0, H, 0, H - m); g.addColorStop(0, c0); g.addColorStop(1, c1); ctx.fillStyle = g; ctx.fillRect(0, H - m, W, m);
+  g = ctx.createLinearGradient(0, 0, m, 0); g.addColorStop(0, c0); g.addColorStop(1, c1); ctx.fillStyle = g; ctx.fillRect(0, 0, m, H);
+  g = ctx.createLinearGradient(W, 0, W - m, 0); g.addColorStop(0, c0); g.addColorStop(1, c1); ctx.fillStyle = g; ctx.fillRect(W - m, 0, m, H);
+  ctx.restore();
+}
+function drawKidCrystals(kb, p, time, hint) {
+  const m = Math.min(W, H), size = m * 0.07 * (0.35 + 0.65 * p);
+  ctx.save(); ctx.globalAlpha = 0.18 + 0.2 * p; rr(kb.x, kb.y, kb.w, kb.h, m * 0.06); ctx.fillStyle = '#BFE6FF'; ctx.fill(); ctx.restore();
+  if (hint) {
+    ctx.save(); ctx.setLineDash([m * 0.03, m * 0.02]); ctx.lineDashOffset = -time * m * 0.05; ctx.lineWidth = Math.max(3, m * 0.012); ctx.strokeStyle = '#6CC4FF'; rr(kb.x, kb.y, kb.w, kb.h, m * 0.06); ctx.stroke(); ctx.restore();
+    drawEmoji('🤫', kb.x + kb.w / 2, kb.y - m * 0.07, m * 0.14 + Math.sin(time * 3) * m * 0.006);
+  }
+  const pts = [[kb.x, kb.y], [kb.x + kb.w, kb.y], [kb.x, kb.y + kb.h * 0.5], [kb.x + kb.w, kb.y + kb.h * 0.5], [kb.x + kb.w * 0.5, kb.y + kb.h], [kb.x, kb.y + kb.h], [kb.x + kb.w, kb.y + kb.h]];
+  pts.forEach(([px, py], i) => drawEmoji('❄️', px, py, size * (0.8 + 0.2 * ((i * 7) % 3) / 2), time * 0.5 + i, 1, 1, 0.92));
+}
+function drawTouchGuide(time) {
+  const m = Math.min(W, H), ph = R.phase, x = W * 0.5, y = H * 0.74;
+  if (ph === 'dance') { const a = time * 3; drawEmoji('👆', x + Math.cos(a) * m * 0.05, y + Math.sin(a * 1.3) * m * 0.03, m * 0.13, -0.4); drawEmoji('🎵', x + m * 0.12, y - m * 0.1 + Math.sin(time * 2) * m * 0.01, m * 0.07); }
+  else if (ph === 'freeze' || ph === 'together') { drawEmoji('✋', x, y, m * 0.14); drawEmoji('❄️', x + m * 0.08, y - m * 0.08, m * 0.06, time * 0.5); }
+}
+function badgePos() { const r = clamp(Math.min(H * 0.085, W * 0.12), 28, 120); return { x: W / 2, y: starBottom + Math.min(W, H) * 0.02 + r * 1.15, r }; }
+function drawBadge(time) {
+  const b = badgePos(), ph = R.phase, cold = ph === 'freeze' || ph === 'together';
+  const col = cold ? '#6CC4FF' : ph === 'success' ? '#FFD36E' : '#FF8FB8';
+  oval(b.x, b.y + b.r * 0.1, b.r, b.r * 0.98, 'rgba(47,59,99,0.16)');
+  circle(b.x, b.y, b.r, '#fff', col, b.r * 0.12);
+  if (ph === 'freeze' && R.fz) {
+    const fz = R.fz, p = fz.wob ? 0 : clamp(fz.hold / fz.need, 0, 1);
+    if (fz.grace > 0 && !fz.wob) { ctx.save(); ctx.setLineDash([b.r * 0.2, b.r * 0.15]); ctx.beginPath(); ctx.arc(b.x, b.y, b.r * 1.2, 0, TAU); ctx.lineWidth = b.r * 0.08; ctx.strokeStyle = 'rgba(79,179,246,0.5)'; ctx.stroke(); ctx.restore(); }
+    if (p > 0.01) { ctx.beginPath(); ctx.arc(b.x, b.y, b.r * 1.2, -Math.PI / 2, -Math.PI / 2 + TAU * p); ctx.lineWidth = b.r * 0.1; ctx.lineCap = 'round'; ctx.strokeStyle = '#4FB3F6'; ctx.stroke(); }
+    drawEmoji('❄️', b.x, b.y, b.r * 1.3, fz.grace > 0 ? time * 2 : 0);
+  } else if (ph === 'dance') {
+    const bt = Music.beat(); drawEmoji('🎵', b.x, b.y - b.r * 0.12 * Math.abs(Math.sin(bt * Math.PI)), b.r * 1.3, Math.sin(bt * Math.PI / 2) * 0.15);
+  } else if (ph === 'success') drawEmoji('⭐', b.x, b.y, b.r * 1.3, Math.sin(time * 3) * 0.2);
+  else if (ph === 'together') drawEmoji('❄️', b.x, b.y, b.r * 1.3);
+  else drawEmoji('🐧', b.x, b.y, b.r * 1.3);
+}
+function drawBursts() {
+  for (const b of bursts) {
+    const t = b.t; let sc, a = 1, x = W / 2, y = H * 0.42;
+    if (t < 0.4) sc = easeOutBack(t / 0.4);
+    else if (t < 1.1) sc = 1 + 0.03 * Math.sin((t - 0.4) * 8);
+    else { const u = (t - 1.1) / 0.4, bp = badgePos(); sc = 1 - 0.75 * u; x += (bp.x - x) * ease(u); y += (bp.y - y) * ease(u); a = 1 - u * 0.5; }
+    const size = Math.min(H * 0.34, W * 0.5) * sc;
+    ctx.save(); ctx.globalAlpha = a; drawEmoji(b.e, x, y, size); if (t < 1.1) pillText(b.label, x, y + size * 0.65, size * 0.26, '#fff', '#2F3B63', b.color); ctx.restore();
+  }
+}
+function drawGamePenguin(time, dt) {
+  const m = Math.min(W, H), ph = R.phase, big = (R.hint && ph === 'freeze') || ph === 'together';
+  let ts = Math.min(H * 0.3, W * 0.36); if (big) ts *= 1.35;
+  const tx = insets.l + ts * 0.45 + m * 0.02 + (ph === 'together' ? Math.min(W * 0.12, ts * 0.5) : 0), ty = H - insets.b - m * 0.02;
+  if (!penguin.init) { penguin.x = tx; penguin.y = ty; penguin.s = ts; penguin.init = true; }
+  const k = 1 - Math.exp(-dt * 5);
+  penguin.x += (tx - penguin.x) * k; penguin.y += (ty - penguin.y) * k; penguin.s += (ts - penguin.s) * k;
+  let P, bubble = null, statue = false;
+  if (ph === 'dance') { P = dancePose(Music.beat()); penguin.pose = P; bubble = '🎵'; }
+  else if (ph === 'welcome') { P = wavePose(time); penguin.pose = P; bubble = '🎵'; }
+  else if (ph === 'success') { P = cheerPose(time); bubble = '⭐'; }
+  else if (ph === 'freeze' || ph === 'together') {
+    P = penguin.frozen || statuePose(); statue = true; bubble = '❄️';
+    if (penguin.shh > 0) { P = shhPose(P); statue = false; bubble = '🤫'; }
+  } else P = idlePose(time);
+  drawPenguin(penguin.x, penguin.y, penguin.s, P, time, bubble, big, statue);
+}
+function drawBigNum() {
+  if (!bigNum) return;
+  const t = bigNum.t, sc = easeOutBack(Math.min(1, t / 0.35)), a = t > 0.8 ? Math.max(0, 1 - (t - 0.8) / 0.4) : 1;
+  const x = W / 2, y = H * 0.4, size = Math.min(H * 0.3, W * 0.3);
+  ctx.save(); ctx.globalAlpha = a; ctx.font = `700 ${Math.max(1, size * sc)}px ${UI_FONT}`; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+  ctx.lineWidth = size * 0.1; ctx.strokeStyle = '#4FB3F6'; ctx.lineJoin = 'round'; ctx.strokeText(String(bigNum.n), x, y); ctx.fillStyle = '#fff'; ctx.fillText(String(bigNum.n), x, y);
+  ctx.restore();
+}
+function drawStepBack(time) {
+  ctx.fillStyle = 'rgba(255,255,255,0.4)'; ctx.fillRect(0, 0, W, H);
+  const h = H * 0.6, cx = W / 2, top = H * 0.16, hr = h * 0.12, sw = h * 0.22, sy = top + hr * 2.25;
+  ctx.save(); ctx.globalAlpha = 0.6 + 0.25 * Math.sin(time * Math.PI);
+  ctx.setLineDash([h * 0.035, h * 0.025]); ctx.lineWidth = Math.max(4, h * 0.014); ctx.strokeStyle = '#fff'; ctx.fillStyle = 'rgba(158,220,255,0.45)';
+  const shape = (x, y, w, hh, r) => { rr(x, y, w, hh, r); ctx.fill(); ctx.stroke(); };
+  ctx.beginPath(); ctx.arc(cx, top + hr, hr, 0, TAU); ctx.fill(); ctx.stroke();
+  shape(cx - sw * 0.6, sy, sw * 1.2, h * 0.38, sw * 0.35);
+  shape(cx - sw * 0.98, sy + sw * 0.08, sw * 0.3, h * 0.32, sw * 0.15); shape(cx + sw * 0.68, sy + sw * 0.08, sw * 0.3, h * 0.32, sw * 0.15);
+  shape(cx - sw * 0.5, sy + h * 0.35, sw * 0.42, h * 0.32, sw * 0.18); shape(cx + sw * 0.08, sy + h * 0.35, sw * 0.42, h * 0.32, sw * 0.18);
+  ctx.restore();
+  pillText('🚶 Step back!', W / 2, Math.min(H * 0.9, top + h * 1.12), Math.min(W, H) * 0.06, 'rgba(255,255,255,0.95)', '#2F3B63', '#9EDCFF');
+}
+function drawFinale(time) {
+  const g = ctx.createLinearGradient(0, 0, 0, H); g.addColorStop(0, 'rgba(207,239,255,0.93)'); g.addColorStop(1, 'rgba(255,211,230,0.93)');
+  ctx.fillStyle = g; ctx.fillRect(0, 0, W, H);
+  const m = Math.min(W, H);
+  drawEmoji('🎉', W / 2, H * 0.13 + Math.sin(time * 2.5) * m * 0.015, m * 0.18, Math.sin(time * 1.5) * 0.1);
+  let n = 0; for (let i = 0; i < ROUNDS; i++) if (R.finStars[i] != null) n++;
+  const s = Math.min(H * 0.52, W * 0.5) / 1.3;
+  drawIceCream(W * 0.5, H * 0.56 + s * 0.65, s, time, { stars: n, face: 'happy', glow: 0.6 + 0.3 * Math.sin(time * 2) });
+  const last = n ? R.finStars[n - 1] : null;
+  if (last != null && gt - last < 0.5) addEmojiParts('✨', W * 0.5, H * 0.56, 1, m * 0.05, true);
+  const ps = Math.min(H * 0.3, W * 0.32);
+  drawPenguin(Math.max(ps * 0.5, W * 0.16), H - insets.b - m * 0.03, ps, Music.on ? dancePose(Music.beat()) : cheerPose(time), time, '🎵', true, false);
+}
+function drawParticles() {
+  for (const p of parts) {
+    const a = p.life > p.max - 0.5 ? Math.max(0, (p.max - p.life) / 0.5) : 1;
+    if (p.k === 'e') { drawEmoji(p.e, p.x, p.y, p.w, p.rot, 1, 1, a); continue; }
+    ctx.save(); ctx.globalAlpha = a; ctx.translate(p.x, p.y); ctx.rotate(p.rot); ctx.fillStyle = p.col;
+    if (p.circ) { ctx.beginPath(); ctx.arc(0, 0, p.h * 0.7, 0, TAU); ctx.fill(); } else ctx.fillRect(-p.w / 2, -p.h / 2, p.w, p.h);
+    ctx.restore();
+  }
+}
+function drawFlyers() {
+  for (const f of flyers) {
+    const u = ease(clamp(f.t / f.dur, 0, 1)), cx = (f.x0 + f.x1) / 2, cy = Math.min(f.y0, f.y1) - H * 0.12;
+    const x = (1 - u) * (1 - u) * f.x0 + 2 * (1 - u) * u * cx + u * u * f.x1, y = (1 - u) * (1 - u) * f.y0 + 2 * (1 - u) * u * cy + u * u * f.y1;
+    drawEmoji('⭐', x, y, Math.min(W, H) * (0.14 - 0.1 * u) + ice.s * 0.11 * u, u * TAU);
+  }
+}
+
+/* ======================= RENDER LOOP ======================= */
+function render(time, dt) {
+  ctx.setTransform(DPR, 0, 0, DPR, 0, 0);
+  ctx.clearRect(0, 0, W, H);
+  const sc = S.screen, camView = (sc === 'game' || sc === 'finale') && S.mode === 'camera' && !!stream;
+  if (!camView) { if (bg) ctx.drawImage(bg, 0, 0, W, H); drawClouds(time); }
+  if (sc === 'game') {
+    updateKidBox(dt);
+    if (camView) drawMirrorFrame();
+    const ph = R.phase, fz = R.fz, cold = ph === 'freeze' || ph === 'together';
+    const p = (ph === 'freeze' && fz && !fz.wob) ? clamp(fz.hold / fz.need, 0, 1) : ph === 'together' ? clamp((R.phaseT - 1.5) / 4, 0, 1) : 0;
+    if (cold) drawFrost(p);
+    const kb = camView ? kidBox() : null;
+    if (kb && cold) drawKidCrystals(kb, p, time, R.hint && ph === 'freeze');
+    if (kb && S.showBox) { ctx.save(); ctx.strokeStyle = '#FF6FA3'; ctx.lineWidth = 3; ctx.strokeRect(kb.x, kb.y, kb.w, kb.h); ctx.restore(); pillText(`motion ${(motion.frac * 100).toFixed(1)}%  freeze limit ${(freezeThr() * 100).toFixed(1)}%`, W / 2, H - insets.b - Math.min(W, H) * 0.06, Math.min(W, H) * 0.03, 'rgba(255,255,255,0.9)', '#2F3B63'); }
+    if (S.mode === 'touch') drawTouchGuide(time);
+    const face = ph === 'success' ? 'happy' : ice.wob > 0.3 ? 'wob' : cold ? 'focus' : 'smile';
+    drawIceCream(ice.x, ice.y, ice.s, time, { face, wob: ice.wob, glow: ice.glow });
+    drawGamePenguin(time, dt);
+    drawBadge(time);
+    drawBursts();
+    drawBigNum();
+    if (R.stepBack) drawStepBack(time);
+  } else if (sc === 'finale') drawFinale(time);
+  else { if (sc !== 'start') drawFloaters(time); drawSpotMascot(time); }
+  drawParticles();
+  drawFlyers();
+}
+let lastFrame = performance.now();
+function frame(now) {
+  requestAnimationFrame(frame);
+  let dt = (now - lastFrame) / 1000; lastFrame = now;
+  if (!(dt >= 0)) dt = 0; if (dt > 0.1) dt = 0.1;
+  const paused = isPaused();
+  try {
+    if (!paused) update(dt);
+    if (ctx) render(now / 1000, paused ? 0 : dt);
+  } catch (e) { console.error(e); }
+}
+
+/* ======================= LAYOUT ======================= */
+const probe = document.createElement('div');
+probe.style.cssText = 'position:fixed;left:0;top:0;width:0;height:0;visibility:hidden;pointer-events:none;padding:env(safe-area-inset-top,0px) env(safe-area-inset-right,0px) env(safe-area-inset-bottom,0px) env(safe-area-inset-left,0px)';
+document.body.appendChild(probe);
+function updateSpot() { const el = document.querySelector('.screen.active .mascot-spot'); spot = el ? el.getBoundingClientRect() : null; }
+function resize() {
+  W = Math.max(1, window.innerWidth); H = Math.max(1, window.innerHeight);
+  DPR = Math.max(0.75, Math.min(window.devicePixelRatio || 1, 2, Math.sqrt(2.6e6 / (W * H))));
+  cv.width = Math.round(W * DPR); cv.height = Math.round(H * DPR);
+  const cs = getComputedStyle(probe);
+  insets = { t: parseFloat(cs.paddingTop) || 0, r: parseFloat(cs.paddingRight) || 0, b: parseFloat(cs.paddingBottom) || 0, l: parseFloat(cs.paddingLeft) || 0 };
+  const mb = $('#btnMute').getBoundingClientRect(); starBottom = Math.max(mb.bottom || 0, insets.t + Math.min(W, H) * 0.09, 48);
+  updateSpot(); buildBg(); penguin.init = false; KB.init = false;
+}
+window.addEventListener('resize', resize);
+window.addEventListener('orientationchange', () => setTimeout(resize, 250));
+
+/* ======================= INPUT ======================= */
+document.addEventListener('pointerdown', () => { S.lastInteract = gt; }, true);
+$('#btnPlay').addEventListener('click', () => { unlock(); sfx.click(); if (S.prefTouch) goTouch(); else goCamera(false); });
+$('#btnTouch').addEventListener('click', () => { unlock(); sfx.click(); goTouch(); });
+$('#btnRetry').addEventListener('click', () => { unlock(); sfx.click(); goCamera(false); });
+$('#btnAgain').addEventListener('click', () => { unlock(); sfx.click(); if (S.mode === 'touch' || S.prefTouch) goTouch(); else goCamera(false); });
+$('#btnSay').addEventListener('click', () => { unlock(); S.lastInteract = gt; if (S.screen === 'game') say(currentInstruction()); else sayScreen(); });
+$('#btnMute').addEventListener('click', () => {
+  unlock(); S.muted = !S.muted; $('#btnMute').textContent = S.muted ? '🔕' : '🔔';
+  if (master) master.gain.value = S.muted ? 0 : 0.55;
+  if (S.muted) cancelSpeech(); else sfx.click();
+});
+let lastPX = 0, lastPY = 0, noteT = 0;
+function touchMotion(e, down) {
+  if (S.screen !== 'game' || isPaused()) return;
+  const dx = e.clientX - lastPX, dy = e.clientY - lastPY; lastPX = e.clientX; lastPY = e.clientY;
+  if (!down && Math.hypot(dx, dy) < 2) return;
+  S.lastTouchGT = gt;
+  if (S.mode !== 'touch') return;
+  if (R.phase === 'dance' && gt - noteT > 0.18) { noteT = gt; addEmojiParts(pick(['🎵', '🎶', '✨']), e.clientX, e.clientY, 1, Math.min(W, H) * 0.06, true); }
+  if (R.phase === 'freeze' && R.fz && R.fz.grace <= 0 && !R.fz.wob && down) { R.fz.over = 3; onWobble(); }
+}
+cv.addEventListener('pointerdown', (e) => { unlock(); lastPX = e.clientX; lastPY = e.clientY; touchMotion(e, true); });
+cv.addEventListener('pointermove', (e) => { if (e.buttons || e.pointerType === 'touch' || S.mode === 'touch') touchMotion(e, false); });
+
+/* ======================= GROWN-UP CORNER ======================= */
+let holdStart = 0, holdRaf = 0;
+function holdTick() {
+  const p = (performance.now() - holdStart) / 3000;
+  grown.style.setProperty('--p', Math.min(1, p).toFixed(3));
+  if (p >= 1) { endHold(); openPanel(); } else holdRaf = requestAnimationFrame(holdTick);
+}
+function endHold() { cancelAnimationFrame(holdRaf); grown.classList.remove('holding'); grown.style.setProperty('--p', '0'); }
+grown.addEventListener('pointerdown', (e) => {
+  e.preventDefault(); try { grown.setPointerCapture(e.pointerId); } catch (_) {}
+  holdStart = performance.now(); grown.classList.add('holding'); cancelAnimationFrame(holdRaf); holdRaf = requestAnimationFrame(holdTick);
+});
+['pointerup', 'pointercancel', 'lostpointercapture'].forEach(ev => grown.addEventListener(ev, endHold));
+grown.addEventListener('contextmenu', (e) => e.preventDefault());
+
+function addOpt(sel, v, label) { const o = document.createElement('option'); o.value = v; o.textContent = label; sel.appendChild(o); }
+async function fillDevices() {
+  const selCam = $('#selCam'), selMic = $('#selMic');
+  let devs = [];
+  try { if (navigator.mediaDevices && navigator.mediaDevices.enumerateDevices) devs = await navigator.mediaDevices.enumerateDevices(); } catch (e) {}
+  selCam.innerHTML = ''; addOpt(selCam, '', 'Front camera (default)');
+  devs.filter(d => d.kind === 'videoinput').forEach((d, i) => { if (d.deviceId) addOpt(selCam, d.deviceId, d.label || 'Camera ' + (i + 1)); });
+  selCam.value = S.camId; if (selCam.value !== S.camId) selCam.value = '';
+  selMic.innerHTML = ''; addOpt(selMic, '', 'Off');
+  let any = false;
+  devs.filter(d => d.kind === 'audioinput').forEach((d, i) => { if (d.deviceId && d.deviceId !== 'default' && d.deviceId !== 'communications') { addOpt(selMic, d.deviceId, d.label || 'Microphone ' + (i + 1)); any = true; } });
+  if (!any) addOpt(selMic, 'any', 'Microphone');
+  selMic.value = S.micId; if (selMic.value !== S.micId) selMic.value = '';
+}
+function syncPanel() {
+  document.querySelectorAll('#segDiff button').forEach(b => b.classList.toggle('on', b.dataset.v === S.diff));
+  $('#chkTouch').checked = S.mode === 'touch' || S.prefTouch; $('#chkBox').checked = S.showBox;
+}
+function openPanel() {
+  S.panel = true; panel.classList.add('open'); cancelSpeech(); Music.pause();
+  if (ac && ac.state === 'running') ac.suspend().catch(() => {});
+  syncPanel(); fillDevices();
+  setTimeout(() => $('#btnClose').focus(), 50);
+}
+function afterPause() {
+  lastFrame = performance.now();
+  if (ac && !S.hidden && !S.panel) ac.resume().catch(() => {});
+  if (S.screen !== 'game') return;
+  if (R.phase === 'dance') Music.resume();
+  if (R.phase === 'freeze' && R.fz) { R.fz.grace = Math.max(R.fz.grace, 1); R.fz.over = 0; }
+  if (R.phase === 'dance' || R.phase === 'freeze') setTimeout(() => say(currentInstruction()), 300);
+}
+function closePanel() { S.panel = false; panel.classList.remove('open'); afterPause(); }
+$('#segDiff').addEventListener('click', (e) => { const b = e.target.closest('button'); if (!b) return; setDifficulty(b.dataset.v); syncPanel(); });
+$('#selCam').addEventListener('change', async (e) => {
+  S.camId = e.target.value; $('#camNote').textContent = '';
+  if (S.mode === 'camera' && stream) {
+    try { await startCamera(S.run); KB.init = false; }
+    catch (err) { $('#camNote').textContent = 'That camera could not start. Pick another one or use touch mode.'; }
+  }
+});
+$('#selMic').addEventListener('change', async (e) => {
+  const v = e.target.value; S.micId = v; const note = $('#micNote');
+  if (!v) { stopMic(); note.textContent = ''; return; }
+  try { await startMic(v); note.textContent = 'Microphone on. Singing along while dancing makes music notes appear 🎵'; fillDevices(); }
+  catch (err) { S.micId = ''; e.target.value = ''; note.textContent = 'The microphone is blocked or missing. That is fine, the game works without it.'; }
+});
+$('#chkTouch').addEventListener('change', (e) => {
+  S.prefTouch = e.target.checked;
+  if (e.target.checked) {
+    if (S.mode !== 'touch') { S.run++; S.mode = 'touch'; stopCamera(); KB.init = false; if (S.screen === 'perm') { S.panel = false; panel.classList.remove('open'); goTouch(); } }
+  } else if (S.mode === 'touch' && S.screen === 'game') { S.panel = false; panel.classList.remove('open'); goCamera(true); }
+  else if (S.mode === 'touch') S.mode = 'camera';
+});
+$('#chkBox').addEventListener('change', (e) => { S.showBox = e.target.checked; });
+$('#btnRestart').addEventListener('click', () => {
+  S.panel = false; panel.classList.remove('open'); if (ac) ac.resume().catch(() => {});
+  if (S.mode === 'touch' || S.prefTouch) goTouch(); else if (stream) startGame(); else goCamera(false);
+});
+$('#btnExit').addEventListener('click', exitToStart);
+$('#btnClose').addEventListener('click', closePanel);
+panel.addEventListener('click', (e) => { if (e.target === panel) closePanel(); });
+document.addEventListener('keydown', (e) => { if (e.key === 'Escape' && S.panel) closePanel(); });
+
+/* ======================= VISIBILITY + CLEANUP ======================= */
+let hideTimer = 0;
+document.addEventListener('visibilitychange', () => {
+  if (document.hidden) {
+    S.hidden = true; cancelSpeech(); Music.pause();
+    if (ac && ac.state === 'running') ac.suspend().catch(() => {});
+    clearTimeout(hideTimer);
+    hideTimer = setTimeout(() => { if (S.hidden && stream) { stopCamera(); S.camSuspended = true; } }, 60000);
+  } else {
+    S.hidden = false; clearTimeout(hideTimer);
+    if (S.camSuspended) {
+      S.camSuspended = false;
+      if (S.mode === 'camera' && (S.screen === 'game' || S.screen === 'finale')) startCamera(S.run).catch(() => cameraLost());
+    }
+    afterPause();
+  }
+});
+window.addEventListener('pagehide', () => { Music.stop(); stopCamera(); stopMic(); cancelSpeech(); });
+window.addEventListener('beforeunload', () => { stopCamera(); stopMic(); });
+
+/* ======================= START ======================= */
+resize();
+if (document.fonts && document.fonts.load) document.fonts.load('700 40px Fredoka').catch(() => {});
+requestAnimationFrame(frame);
+if (location.hash === '#debug') window.__FD = { S, R, motion, Music };
+})();
+</script>
+</body>
+</html>

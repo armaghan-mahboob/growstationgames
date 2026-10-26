@@ -1,0 +1,1180 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Opposites in Motion</title>
+<!--
+  OPPOSITES IN MOTION: a single-file webcam movement game for 3 to 5 year olds.
+  Run: open in Chrome/Edge/Firefox on a computer. On phones and tablets the camera
+  needs https:// or localhost. Internet is needed to load MediaPipe from the CDN.
+-->
+<style>
+/* ===================================================================
+   UI STYLES: base tokens
+   =================================================================== */
+*{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+[hidden]{display:none!important}
+html,body{margin:0;height:100%;overflow:hidden;overscroll-behavior:none}
+html{font-size:15px}                                   /* phone   */
+@media (min-width:601px){html{font-size:17px}}         /* tablet  */
+@media (min-width:1025px){html{font-size:18px}}        /* laptop  */
+@media (min-width:1441px){html{font-size:20px}}        /* desktop */
+
+:root{
+  --sun:#FFD23F; --ink:#1E1A4A; --paper:#FFFBF0;
+  --tomato:#FF5A3C; --leaf:#12B76A; --sky:#2E9BFF;
+  --gap:clamp(6px,1.6vmin,16px);
+  --rad:clamp(14px,3.4vmin,32px);
+  --line:clamp(3px,.55vmin,5px);
+  --drop:clamp(4px,.9vmin,8px);
+  --ib:clamp(44px,9vmin,68px);
+  --word:clamp(2.2rem,min(11vw,18vh),9rem);
+  --demo:clamp(60px,min(15vw,19vh),230px);
+}
+body{
+  font-family:ui-rounded,"SF Pro Rounded","Arial Rounded MT Bold","Nunito","Comic Sans MS","Chalkboard SE","Trebuchet MS",system-ui,sans-serif;
+  font-weight:700;color:var(--ink);
+  background-color:var(--sun);
+  background-image:radial-gradient(rgba(255,255,255,.4) 11%,transparent 12%);
+  background-size:clamp(40px,9vmin,84px) clamp(40px,9vmin,84px);
+  -webkit-user-select:none;user-select:none;touch-action:manipulation;
+}
+h1,h2,p{margin:0}
+/* the real <video> stays invisible; frames are painted (mirrored) onto canvases */
+#video{position:fixed;left:0;top:0;width:4px;height:4px;opacity:0;pointer-events:none}
+#fx{position:fixed;inset:0;width:100%;height:100%;pointer-events:none;z-index:50}
+
+#app{position:fixed;inset:0;display:flex;
+  padding:max(10px,env(safe-area-inset-top)) max(10px,env(safe-area-inset-right))
+          max(12px,env(safe-area-inset-bottom)) max(10px,env(safe-area-inset-left))}
+.screen{display:none;flex:1;min-width:0;min-height:0}
+.screen.on{display:flex}
+.center{overflow-y:auto;overflow-x:hidden}
+.inner{margin:auto;display:flex;flex-direction:column;align-items:center;text-align:center;
+  gap:clamp(8px,2.4vmin,24px);max-width:min(100%,860px);padding:clamp(6px,1.5vmin,14px)}
+.inner.pad{padding:clamp(14px,4vmin,36px)}
+
+/* sticker look: paper, ink outline, hard drop */
+.card{background:var(--paper);border:var(--line) solid var(--ink);border-radius:var(--rad);
+  box-shadow:0 var(--drop) 0 var(--ink)}
+
+/* ---------- buttons (touch + mouse) ---------- */
+.btn{font:inherit;font-weight:800;font-size:clamp(1.25rem,4.8vmin,2.4rem);color:#fff;
+  background:var(--tomato);border:var(--line) solid var(--ink);border-radius:999px;
+  padding:.4em 1.2em;box-shadow:0 var(--drop) 0 var(--ink);cursor:pointer;touch-action:manipulation}
+.btn:active{transform:translateY(var(--drop));box-shadow:0 0 0 var(--ink)}
+.btn.go{background:var(--leaf)}
+.btn.alt{background:var(--paper);color:var(--ink)}
+.btn.big{font-size:clamp(1.8rem,8vmin,3.6rem);padding:.35em 1.4em}
+.btn.sm{font-size:clamp(1rem,3.4vmin,1.5rem)}
+.ibtn{width:var(--ib);height:var(--ib);flex:none;border-radius:50%;font-size:calc(var(--ib)*.46);
+  line-height:1;display:grid;place-items:center;background:var(--paper);
+  border:var(--line) solid var(--ink);box-shadow:0 var(--drop) 0 var(--ink);cursor:pointer;padding:0;
+  touch-action:manipulation}
+.ibtn:active{transform:translateY(var(--drop));box-shadow:0 0 0 var(--ink)}
+.btn:focus-visible,.ibtn:focus-visible{outline:4px solid var(--sky);outline-offset:3px}
+
+/* ---------- start / loading / error / final ---------- */
+.title{font-size:clamp(2.2rem,11vmin,6rem);font-weight:900;line-height:.98;
+  text-shadow:.05em .06em 0 #fff}
+.tag{font-size:clamp(1.1rem,4vmin,2rem);font-weight:800}
+.note{font-size:clamp(.82rem,2.2vmin,1.05rem);font-weight:600;max-width:34em;line-height:1.35}
+.pairs{display:flex;flex-wrap:wrap;justify-content:center;gap:clamp(6px,1.6vmin,14px)}
+.pairSticker{background:var(--paper);border:var(--line) solid var(--ink);border-radius:999px;
+  padding:.1em .5em;font-size:clamp(1.3rem,5.6vmin,2.8rem);line-height:1.3;white-space:nowrap}
+.pairSticker i{font-style:normal;font-size:.6em;margin:0 .2em;vertical-align:middle}
+.bigmsg{font-size:clamp(1.5rem,5.6vmin,3.2rem);font-weight:900;line-height:1.1}
+.bigEmoji{font-size:clamp(3rem,16vmin,7rem);line-height:1}
+.rock{animation:rock 1.2s ease-in-out infinite}
+@keyframes rock{0%,100%{transform:rotate(-14deg)}50%{transform:rotate(14deg)}}
+.finalStars{font-size:clamp(2.6rem,15vmin,8rem);font-weight:900;line-height:1}
+
+/* ---------- calibration ---------- */
+.calib{flex:1;display:grid;gap:var(--gap);min-width:0;min-height:0;
+  grid-template-columns:minmax(0,1.25fr) minmax(0,1fr)}
+.camCell{position:relative;min-width:0;min-height:0;overflow:hidden}
+.camCell canvas{position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);
+  border-radius:var(--rad);border:var(--line) solid var(--ink)}
+.calibSide{display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;
+  gap:clamp(6px,2vmin,20px);padding:clamp(8px,2.2vmin,24px);min-width:0;min-height:0;overflow:hidden;
+  align-self:center}
+.checks{display:flex;flex-wrap:wrap;justify-content:center;gap:clamp(6px,1.4vmin,14px)}
+.chk{display:flex;align-items:center;gap:.4em;padding:.25em .8em;border-radius:999px;
+  background:#EDE9DC;color:#8A86A8;font-size:clamp(.95rem,3vmin,1.6rem);font-weight:800;white-space:nowrap}
+.chk.ok{background:#C8F1D8;color:#0B6B3C}
+.chk.ok::after{content:"✓";font-weight:900}
+
+/* ---------- game ---------- */
+.game{flex:1;display:grid;grid-template-rows:auto minmax(0,1fr);gap:var(--gap);min-width:0;min-height:0}
+.hud{display:flex;align-items:center;justify-content:space-between;gap:var(--gap);min-width:0;
+  padding-bottom:var(--drop)}
+.pills,.hudBtns{display:flex;align-items:center;gap:var(--gap)}
+.pill{background:var(--paper);border:var(--line) solid var(--ink);border-radius:999px;
+  box-shadow:0 var(--drop) 0 var(--ink);padding:0 .65em;font-weight:900;
+  font-size:clamp(1.15rem,4.4vmin,2.1rem);line-height:1.55;white-space:nowrap}
+.pill.bump{animation:bump .4s}
+@keyframes bump{40%{transform:scale(1.25)}}
+
+.stage{position:relative;display:grid;gap:var(--gap);min-width:0;min-height:0;padding-bottom:var(--drop);
+  grid-template-columns:minmax(0,1.15fr) minmax(0,1fr);grid-template-rows:minmax(0,1fr)}
+.prompt{--act:var(--tomato);display:flex;flex-direction:column;align-items:center;justify-content:space-evenly;
+  gap:clamp(2px,.8vh,10px);padding:clamp(6px,1.6vmin,18px);min-width:0;min-height:0;overflow:hidden;text-align:center}
+.roundTag{font-weight:800;font-size:clamp(.8rem,2.4vmin,1.2rem);background:#EDE9DC;border-radius:999px;
+  padding:.1em .8em;white-space:nowrap;flex:none}
+.chips{display:flex;align-items:center;justify-content:center;gap:.4em;min-height:1.9em;flex:none;
+  font-size:clamp(.8rem,2.6vmin,1.35rem);font-weight:800}
+.chip{padding:.15em .7em;border-radius:999px;background:#EDE9DC;color:#8A86A8;white-space:nowrap}
+.chip.cur{background:var(--c);color:#fff;transform:scale(1.1)}
+.chip.done{background:#C8F1D8;color:#0B6B3C}
+
+/* the word acts out its own meaning */
+.word{font-size:var(--word);font-weight:900;line-height:1;height:1.2em;flex:none;display:flex;
+  align-items:center;justify-content:center;white-space:nowrap;color:var(--act);
+  text-shadow:.045em .055em 0 var(--ink)}
+.word.pop{animation:pop .4s cubic-bezier(.2,1.5,.4,1)}
+@keyframes pop{0%{transform:scale(.3);opacity:0}100%{transform:scale(1);opacity:1}}
+.wInner,.wInner span{display:inline-block}
+.w-BIG .wInner{transform:scale(1.2)}
+.w-SMALL .wInner{transform:scale(.42)}
+.w-UP .wInner{transform:translateY(12%)}
+.w-UP .wInner span{transform:translateY(calc(var(--i) * -13%))}
+.w-DOWN .wInner{transform:translateY(-14%)}
+.w-DOWN .wInner span{transform:translateY(calc(var(--i) * 7%))}
+.w-FAST .wInner{transform:skewX(-16deg);
+  text-shadow:.045em .055em 0 var(--ink),-.12em 0 0 rgba(30,26,74,.28),-.24em 0 0 rgba(30,26,74,.12)}
+.w-SLOW .wInner{letter-spacing:.2em;margin-right:-.2em}
+.w-HAPPY .wInner span{animation:wave .8s ease-in-out infinite;animation-delay:calc(var(--i) * -.11s)}
+@keyframes wave{0%,100%{transform:translateY(8%)}50%{transform:translateY(-10%) rotate(-4deg)}}
+
+.demoRow{display:flex;align-items:center;justify-content:center;gap:clamp(8px,3vmin,32px);flex:none}
+#coach{width:var(--demo);height:var(--demo);flex:none;display:block}
+.friendBox{width:var(--demo);height:var(--demo);flex:none;display:grid;place-items:center}
+.friend{font-size:calc(var(--demo) * .6);line-height:1;will-change:transform}
+.friend.cheer{animation:cheer .9s ease}
+@keyframes cheer{0%,100%{transform:none}25%{transform:translateY(-28%) rotate(-12deg)}
+  50%{transform:rotate(10deg)}75%{transform:translateY(-16%) rotate(-6deg)}}
+.meter{width:min(86%,560px);height:clamp(14px,3.2vh,30px);flex:none;background:#EDE9DC;
+  border:var(--line) solid var(--ink);border-radius:999px;overflow:hidden}
+.meter i{display:block;height:100%;width:0;background:var(--act,var(--leaf));transition:width .08s linear}
+.hint{font-weight:800;font-size:clamp(1rem,3.4vmin,1.9rem);white-space:nowrap;flex:none}
+
+.mirror{display:flex;align-items:flex-end;gap:var(--gap);min-width:0;min-height:0}
+.buddyCard{position:relative;flex:1;min-width:0;align-self:stretch;overflow:hidden;background:#D9F2FF}
+#buddy{position:absolute;inset:0;width:100%;height:100%;display:block}
+.you{position:absolute;left:.6em;top:.4em;font-size:clamp(.8rem,2.4vmin,1.2rem);font-weight:800;
+  background:var(--paper);border-radius:999px;padding:.05em .7em}
+.pv{flex:none;line-height:0;border:var(--line) solid var(--ink);border-radius:clamp(10px,2vmin,18px);
+  overflow:hidden;box-shadow:0 var(--drop) 0 var(--ink);background:var(--ink)}
+.pv canvas,.lostCamBox canvas{display:block}
+
+.intro{position:absolute;inset:0 0 var(--drop) 0;z-index:5;display:none;place-content:center;text-align:center;
+  background:var(--paper);border:var(--line) solid var(--ink);border-radius:var(--rad)}
+.intro.on{display:grid}
+.bTitle{font-size:clamp(2.4rem,12vmin,7rem);font-weight:900;line-height:1.05;color:var(--tomato);
+  text-shadow:.045em .055em 0 var(--ink);animation:pop .5s cubic-bezier(.2,1.5,.4,1)}
+.bSub{font-size:clamp(1.4rem,6vmin,3.4rem);font-weight:900}
+.praise{position:absolute;left:0;right:0;top:36%;z-index:6;text-align:center;pointer-events:none;opacity:0;
+  font-size:clamp(2.4rem,13vmin,8rem);font-weight:900;line-height:1;white-space:nowrap;color:#fff;
+  text-shadow:.05em .06em 0 var(--ink),-.03em -.03em 0 var(--ink),.03em -.03em 0 var(--ink),-.03em .03em 0 var(--ink)}
+.praise.go{animation:praise 1.3s ease-out forwards}
+@keyframes praise{0%{opacity:0;transform:scale(.3) rotate(-8deg)}18%{opacity:1;transform:scale(1.15) rotate(3deg)}
+  30%{transform:scale(1)}80%{opacity:1}100%{opacity:0;transform:translateY(-30%)}}
+
+/* ---------- overlays: pause + tracking lost ---------- */
+.overlay{position:absolute;inset:0;z-index:20;display:none;place-items:center;
+  background:rgba(255,210,63,.94);
+  padding:max(10px,env(safe-area-inset-top)) max(10px,env(safe-area-inset-right))
+          max(12px,env(safe-area-inset-bottom)) max(10px,env(safe-area-inset-left))}
+.overlay.on{display:grid}
+#ovPause{z-index:21}
+.panel{display:flex;flex-direction:column;align-items:center;text-align:center;
+  gap:clamp(8px,2.2vmin,20px);padding:clamp(14px,4vmin,36px);max-width:min(100%,760px);max-height:100%;overflow:auto}
+.row{display:flex;flex-wrap:wrap;justify-content:center;gap:clamp(8px,2.4vmin,20px);padding-bottom:var(--drop)}
+.lostCamBox{line-height:0;border:var(--line) solid var(--ink);border-radius:clamp(10px,2vmin,18px);overflow:hidden}
+
+/* ---------- responsive layout ---------- */
+@media (orientation:portrait){
+  :root{--word:clamp(2.4rem,min(19vw,9.5vh),9rem);--demo:clamp(60px,min(26vw,12vh),230px)}
+  .stage{grid-template-columns:minmax(0,1fr);grid-template-rows:minmax(0,1.35fr) minmax(0,1fr)}
+  .calib{grid-template-columns:minmax(0,1fr);grid-template-rows:minmax(0,1fr) auto}
+  .calibSide{align-self:end;width:100%}
+}
+@media (orientation:landscape) and (max-height:480px){   /* phone on its side */
+  :root{--word:clamp(2rem,min(10vw,17vh),5rem);--demo:clamp(52px,17vh,120px);--ib:clamp(40px,11vh,52px)}
+  .bigEmoji{display:none}
+  .title{font-size:clamp(1.8rem,13vh,3.4rem)}
+}
+@media (prefers-reduced-motion:reduce){
+  .rock,.w-HAPPY .wInner span,.friend.cheer,.word.pop,.bTitle{animation:none}
+}
+</style>
+</head>
+<body>
+
+<video id="video" playsinline muted autoplay></video>
+
+<div id="app">
+
+  <!-- START -->
+  <section id="s-start" class="screen center on">
+    <div class="inner">
+      <div class="pairs" aria-hidden="true">
+        <span class="pairSticker">🐘<i>⇄</i>🐭</span>
+        <span class="pairSticker">🚀<i>⇄</i>🐸</span>
+        <span class="pairSticker">🐇<i>⇄</i>🐢</span>
+        <span class="pairSticker">🌞<i>⇄</i>⛄</span>
+      </div>
+      <h1 class="title">Opposites<br>in Motion</h1>
+      <p class="tag">Move your body. Learn opposites!</p>
+      <button id="btnStart" class="btn go big">▶ Start</button>
+      <p class="note">For grown-ups: allow the camera, then have your child stand 2 to 3 metres back so the whole body shows. The video never leaves this device.</p>
+    </div>
+  </section>
+
+  <!-- LOADING -->
+  <section id="s-loading" class="screen center">
+    <div class="inner">
+      <div class="bigEmoji rock" aria-hidden="true">🤸</div>
+      <h2 class="bigmsg">Getting ready…</h2>
+      <p class="note">Say yes to the camera. The first load can take a few seconds.</p>
+    </div>
+  </section>
+
+  <!-- ERROR -->
+  <section id="s-error" class="screen center">
+    <div class="inner card pad">
+      <div class="bigEmoji" id="errIcon" aria-hidden="true">📷</div>
+      <h2 class="bigmsg" id="errTitle"></h2>
+      <p class="note" id="errBody"></p>
+      <button id="btnRetry" class="btn go">Try again</button>
+    </div>
+  </section>
+
+  <!-- CALIBRATION -->
+  <section id="s-calib" class="screen">
+    <div class="calib">
+      <div class="camCell" id="calibCell"><canvas id="calibCam"></canvas></div>
+      <div class="calibSide card">
+        <h2 class="bigmsg" id="calibMsg" aria-live="polite">Let me see you!</h2>
+        <div class="checks">
+          <div class="chk" id="chkSee">👀 I see you</div>
+          <div class="chk" id="chkWhole">🧍 Whole body</div>
+          <div class="chk" id="chkMid">🎯 In the middle</div>
+        </div>
+        <div class="meter" style="--act:var(--leaf)"><i id="calibBar"></i></div>
+        <button id="btnSkipCalib" class="btn alt sm" hidden>Start anyway</button>
+      </div>
+    </div>
+  </section>
+
+  <!-- GAME -->
+  <section id="s-game" class="screen">
+    <div class="game">
+      <header class="hud">
+        <div class="pills">
+          <div class="pill" id="pillStars">⭐ <span id="starCount">0</span></div>
+          <div class="pill" id="pillStreak">🔥 <span id="streakCount">0</span></div>
+        </div>
+        <div class="hudBtns">
+          <button class="ibtn" id="btnSound" aria-label="Sound on or off">🔊</button>
+          <button class="ibtn" id="btnPause" aria-label="Pause">⏸</button>
+          <button class="ibtn" id="btnRestart" aria-label="Restart">🔄</button>
+        </div>
+      </header>
+      <main class="stage">
+        <div class="card prompt" id="promptCard">
+          <div class="roundTag" id="roundTag">Round 1</div>
+          <div class="chips" id="chips"></div>
+          <div class="word" id="word"></div>
+          <div class="demoRow">
+            <canvas id="coach"></canvas>
+            <div class="friendBox"><div class="friend" id="friend"></div></div>
+          </div>
+          <div class="meter"><i id="meterFill"></i></div>
+          <div class="hint" id="hint"></div>
+        </div>
+        <div class="mirror">
+          <div class="card buddyCard"><canvas id="buddy"></canvas><span class="you">You!</span></div>
+          <div class="pv"><canvas id="pvCam"></canvas></div>
+        </div>
+        <div class="intro" id="ovIntro">
+          <div class="bTitle" id="introTitle"></div>
+          <div class="bSub" id="introSub"></div>
+        </div>
+        <div class="praise" id="praise"></div>
+      </main>
+    </div>
+  </section>
+
+  <!-- FINAL -->
+  <section id="s-final" class="screen center">
+    <div class="inner">
+      <div class="bigEmoji" aria-hidden="true">🏆</div>
+      <h1 class="title" id="finalTitle">You did it!</h1>
+      <div class="finalStars" id="finalStars">⭐ 0</div>
+      <div class="pill">🔥 Best streak: <span id="finalStreak">0</span></div>
+      <button id="btnAgain" class="btn go big">🔄 Play again</button>
+    </div>
+  </section>
+
+  <!-- TRACKING LOST (auto pause) -->
+  <div class="overlay" id="ovLost">
+    <div class="panel card">
+      <div class="bigEmoji" aria-hidden="true">🙈</div>
+      <h2 class="bigmsg">I can’t see you.<br>Step back so I can see you!</h2>
+      <div class="lostCamBox"><canvas id="lostCam"></canvas></div>
+    </div>
+  </div>
+
+  <!-- PAUSE -->
+  <div class="overlay" id="ovPause">
+    <div class="panel card">
+      <h2 class="bigmsg">Paused</h2>
+      <div class="row">
+        <button class="btn go" id="btnResume">▶ Play</button>
+        <button class="btn alt sm" id="btnSkip">⏭ Skip this one</button>
+        <button class="btn sm" id="btnRestart2">🔄 Restart</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<canvas id="fx"></canvas>
+
+<script>
+(() => {
+'use strict';
+
+/* ---------- small helpers ---------- */
+const $ = id => document.getElementById(id);
+const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
+const clamp01 = v => clamp(v, 0, 1);
+const lerp = (a, b, t) => a + (b - a) * t;
+const ease = (dt, tc) => 1 - Math.exp(-dt / tc);           // frame-rate independent smoothing factor
+const pick = a => a[Math.floor(Math.random() * a.length)];
+const shuffle = a => { a = a.slice(); for (let i = a.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [a[i], a[j]] = [a[j], a[i]]; } return a; };
+const INK = '#1E1A4A';
+const App = { screen: 'start', busy: false };
+const el = {};
+['video','btnStart','btnRetry','errIcon','errTitle','errBody','calibCell','calibCam','calibMsg','chkSee','chkWhole',
+ 'chkMid','calibBar','btnSkipCalib','starCount','streakCount','pillStars','pillStreak','btnSound','btnPause',
+ 'btnRestart','promptCard','roundTag','chips','word','coach','friend','meterFill','hint','buddy','pvCam','ovIntro',
+ 'introTitle','introSub','praise','ovPause','btnResume','btnSkip','btnRestart2','ovLost','lostCam','finalTitle',
+ 'finalStars','finalStreak','btnAgain','fx'].forEach(id => { el[id] = $(id); });
+const video = el.video;
+
+/* =====================================================================
+   AUDIO + VOICE (Web Audio beeps, speech synthesis narration)
+   ===================================================================== */
+const Sound = {
+  on: true, ctx: null, voice: null, timer: 0,
+  init() {
+    if (!this.ctx) { try { this.ctx = new (window.AudioContext || window.webkitAudioContext)(); } catch (e) {} }
+    if (this.ctx && this.ctx.state === 'suspended') this.ctx.resume();
+    this.pickVoice();
+  },
+  pickVoice() {
+    if (!('speechSynthesis' in window)) return;
+    const vs = speechSynthesis.getVoices() || [];
+    this.voice = vs.find(v => /^en[-_]US/i.test(v.lang) && /samantha|zira|jenny|aria|google us|female/i.test(v.name))
+              || vs.find(v => /^en/i.test(v.lang)) || null;
+  },
+  tone(freq, start, dur, type, vol) {
+    if (!this.on || !this.ctx) return;
+    try {
+      const t = this.ctx.currentTime + start, o = this.ctx.createOscillator(), g = this.ctx.createGain();
+      o.type = type || 'triangle'; o.frequency.setValueAtTime(freq, t);
+      g.gain.setValueAtTime(0.0001, t);
+      g.gain.exponentialRampToValueAtTime(vol || 0.16, t + 0.02);
+      g.gain.exponentialRampToValueAtTime(0.0001, t + dur);
+      o.connect(g); g.connect(this.ctx.destination); o.start(t); o.stop(t + dur + 0.05);
+    } catch (e) {}
+  },
+  blip()    { this.tone(660, 0, 0.09, 'triangle', 0.09); },
+  step()    { this.tone(784, 0, 0.12); this.tone(1047, 0.09, 0.16); },
+  success() { [523, 659, 784, 1047].forEach((f, i) => this.tone(f, i * 0.08, 0.22)); },
+  combo()   { [523, 659, 784, 1047, 1319].forEach((f, i) => this.tone(f, i * 0.07, 0.25)); this.tone(1568, 0.4, 0.4, 'sine', 0.12); },
+  soft()    { this.tone(440, 0, 0.18, 'sine', 0.09); this.tone(392, 0.16, 0.25, 'sine', 0.09); },
+  fanfare() { [523, 523, 659, 784, 659, 784, 1047].forEach((f, i) => this.tone(f, i * 0.14, 0.3)); },
+  say(text, immediate) {
+    if (!this.on || !('speechSynthesis' in window)) return;
+    clearTimeout(this.timer);
+    try { speechSynthesis.cancel(); } catch (e) {}
+    const go = () => {
+      try {
+        const u = new SpeechSynthesisUtterance(text);
+        u.lang = 'en-US'; u.rate = 0.95; u.pitch = 1.25;
+        if (this.voice) u.voice = this.voice;
+        speechSynthesis.speak(u);
+      } catch (e) {}
+    };
+    if (immediate) go(); else this.timer = setTimeout(go, 60);   // tiny gap avoids a cancel/speak race
+  },
+  hush() { clearTimeout(this.timer); try { speechSynthesis.cancel(); } catch (e) {} }
+};
+if ('speechSynthesis' in window) { try { speechSynthesis.onvoiceschanged = () => Sound.pickVoice(); } catch (e) {} }
+
+/* =====================================================================
+   TRACKING SYSTEM
+   MediaPipe Pose Landmarker (body) plus an optional Face Landmarker
+   (smile bonus). Landmarks are smoothed, then turned into simple,
+   forgiving body measurements in "body units" (about one shoulder width).
+   ===================================================================== */
+const MP = 'https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.14';
+const POSE_MODEL = 'https://storage.googleapis.com/mediapipe-models/pose_landmarker/pose_landmarker_lite/float16/1/pose_landmarker_lite.task';
+const FACE_MODEL = 'https://storage.googleapis.com/mediapipe-models/face_landmarker/face_landmarker/float16/1/face_landmarker.task';
+const HIST_IDS = [0, 11, 12, 13, 14, 15, 16, 23, 24];       // joints used for slow/still detection
+
+const T = {
+  vision: null, fileset: null, pose: null, face: null, faceLoading: false, stream: null,
+  ar: 4 / 3, lastVideoTime: -1, lastDet: 0,
+  raw: null, sm: null, prev: null, hist: [],
+  lastSeen: -1e9, seenSince: 0,
+  unit: 0, standSh: null, standHip: null, refLeg: null,
+  armSp: 0, coreSp: 0, legSp: 0, winSp: 0,
+  jumpFrames: 0, jumpUntil: 0,
+  wantSmile: false, smile: 0, lastFace: 0,
+  m: { spread: 1.5, handsClose: false, crouch: 0, isCrouch: false, rise: 0, jump: false,
+       handsUp: false, oneUp: false, handsHigh: false, fastSp: 0, slowSp: 0, smile: 0 }
+};
+const vis = p => (p && p.visibility !== undefined ? p.visibility : 1);
+
+async function startCamera() {
+  if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) throw { kind: 'insecure' };
+  if (!(T.stream && T.stream.active)) {
+    try {
+      T.stream = await navigator.mediaDevices.getUserMedia({ audio: false,
+        video: { facingMode: 'user', width: { ideal: 640 }, height: { ideal: 480 } } });
+    } catch (e1) {
+      if (e1 && e1.name === 'OverconstrainedError') {
+        try { T.stream = await navigator.mediaDevices.getUserMedia({ audio: false, video: true }); }
+        catch (e2) { throw { kind: 'camera', name: e2 && e2.name }; }
+      } else throw { kind: 'camera', name: e1 && e1.name };
+    }
+  }
+  video.srcObject = T.stream;
+  await new Promise(res => { if (video.readyState >= 1) res(); else video.onloadedmetadata = () => res(); });
+  try { await video.play(); } catch (e) {}
+  updateAspect();
+}
+function updateAspect() { if (video.videoWidth) { T.ar = video.videoWidth / video.videoHeight; fitCams(); } }
+video.addEventListener('resize', updateAspect);
+
+async function createTask(Cls, opts) {                       // try GPU first, fall back to CPU
+  const withDelegate = d => Cls.createFromOptions(T.fileset,
+    Object.assign({}, opts, { baseOptions: Object.assign({}, opts.baseOptions, { delegate: d }) }));
+  try { return await withDelegate('GPU'); } catch (e) { return await withDelegate('CPU'); }
+}
+async function loadTracker() {
+  if (T.pose) return;
+  try {
+    if (!T.vision) T.vision = await import(MP + '/vision_bundle.mjs');
+    if (!T.fileset) T.fileset = await T.vision.FilesetResolver.forVisionTasks(MP + '/wasm');
+    T.pose = await createTask(T.vision.PoseLandmarker, {
+      baseOptions: { modelAssetPath: POSE_MODEL }, runningMode: 'VIDEO', numPoses: 1,
+      minPoseDetectionConfidence: 0.3, minPosePresenceConfidence: 0.3, minTrackingConfidence: 0.3 });
+  } catch (e) { throw { kind: 'model', name: String(e && e.message || e) }; }
+}
+function loadFaceLater() {                                   // optional: only powers the HAPPY smile bonus
+  if (T.face || T.faceLoading || !T.vision) return;
+  T.faceLoading = true;
+  createTask(T.vision.FaceLandmarker, { baseOptions: { modelAssetPath: FACE_MODEL }, runningMode: 'VIDEO',
+    numFaces: 1, outputFaceBlendshapes: true }).then(f => { T.face = f; }).catch(() => {});
+}
+
+/* runs once per new camera frame */
+function trackingStep(now) {
+  if (!T.pose || video.readyState < 2 || !video.videoWidth) return;
+  if (video.currentTime === T.lastVideoTime) return;
+  T.lastVideoTime = video.currentTime;
+  let res = null;
+  try { res = T.pose.detectForVideo(video, now); } catch (e) { return; }
+  const lm = res && res.landmarks && res.landmarks[0];
+  const dt = clamp((now - T.lastDet) / 1000, 0.005, 0.25); T.lastDet = now;
+  const ok = !!lm && vis(lm[11]) > 0.3 && vis(lm[12]) > 0.3 && vis(lm[0]) > 0.15;
+  if (ok) {
+    if (now - T.lastSeen > 1500) { T.sm = null; T.seenSince = now; }   // fresh start after a gap
+    T.raw = lm; T.lastSeen = now;
+    smooth(lm); measure(dt, now);
+  }
+  if (!T.wantSmile) T.smile = 0;
+  else if (T.face && ok && now - T.lastFace > 180) {
+    T.lastFace = now;
+    try {
+      const fr = T.face.detectForVideo(video, now);
+      const cats = fr.faceBlendshapes && fr.faceBlendshapes[0] && fr.faceBlendshapes[0].categories;
+      if (cats) {
+        let a = 0, b = 0;
+        for (const c of cats) { if (c.categoryName === 'mouthSmileLeft') a = c.score; else if (c.categoryName === 'mouthSmileRight') b = c.score; }
+        T.smile = lerp(T.smile, (a + b) / 2, 0.6);
+      } else T.smile *= 0.7;
+    } catch (e) {}
+  }
+  T.m.smile = T.smile;
+}
+
+/* adaptive smoothing: heavy on jitter, light on real movement */
+function smooth(lm) {
+  const ar = T.ar;
+  if (!T.sm) {
+    T.sm = lm.map(p => ({ x: p.x * ar, y: p.y, v: vis(p) }));
+    T.prev = T.sm.map(p => ({ x: p.x, y: p.y }));
+    T.hist = []; T.unit = 0; T.standSh = T.standHip = T.refLeg = null;
+    T.armSp = T.coreSp = T.legSp = T.winSp = 0; T.jumpFrames = 0;
+    return;
+  }
+  const ref = Math.max(T.unit, 0.02) * 0.35;
+  for (let i = 0; i < lm.length && i < T.sm.length; i++) {
+    const s = T.sm[i], tx = lm[i].x * ar, ty = lm[i].y;
+    const a = clamp(0.35 + Math.hypot(tx - s.x, ty - s.y) / ref, 0.35, 0.95);
+    s.x += (tx - s.x) * a; s.y += (ty - s.y) * a; s.v += (vis(lm[i]) - s.v) * 0.5;
+  }
+}
+/* "standing" reference: follows upward quickly, downward slowly (smaller y = higher) */
+function envelope(key, val, dt) {
+  if (T[key] == null) { T[key] = val; return; }
+  T[key] += (val - T[key]) * ease(dt, val < T[key] ? 0.6 : 5);
+}
+
+/* turn landmarks into simple, forgiving measurements */
+function measure(dt, now) {
+  const s = T.sm, p = T.prev, m = T.m;
+  const LS = s[11], RS = s[12], LE = s[13], RE = s[14], LW = s[15], RW = s[16], LH = s[23], RH = s[24], N = s[0];
+  const shX = (LS.x + RS.x) / 2, shY = (LS.y + RS.y) / 2;
+  const hipsOK = LH.v > 0.4 && RH.v > 0.4;
+  const hipX = (LH.x + RH.x) / 2, hipY = (LH.y + RH.y) / 2;
+  const sw = Math.hypot(LS.x - RS.x, LS.y - RS.y);
+  const torso = hipsOK ? Math.hypot(shX - hipX, shY - hipY) : 0;
+  const S = Math.max(sw, torso * 0.6, 0.01);                  // body unit, stable when turning sideways
+  T.unit = T.unit ? lerp(T.unit, S, ease(dt, 0.6)) : S;
+  const u = T.unit;
+
+  /* UP / DOWN: compare with the standing reference, then update it */
+  if (T.standSh == null) T.standSh = shY;
+  if (hipsOK && T.standHip == null) T.standHip = hipY;
+  m.crouch = (shY - T.standSh) / u;
+  const rise = hipsOK ? (T.standHip - hipY) / u : (T.standSh - shY) / u * 0.7;
+  envelope('standSh', shY, dt);
+  if (hipsOK) envelope('standHip', hipY, dt);
+
+  let legCrouch = false;                                      // legs look much shorter when squatting
+  const LA = s[27], RA = s[28];
+  if (hipsOK && LA.v > 0.55 && RA.v > 0.55) {
+    const leg = ((LA.y + RA.y) / 2 - hipY) / u;
+    if (T.refLeg == null) T.refLeg = leg;
+    else T.refLeg += (leg - T.refLeg) * ease(dt, leg > T.refLeg ? 0.6 : 6);
+    legCrouch = T.refLeg > 1 && leg < T.refLeg * 0.66;
+  }
+  m.isCrouch = m.crouch > 0.45 || legCrouch;
+
+  T.jumpFrames = rise > 0.13 ? T.jumpFrames + 1 : 0;          // tiny hops and tiptoes count too
+  if (T.jumpFrames >= 2 || rise > 0.26) T.jumpUntil = now + 400;
+  m.rise = rise;
+
+  /* BIG / SMALL / HAPPY: where are the hands? */
+  const wristsSeen = LW.v > 0.15 || RW.v > 0.15;
+  m.spread = wristsSeen ? Math.hypot(LW.x - RW.x, LW.y - RW.y) / u
+                        : Math.hypot(LE.x - RE.x, LE.y - RE.y) / u * 1.5;
+  m.handsClose = LW.v > 0.3 && RW.v > 0.3 && m.spread < 0.85;
+  const upL = LW.y < LS.y - 0.15 * u, upR = RW.y < RS.y - 0.15 * u;
+  m.handsUp = upL && upR; m.oneUp = upL || upR;
+  m.handsHigh = LW.y < N.y && RW.y < N.y;
+
+  /* FAST: frame to frame path speed (catches quick shaking) */
+  const sp = i => Math.min(12, Math.hypot(s[i].x - p[i].x, s[i].y - p[i].y) / dt / u);
+  let arm = 0, core = 0, leg = 0;
+  for (const i of [13, 14, 15, 16]) if (s[i].v > 0.3) arm = Math.max(arm, sp(i));
+  for (const i of [0, 11, 12, 23, 24]) if (s[i].v > 0.4) core = Math.max(core, sp(i));
+  for (const i of [25, 26, 27, 28]) if (s[i].v > 0.6) leg = Math.max(leg, sp(i));
+  const k = ease(dt, 0.3);
+  T.armSp = lerp(T.armSp, arm, k); T.coreSp = lerp(T.coreSp, core, k); T.legSp = lerp(T.legSp, leg, k);
+  m.fastSp = Math.max(T.armSp, T.coreSp, T.legSp * 0.8);
+
+  /* SLOW / STILL: net movement over about 0.3 s (ignores tracking jitter) */
+  const cur = HIST_IDS.map(i => [s[i].x, s[i].y, s[i].v]);
+  T.hist.push({ t: now, pts: cur });
+  while (T.hist.length && now - T.hist[0].t > 450) T.hist.shift();
+  let old = T.hist[0];
+  for (const h of T.hist) { if (now - h.t <= 320) { old = h; break; } }
+  const age = (now - old.t) / 1000;
+  if (age > 0.12) {
+    let win = 0;
+    for (let j = 0; j < HIST_IDS.length; j++) {
+      if (cur[j][2] < 0.35) continue;
+      win = Math.max(win, Math.hypot(cur[j][0] - old.pts[j][0], cur[j][1] - old.pts[j][1]) / age / u);
+    }
+    T.winSp = lerp(T.winSp, win, ease(dt, 0.15));
+  } else T.winSp = Math.max(T.armSp, T.coreSp);
+  m.slowSp = T.winSp;
+
+  for (let i = 0; i < s.length; i++) { p[i].x = s[i].x; p[i].y = s[i].y; }
+}
+
+/* =====================================================================
+   GAME LOGIC
+   ===================================================================== */
+/* Every action: the word, the voice line, a hint, a friend, and a forgiving test.
+   "hold" is how long (seconds) the test must be true. Thresholds are in body units. */
+const ACT = {
+  BIG:   { word: 'BIG!',   say: 'Big!',   hint: 'Arms wide!',           friend: '🐘', color: '#FF5A3C', hold: 0.5,
+           ok: m => m.spread > 2.6, live: m => clamp01((m.spread - 1.3) / 2) },
+  SMALL: { word: 'SMALL!', say: 'Small!', hint: 'Curl up tiny!',        friend: '🐭', color: '#7B4DFF', hold: 0.5,
+           ok: m => m.handsClose || m.isCrouch, live: m => clamp01(Math.max(m.crouch / 0.6, (1.7 - m.spread) / 0.9)) },
+  UP:    { word: 'UP!',    say: 'Up!',    hint: 'Jump!',                friend: '🚀', color: '#2E9BFF', hold: 0.4,
+           ok: m => m.jump || m.handsHigh, instant: m => m.jump,
+           live: m => clamp01(Math.max(m.rise / 0.3, m.handsHigh ? 0.8 : 0)) },
+  DOWN:  { word: 'DOWN!',  say: 'Down!',  hint: 'Crouch low!',          friend: '🐸', color: '#12B76A', hold: 0.45,
+           ok: m => m.isCrouch, live: m => clamp01(m.crouch / 0.7) },
+  FAST:  { word: 'FAST!',  say: 'Fast!',  hint: 'Shake, shake, shake!', friend: '🐇', color: '#FF3D9A', hold: 1.3,
+           ok: m => m.fastSp > 2.2, live: m => clamp01(m.fastSp / 4) },
+  SLOW:  { word: 'SLOW!',  say: 'Slow!',  hint: 'Move slowly…',         friend: '🐢', color: '#0FA3A3', hold: 2.2,
+           ok: m => m.slowSp > 0.3 && m.slowSp < 1.7 && m.fastSp < 2.6,
+           bad: m => m.fastSp > 3, badHint: 'Slower…', live: m => clamp01(m.slowSp / 1.7) },
+  HAPPY: { word: 'HAPPY!', say: 'Happy!', hint: 'Hands up! Smile!',     friend: '🌞', color: '#FF8A00', hold: 0.6,
+           ok: m => m.handsUp || (m.oneUp && m.smile > 0.45), boost: m => (m.smile > 0.45 ? 2 : 1),
+           live: m => (m.handsUp ? 1 : m.oneUp ? 0.5 : 0) },
+  STILL: { word: 'STILL!', say: 'Still!', hint: 'Freeze!',              friend: '⛄', color: '#4F7DF9', hold: 1.5, drain: 1.2,
+           ok: m => m.slowSp < 0.45, live: m => clamp01(1 - m.slowSp / 1.2) }
+};
+const PAIRS = [['BIG', 'SMALL'], ['UP', 'DOWN'], ['FAST', 'SLOW'], ['HAPPY', 'STILL']];
+const CLASH = [['SMALL', 'DOWN'], ['UP', 'HAPPY'], ['SLOW', 'STILL']];   // too alike to sit side by side
+const clash = (a, b) => a === b || CLASH.some(c => c.includes(a) && c.includes(b));
+const PRAISE = ['Great!', 'Wow!', 'Super!', 'Yes!', 'Awesome!', 'Hooray!', 'You did it!'];
+
+const G = { plan: [], ti: -1, si: 0, phase: 'idle', t: 0, tAct: 0, prog: 0, listen: 0.8, celebrate: 1.4,
+            stars: 0, streak: 0, best: 0, maxStars: 1, paused: false, lost: false, running: false,
+            wasOk: false, hinted: 0, lastBlip: 0, grace: 0, curKey: null, color: '#FF5A3C' };
+
+/* Round 1: opposite pairs. Round 2: random mix. Round 3: three-move combos. */
+function buildPlan() {
+  const names = Object.keys(ACT), plan = [];
+  const r1 = [];
+  for (const pr of shuffle(PAIRS)) r1.push({ round: 1, acts: [pr[0]], pair: pr, pi: 0 }, { round: 1, acts: [pr[1]], pair: pr, pi: 1 });
+  let r2;
+  do { r2 = shuffle(names).slice(0, 6); } while (r2.some((a, i) => i > 0 && clash(r2[i - 1], a)));
+  const r3 = [['BIG', 'SMALL', 'UP']];
+  while (r3.length < 3) { const c = shuffle(names).slice(0, 3); if (!clash(c[0], c[1]) && !clash(c[1], c[2])) r3.push(c); }
+  const add = (round, intro, tasks) => {
+    plan.push(Object.assign({ intro: true, round }, intro));
+    tasks.forEach((t, i) => { t.n = i + 1; t.of = tasks.length; plan.push(t); });
+  };
+  add(1, { title: 'Round 1', sub: 'Opposites!', say: 'Round one! Opposites!' }, r1);
+  add(2, { title: 'Round 2', sub: 'Mix it up!', say: 'Round two! Mix it up!' }, r2.map(a => ({ round: 2, acts: [a] })));
+  add(3, { title: 'Super Combo!', sub: '3 in a row!', say: 'Super combo! Three in a row!' }, r3.map(c => ({ round: 3, acts: c })));
+  return plan;
+}
+
+function startGame() {
+  G.plan = buildPlan();
+  G.maxStars = G.plan.reduce((n, t) => n + (t.acts ? t.acts.length + (t.acts.length > 1 ? 1 : 0) : 0), 0);
+  Object.assign(G, { ti: -1, si: 0, stars: 0, streak: 0, best: 0, prog: 0, paused: false, lost: false,
+                     running: true, phase: 'idle', curKey: null, grace: performance.now() + 1500 });
+  FX.confetti = 0;
+  UI.pause(false); UI.lost(false); UI.show('game'); UI.hud(false);
+  nextTask();
+}
+function nextTask() {
+  G.ti++; G.si = 0;
+  if (G.ti >= G.plan.length) { finish(); return; }
+  const task = G.plan[G.ti];
+  if (task.intro) { G.phase = 'intro'; G.t = 0; G.curKey = null; UI.intro(task); Sound.say(task.say); return; }
+  UI.hideIntro(); beginStep(true);
+}
+function beginStep(first) {
+  const task = G.plan[G.ti], key = task.acts[G.si], a = ACT[key], combo = task.acts.length > 1;
+  G.phase = 'listen'; G.t = 0; G.tAct = 0; G.prog = 0; G.wasOk = false; G.hinted = 0;
+  G.curKey = key; G.color = a.color;
+  T.wantSmile = key === 'HAPPY';
+  UI.prompt(task, G.si);
+  if (combo && first) { G.listen = 2.4; Sound.say(task.acts.map(k => ACT[k].say.replace('!', '')).join(', ') + '!'); }
+  else { G.listen = 0.8; Sound.say(task.pi === 1 ? 'Opposite! ' + a.say : a.say); }
+}
+function succeed() {
+  const task = G.plan[G.ti], combo = task.acts.length > 1, last = G.si === task.acts.length - 1;
+  G.stars++; G.streak++; G.best = Math.max(G.best, G.streak);
+  const bonus = combo && last && !task.missed;
+  if (bonus) G.stars++;
+  G.phase = 'celebrate'; G.t = 0; T.wantSmile = false;
+  UI.hud(true); UI.meter(1); UI.chips(task, (combo ? G.si : task.pi) + 1); UI.cheer();
+  if (combo && !last) { G.celebrate = 0.7; Sound.step(); UI.burst(8); }
+  else {
+    const word = bonus ? 'Combo!' : (G.streak > 0 && G.streak % 5 === 0 ? 'On fire!' : pick(PRAISE));
+    G.celebrate = 1.5;
+    if (bonus) Sound.combo(); else Sound.success();
+    UI.burst(bonus ? 26 : 16); UI.praise(word); Sound.say(word);
+  }
+}
+function giveUp() {                                           // no penalty: a kind word, then move on
+  const task = G.plan[G.ti];
+  task.missed = true; G.streak = 0; G.phase = 'celebrate'; G.t = 0; G.celebrate = 1.2; T.wantSmile = false;
+  UI.hud(false); UI.praise('Good try!'); Sound.say('Good try!');
+}
+function advance() {
+  const task = G.plan[G.ti];
+  if (task && task.acts && G.si < task.acts.length - 1) { G.si++; beginStep(false); } else nextTask();
+}
+function finish() {
+  G.running = false; G.phase = 'idle'; G.curKey = null; T.wantSmile = false;
+  UI.final(); Sound.fanfare(); Sound.say('Hooray! You got ' + G.stars + ' stars!');
+}
+function resay() {
+  const task = G.plan[G.ti];
+  if (task && !task.intro && (G.phase === 'active' || G.phase === 'listen')) Sound.say(ACT[task.acts[G.si]].say);
+}
+function setPaused(p) {
+  if (!G.running) return;
+  G.paused = p; UI.pause(p);
+  if (p) Sound.hush(); else { G.grace = performance.now() + 1500; resay(); }
+}
+function skipStep() {
+  if (!G.running) return;
+  G.paused = false; UI.pause(false); G.grace = performance.now() + 1500;
+  const task = G.plan[G.ti];
+  if (task && !task.intro) { task.missed = true; advance(); } else nextTask();
+}
+function restart() { Sound.hush(); startGame(); }
+
+/* runs every animation frame while the game screen is up */
+function gameStep(dt, now) {
+  if (!G.running || G.paused) return;
+
+  /* tracking lost: pause kindly. tracking back: carry on. */
+  const ago = now - T.lastSeen;
+  if (!G.lost) {
+    if (ago > 2500 && now > G.grace) {
+      G.lost = true; UI.lost(true); Sound.soft();
+      Sound.say("I can't see you. Step back so I can see you!");
+    }
+  } else if (ago < 250 && now - T.seenSince > 500) {
+    G.lost = false; UI.lost(false); Sound.blip(); resay(); G.grace = now + 800;
+  }
+  if (G.lost) return;
+
+  const task = G.plan[G.ti]; if (!task) return;
+  G.t += dt;
+  if (G.phase === 'intro') { if (G.t > 2.6) nextTask(); return; }
+  if (G.phase === 'listen') { if (G.t > G.listen) { G.phase = 'active'; G.t = 0; T.jumpUntil = 0; } return; }
+  if (G.phase === 'celebrate') { if (G.t > G.celebrate) advance(); return; }
+  if (G.phase !== 'active') return;
+
+  const key = task.acts[G.si], a = ACT[key], m = T.m;
+  m.jump = now < T.jumpUntil;
+  const ok = a.ok(m), bad = !!(a.bad && a.bad(m));
+  if (ok) {
+    G.prog += dt / a.hold * (a.boost ? a.boost(m) : 1);
+    if (!G.wasOk && now - G.lastBlip > 700) { Sound.blip(); G.lastBlip = now; }   // instant "that's it!" blip
+  } else G.prog -= dt * (bad ? 0.5 : (a.drain || 0.35));      // drains gently, never snaps to zero
+  if (a.instant && a.instant(m)) G.prog = 1;
+  G.prog = clamp01(G.prog); G.wasOk = ok;
+  UI.meter(G.prog);
+  UI.hint(bad ? a.badHint : (key === 'HAPPY' && m.smile > 0.45 ? 'Lovely smile! 😁' : a.hint));
+  if (G.prog >= 1) { succeed(); return; }
+
+  G.tAct += dt;                                               // spoken hints, then a kind skip
+  if (G.hinted === 0 && G.tAct > 5) { G.hinted = 1; Sound.say(a.hint); }
+  else if (G.hinted === 1 && G.tAct > 11) { G.hinted = 2; Sound.say(a.say + ' ' + a.hint); }
+  else if (G.tAct > 18) giveUp();
+}
+
+/* ---------- calibration: is the child visible, whole and centred? ---------- */
+const C = { hold: 0, t: 0, msg: '', lastSay: 0, done: false, ok: false };
+function startCalib() {
+  Object.assign(C, { hold: 0, t: 0, msg: '', done: false, ok: false, lastSay: performance.now() });
+  el.btnSkipCalib.hidden = true;
+  UI.show('calib');
+  Sound.say('Stand back. Let me see you!');
+}
+function calibStep(dt, now) {
+  if (C.done) return;
+  C.t += dt;
+  let see = false, whole = false, mid = false, msg;
+  if (!(T.raw && now - T.lastSeen < 1200)) {
+    msg = C.t < 2.5 ? 'Let me see you!' : 'I can’t see you. Step back so I can see you!';
+  } else {
+    const lm = T.raw, LS = lm[11], RS = lm[12], LH = lm[23], RH = lm[24], N = lm[0];
+    const swx = Math.abs(LS.x - RS.x), shY = (LS.y + RS.y) / 2, hipY = (LH.y + RH.y) / 2, midX = (LS.x + RS.x) / 2;
+    // moderately forgiving: hips must still be seen, but they may sit right at the bottom edge of the frame
+    const hipsIn = vis(LH) > 0.35 && vis(RH) > 0.35 && hipY < 1.05;
+    const tooClose = swx > 0.45 || !hipsIn || N.y < -0.01;
+    const tooFar = hipY - shY < 0.06;
+    see = true; whole = !tooClose && !tooFar; mid = midX > 0.21 && midX < 0.79;
+    msg = tooClose ? 'Step back!' : tooFar ? 'Come closer!' : !mid ? 'Move to the middle!' : 'Perfect! Stay there…';
+  }
+  const ok = see && whole && mid;
+  C.ok = ok;
+  C.hold = ok ? C.hold + dt : Math.max(0, C.hold - dt * 1.5);
+  UI.calib(see, whole, mid, msg, clamp01(C.hold / 1.5));
+  if (!ok && C.t > 2 && ((msg !== C.msg && now - C.lastSay > 3500) || now - C.lastSay > 7000)) {
+    Sound.say(msg.replace('’', "'")); C.lastSay = now;
+  }
+  C.msg = msg;
+  if (C.t > 6.5) el.btnSkipCalib.hidden = false;
+  if (C.hold >= 1.5) {
+    C.done = true; Sound.success(); Sound.say("Great! Let's play!");
+    FX.burst(innerWidth / 2, innerHeight / 2, 18);
+    setTimeout(() => { if (App.screen === 'calib') startGame(); }, 1400);
+  }
+}
+
+/* =====================================================================
+   UI
+   ===================================================================== */
+function retrigger(node, cls) { node.classList.remove(cls); void node.offsetWidth; node.classList.add(cls); }
+
+const UI = {
+  show(name) {
+    App.screen = name;
+    document.querySelectorAll('.screen').forEach(s => s.classList.toggle('on', s.id === 's-' + name));
+    fitCams();
+  },
+  hud(bump) {
+    el.starCount.textContent = G.stars; el.streakCount.textContent = G.streak;
+    if (bump) { retrigger(el.pillStars, 'bump'); if (G.streak > 1) retrigger(el.pillStreak, 'bump'); }
+  },
+  intro(task) { el.introTitle.textContent = task.title; el.introSub.textContent = task.sub; el.ovIntro.classList.add('on'); },
+  hideIntro() { el.ovIntro.classList.remove('on'); },
+  prompt(task, si) {
+    const key = task.acts[si], a = ACT[key], combo = task.acts.length > 1;
+    el.promptCard.style.setProperty('--act', a.color);
+    el.roundTag.textContent = (task.round === 3 ? 'Super Combo' : 'Round ' + task.round) + ': ' + task.n + ' of ' + task.of;
+    el.word.className = 'word w-' + key;
+    el.word.innerHTML = '<span class="wInner">' +
+      Array.from(a.word).map((ch, i) => '<span style="--i:' + i + '">' + ch + '</span>').join('') + '</span>';
+    retrigger(el.word, 'pop');
+    el.friend.classList.remove('cheer'); el.friend.style.transform = ''; el.friend.textContent = a.friend;
+    el.hint.textContent = a.hint;
+    this.chips(task, combo ? si : task.pi);
+    this.meter(0);
+  },
+  chips(task, cur) {
+    const combo = task.acts.length > 1, list = combo ? task.acts : task.pair;
+    if (!list) { el.chips.style.visibility = 'hidden'; return; }
+    el.chips.style.visibility = 'visible';
+    el.chips.innerHTML = list.map((k, i) =>
+      '<span class="chip' + (i < cur ? ' done' : i === cur ? ' cur' : '') + '" style="--c:' + ACT[k].color + '">' +
+      (i < cur ? '✓ ' : '') + ACT[k].say.replace('!', '') + '</span>'
+    ).join('<span>' + (combo ? '➜' : '⇄') + '</span>');
+  },
+  meter(v) { el.meterFill.style.width = (v * 100).toFixed(1) + '%'; },
+  hint(txt) { if (el.hint.textContent !== txt) el.hint.textContent = txt; },
+  praise(txt) { el.praise.textContent = txt; retrigger(el.praise, 'go'); },
+  cheer() { el.friend.style.transform = ''; retrigger(el.friend, 'cheer'); },
+  burst(n) { const r = el.friend.getBoundingClientRect(); FX.burst(r.left + r.width / 2, r.top + r.height / 2, n); },
+  pause(on) { el.ovPause.classList.toggle('on', on); },
+  lost(on) { el.ovLost.classList.toggle('on', on); },
+  calib(see, whole, mid, msg, p) {
+    el.chkSee.classList.toggle('ok', see); el.chkWhole.classList.toggle('ok', whole); el.chkMid.classList.toggle('ok', mid);
+    if (el.calibMsg.textContent !== msg) el.calibMsg.textContent = msg;
+    el.calibBar.style.width = (p * 100).toFixed(0) + '%';
+  },
+  final() {
+    this.show('final');
+    const r = G.stars / G.maxStars;
+    el.finalTitle.textContent = r > 0.8 ? 'Super Star Mover!' : r > 0.45 ? 'Awesome Mover!' : 'Great Moving!';
+    el.finalStars.textContent = '⭐ ' + G.stars; el.finalStreak.textContent = G.best;
+    FX.confetti = 6; FX.burst(innerWidth / 2, innerHeight * 0.4, 30);
+  }
+};
+
+function showError(e) {
+  const kind = e && e.kind, name = (e && e.name) || '';
+  let icon = '📷', title, body;
+  if (kind === 'insecure') { title = 'The camera needs a secure page.'; body = 'Open this file in Chrome or Edge on a computer, or put it on an https:// address or localhost.'; }
+  else if (kind === 'model') { icon = '🌐'; title = 'The body tracker did not load.'; body = 'It comes from the internet. Check the connection, then press Try again.'; }
+  else if (/NotAllowed|Security|PermissionDenied/.test(name)) { title = 'The camera is blocked.'; body = 'Click the camera or lock icon next to the address bar, choose Allow, then press Try again.'; }
+  else if (/NotFound|Overconstrained|DevicesNotFound/.test(name)) { title = 'No camera found.'; body = 'Plug in a webcam, or open the game on a phone, tablet or laptop that has one.'; }
+  else if (/NotReadable|TrackStart|Abort/.test(name)) { title = 'The camera is busy.'; body = 'Close other apps or tabs that use the camera, then press Try again.'; }
+  else { title = 'The camera did not start.'; body = 'Check the camera, then press Try again.'; }
+  el.errIcon.textContent = icon; el.errTitle.textContent = title; el.errBody.textContent = body;
+  UI.show('error');
+}
+
+/* ---------- canvas sizing (camera boxes follow the real camera shape) ---------- */
+const ctxCache = new Map();
+const C2 = c => { let x = ctxCache.get(c); if (!x) { x = c.getContext('2d'); ctxCache.set(c, x); } return x; };
+const dpr = () => Math.min(2, window.devicePixelRatio || 1);
+function fitBox(c, maxW, maxH) {
+  let w = maxW, h = w / T.ar;
+  if (h > maxH) { h = maxH; w = h * T.ar; }
+  w = Math.max(1, Math.floor(w)); h = Math.max(1, Math.floor(h));
+  c.style.width = w + 'px'; c.style.height = h + 'px';
+  const cw = Math.round(w * dpr()), ch = Math.round(h * dpr());
+  if (c.width !== cw || c.height !== ch) { c.width = cw; c.height = ch; }
+}
+function sizeCanvas(c) {
+  const r = c.getBoundingClientRect();
+  const cw = Math.max(1, Math.round(r.width * dpr())), ch = Math.max(1, Math.round(r.height * dpr()));
+  if (c.width !== cw || c.height !== ch) { c.width = cw; c.height = ch; }
+}
+function fitCams() {
+  const vw = innerWidth, vh = innerHeight, land = vw > vh;
+  if (App.screen === 'calib') { const r = el.calibCell.getBoundingClientRect(); fitBox(el.calibCam, r.width - 12, r.height - 12); }
+  if (App.screen === 'game') {
+    fitBox(el.pvCam, clamp(land ? vw * 0.17 : vw * 0.3, 84, 260), clamp(land ? vh * 0.36 : vh * 0.2, 70, 240));
+    fitBox(el.lostCam, Math.min(vw * 0.6, 440), Math.min(vh * 0.32, 320));
+    sizeCanvas(el.buddy); sizeCanvas(el.coach);
+  }
+  FX.resize();
+}
+
+/* ---------- mirrored camera picture + skeleton ---------- */
+const BONES = [[11,12],[11,13],[13,15],[12,14],[14,16],[11,23],[12,24],[23,24],[23,25],[25,27],[24,26],[26,28]];
+function roundRect(ctx, x, y, w, h, r) {
+  ctx.beginPath(); ctx.moveTo(x + r, y);
+  ctx.arcTo(x + w, y, x + w, y + h, r); ctx.arcTo(x + w, y + h, x, y + h, r);
+  ctx.arcTo(x, y + h, x, y, r); ctx.arcTo(x, y, x + w, y, r); ctx.closePath();
+}
+function drawCam(c, guide) {
+  const ctx = C2(c), w = c.width, h = c.height; if (w < 2 || h < 2) return;
+  if (video.readyState >= 2 && video.videoWidth) {
+    ctx.save(); ctx.translate(w, 0); ctx.scale(-1, 1); ctx.drawImage(video, 0, 0, w, h); ctx.restore();   // mirror
+  } else { ctx.fillStyle = INK; ctx.fillRect(0, 0, w, h); }
+  if (guide) {                                                // "stand here" frame
+    ctx.save(); ctx.setLineDash([w * 0.03, w * 0.025]); ctx.lineWidth = Math.max(3, w * 0.008);
+    ctx.strokeStyle = C.ok ? '#3BE07F' : 'rgba(255,255,255,.9)';
+    roundRect(ctx, w * 0.2, h * 0.04, w * 0.6, h * 0.92, w * 0.06); ctx.stroke(); ctx.restore();
+  }
+  const s = T.sm; if (!s || performance.now() - T.lastSeen > 1200) return;
+  const X = i => (1 - s[i].x / T.ar) * w, Y = i => s[i].y * h;
+  ctx.lineCap = 'round';
+  for (const pass of [0, 1]) {
+    ctx.strokeStyle = pass ? '#FFD23F' : 'rgba(30,26,74,.6)';
+    ctx.lineWidth = Math.max(2, w * (pass ? 0.012 : 0.024));
+    ctx.beginPath();
+    for (const b of BONES) { if (s[b[0]].v < 0.3 || s[b[1]].v < 0.3) continue; ctx.moveTo(X(b[0]), Y(b[0])); ctx.lineTo(X(b[1]), Y(b[1])); }
+    ctx.stroke();
+  }
+  ctx.strokeStyle = '#FFD23F'; ctx.lineWidth = Math.max(2, w * 0.012);
+  ctx.beginPath(); ctx.arc(X(0), Y(0), Math.abs(X(11) - X(12)) * 0.42 + 2, 0, 7); ctx.stroke();
+}
+
+/* ---------- shared cartoon drawing bits ---------- */
+function limb(ctx, pts, wd, col, o) {
+  ctx.lineCap = 'round'; ctx.lineJoin = 'round';
+  ctx.beginPath(); ctx.moveTo(pts[0][0], pts[0][1]);
+  for (let i = 1; i < pts.length; i++) ctx.lineTo(pts[i][0], pts[i][1]);
+  ctx.strokeStyle = INK; ctx.lineWidth = wd + o * 2; ctx.stroke();
+  ctx.strokeStyle = col; ctx.lineWidth = wd; ctx.stroke();
+}
+function face(ctx, x, y, r, big, o) {
+  ctx.fillStyle = '#FFD23F'; ctx.strokeStyle = INK; ctx.lineWidth = o;
+  ctx.beginPath(); ctx.arc(x, y, r, 0, 7); ctx.fill(); ctx.stroke();
+  ctx.fillStyle = 'rgba(255,90,60,.4)';
+  for (const sx of [-1, 1]) { ctx.beginPath(); ctx.arc(x + sx * r * 0.6, y + r * 0.22, r * 0.17, 0, 7); ctx.fill(); }
+  ctx.fillStyle = INK;
+  for (const sx of [-1, 1]) { ctx.beginPath(); ctx.arc(x + sx * r * 0.34, y - r * 0.14, r * 0.11, 0, 7); ctx.fill(); }
+  ctx.strokeStyle = INK; ctx.lineWidth = Math.max(1.5, r * 0.12); ctx.lineCap = 'round';
+  ctx.beginPath(); ctx.arc(x, y + r * 0.06, r * 0.5, Math.PI * 0.15, Math.PI * 0.85);
+  if (big) { ctx.closePath(); ctx.fillStyle = '#FF5A3C'; ctx.fill(); }
+  ctx.stroke();
+}
+
+/* ---------- "You!" buddy: a cartoon that copies the child's detected pose ---------- */
+const View = { cx: null, by: null };
+function drawBuddy(now) {
+  const c = el.buddy, ctx = C2(c), w = c.width, h = c.height; if (w < 2 || h < 2) return;
+  ctx.clearRect(0, 0, w, h);
+  ctx.fillStyle = '#9FE3B4'; ctx.beginPath(); ctx.ellipse(w / 2, h * 0.93, w * 0.42, h * 0.05, 0, 0, 7); ctx.fill();
+  const s = T.sm;
+  if (!s || now - T.lastSeen > 1500) {
+    View.cx = View.by = null;
+    ctx.font = Math.min(w, h) * 0.3 + 'px serif'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+    ctx.fillText('👀', w / 2, h / 2); return;
+  }
+  const u = T.unit || 0.1, k = Math.min(h * 0.165, w * 0.21) / u, o = Math.max(2, u * k * 0.07);
+  const hipOK = s[23].v > 0.4 && s[24].v > 0.4;
+  const bx = (s[11].x + s[12].x) / 2;
+  const by = hipOK && T.standHip != null ? T.standHip : (T.standSh != null ? T.standSh : s[11].y) + 1.4 * u;
+  View.cx = View.cx == null ? bx : lerp(View.cx, bx, 0.04);    // camera follows slowly, so moves stay visible
+  View.by = View.by == null ? by : lerp(View.by, by, 0.1);
+  const P = i => [w / 2 - (s[i].x - View.cx) * k, h * 0.56 + (s[i].y - View.by) * k];   // mirrored
+  const LS = P(11), RS = P(12), LE = P(13), RE = P(14), LW = P(15), RW = P(16);
+  let LH = P(23), RH = P(24);
+  if (!hipOK) { LH = [LS[0], LS[1] + 1.4 * u * k]; RH = [RS[0], RS[1] + 1.4 * u * k]; }
+  const lw = u * k * 0.34, col = G.color || '#FF5A3C';
+  if (hipOK) {                                                // legs + shoes
+    for (const leg of [[LH, 25, 27], [RH, 26, 28]]) {
+      if (s[leg[1]].v < 0.4) continue;
+      const pts = [leg[0], P(leg[1])];
+      if (s[leg[2]].v > 0.4) pts.push(P(leg[2]));
+      limb(ctx, pts, lw, '#3B4CC0', o);
+      if (pts.length === 3) {
+        const a = pts[2];
+        ctx.fillStyle = '#FF5A3C'; ctx.strokeStyle = INK; ctx.lineWidth = o;
+        ctx.beginPath(); ctx.ellipse(a[0], a[1] + lw * 0.2, lw * 0.75, lw * 0.5, 0, 0, 7); ctx.fill(); ctx.stroke();
+      }
+    }
+  }
+  ctx.lineJoin = 'round';                                     // shirt in the colour of the current word
+  ctx.beginPath(); ctx.moveTo(LS[0], LS[1]); ctx.lineTo(RS[0], RS[1]); ctx.lineTo(RH[0], RH[1]); ctx.lineTo(LH[0], LH[1]); ctx.closePath();
+  ctx.strokeStyle = INK; ctx.lineWidth = lw + o * 2; ctx.stroke();
+  ctx.fillStyle = col; ctx.strokeStyle = col; ctx.lineWidth = lw; ctx.fill(); ctx.stroke();
+  limb(ctx, [LS, LE, LW], lw * 0.8, col, o); limb(ctx, [RS, RE, RW], lw * 0.8, col, o);
+  for (const hand of [LW, RW]) {
+    ctx.fillStyle = '#FFD23F'; ctx.strokeStyle = INK; ctx.lineWidth = o;
+    ctx.beginPath(); ctx.arc(hand[0], hand[1], lw * 0.55, 0, 7); ctx.fill(); ctx.stroke();
+  }
+  const N = P(0);
+  face(ctx, N[0], N[1], u * k * 0.55, G.phase === 'celebrate', o);
+}
+
+/* ---------- coach: a little figure that shows the move to copy ---------- */
+function drawCoach(t) {
+  const c = el.coach, ctx = C2(c), w = c.width, H = c.height; if (w < 2 || H < 2) return;
+  ctx.clearRect(0, 0, w, H);
+  const key = G.curKey; if (!key) return;
+  let aL = 18, aR = 18, crouch = 0, lift = 0, spread = 0.08, tuck = false, sc = 1, happy = false;
+  switch (key) {
+    case 'BIG':   aL = aR = 94 + Math.sin(t * 4) * 5; spread = 0.17; sc = 1.05; break;
+    case 'SMALL': crouch = 0.8; tuck = true; sc = 0.85; break;
+    case 'UP': { const p = (t * 1.3) % 1;
+      if (p < 0.55) { lift = Math.sin(p / 0.55 * Math.PI); aL = aR = 160; }
+      else { crouch = 0.4 * Math.sin((p - 0.55) / 0.45 * Math.PI); aL = aR = 30; } break; }
+    case 'DOWN':  crouch = 0.6 + 0.3 * Math.sin(t * 3); aL = aR = 25; break;
+    case 'FAST':  aL = 95 + 60 * Math.sin(t * 24); aR = 95 - 60 * Math.sin(t * 24); break;
+    case 'SLOW':  aL = 95 + 60 * Math.sin(t * 1.3); aR = 95 - 60 * Math.sin(t * 1.3); break;
+    case 'HAPPY': aL = aR = 150 + 14 * Math.sin(t * 7); lift = 0.25 * Math.abs(Math.sin(t * 7)); happy = true; break;
+    case 'STILL': aL = aR = 14; break;
+  }
+  const cx = w / 2, ground = H * 0.93, o = Math.max(1.5, H * 0.014);
+  ctx.fillStyle = 'rgba(30,26,74,.15)';
+  ctx.beginPath(); ctx.ellipse(cx, ground, H * 0.2 * (1 - lift * 0.4), H * 0.025, 0, 0, 7); ctx.fill();
+  ctx.save(); ctx.translate(cx, ground); ctx.scale(sc, sc); ctx.translate(-cx, -ground);
+  const footY = ground - lift * H * 0.13;
+  const hipY = footY - H * 0.3 * (1 - 0.62 * crouch);
+  const shY = hipY - H * 0.25 * (1 - 0.12 * crouch);
+  const hr = H * 0.095, headY = shY - hr * 1.15, fx = spread * H + H * 0.04;
+  for (const sg of [-1, 1])
+    limb(ctx, [[cx + sg * H * 0.035, hipY], [cx + sg * (fx * 0.6 + crouch * H * 0.1), (hipY + footY) / 2], [cx + sg * fx, footY]], H * 0.055, '#3B4CC0', o);
+  limb(ctx, [[cx, shY + H * 0.04], [cx, hipY - H * 0.01]], H * 0.13, ACT[key].color, o);
+  [[-1, aL], [1, aR]].forEach(pr => {
+    const sg = pr[0], sx = cx + sg * H * 0.07, sy = shY + H * 0.035;
+    const pts = tuck ? [[sx, sy], [sx + sg * H * 0.07, sy + H * 0.09], [cx + sg * H * 0.02, sy + H * 0.05]]
+      : [[sx, sy], [sx + sg * Math.sin(pr[1] * Math.PI / 180) * H * 0.23, sy + Math.cos(pr[1] * Math.PI / 180) * H * 0.23]];
+    limb(ctx, pts, H * 0.05, '#FFD23F', o);
+  });
+  face(ctx, cx, headY, hr, happy, o);
+  ctx.restore();
+}
+
+/* ---------- the friend emoji reacts live to what the child is doing ---------- */
+function liveFriend(now) {
+  if (G.paused || G.lost || !G.curKey || (G.phase !== 'active' && G.phase !== 'listen')) return;
+  const m = T.m, t = now / 1000, key = G.curKey, v = ACT[key].live(m);
+  let tr = '';
+  switch (key) {
+    case 'BIG':   tr = 'scale(' + (0.55 + v * 0.75).toFixed(3) + ')'; break;                 // elephant grows
+    case 'SMALL': tr = 'scale(' + (1.25 - v * 0.8).toFixed(3) + ')'; break;                  // mouse shrinks
+    case 'UP':    tr = 'translateY(' + (-v * 42).toFixed(1) + '%)'; break;                   // rocket lifts
+    case 'DOWN':  tr = 'translateY(' + (v * 20).toFixed(1) + '%) scale(' + (1 + v * 0.15).toFixed(3) + ',' + (1 - v * 0.35).toFixed(3) + ')'; break;
+    case 'FAST':  tr = 'translateX(' + (Math.sin(t * 38) * v * 16).toFixed(1) + '%) rotate(' + (Math.sin(t * 31) * v * 12).toFixed(1) + 'deg)'; break;
+    case 'SLOW':  tr = 'translateX(' + ((G.prog - 0.5) * 60).toFixed(1) + '%) scaleX(-1)'; break;   // turtle walks
+    case 'HAPPY': tr = 'scale(' + (0.8 + v * 0.4).toFixed(3) + ') rotate(' + (Math.sin(t * 5) * 8 * v).toFixed(1) + 'deg)'; break;
+    case 'STILL': tr = 'rotate(' + (Math.sin(t * 22) * (1 - v) * 14).toFixed(1) + 'deg)'; break;     // snowman wobbles if you move
+  }
+  el.friend.style.transform = tr;
+}
+
+/* ---------- star bursts + confetti ---------- */
+const CONF = ['#FF5A3C', '#12B76A', '#2E9BFF', '#7B4DFF', '#FF3D9A', '#FFFBF0'];
+const FX = {
+  c: el.fx, ctx: null, d: 1, parts: [], confetti: 0, dirty: false,
+  resize() { this.d = dpr(); this.c.width = Math.round(innerWidth * this.d); this.c.height = Math.round(innerHeight * this.d); },
+  burst(x, y, n) {
+    const k = clamp(Math.min(innerWidth, innerHeight) / 600, 0.6, 1.6);
+    for (let i = 0; i < n; i++) {
+      const a = Math.random() * Math.PI * 2, sp = (160 + Math.random() * 380) * k;
+      this.parts.push({ x, y, vx: Math.cos(a) * sp, vy: Math.sin(a) * sp - 200 * k, g: 900 * k, life: 0,
+        max: 0.8 + Math.random() * 0.6, size: (18 + Math.random() * 24) * k, ch: pick(['⭐', '✨', '🌟']), rot: 0, vr: 0 });
+    }
+  },
+  step(dt) {
+    const c = this.c, ctx = this.ctx || (this.ctx = c.getContext('2d'));
+    if (this.confetti > 0) {
+      this.confetti -= dt;
+      const n = Math.round(60 * dt) + (Math.random() < 0.5 ? 1 : 0);
+      for (let i = 0; i < n; i++) this.parts.push({ x: Math.random() * innerWidth, y: -20, vx: (Math.random() - 0.5) * 120,
+        vy: 120 + Math.random() * 220, g: 160, life: 0, max: 4, size: 8 + Math.random() * 10, col: pick(CONF),
+        rot: Math.random() * 6, vr: (Math.random() - 0.5) * 10 });
+    }
+    if (!this.parts.length) { if (this.dirty) { ctx.setTransform(1, 0, 0, 1, 0, 0); ctx.clearRect(0, 0, c.width, c.height); this.dirty = false; } return; }
+    ctx.setTransform(this.d, 0, 0, this.d, 0, 0); ctx.clearRect(0, 0, innerWidth, innerHeight); this.dirty = true;
+    ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+    for (let i = this.parts.length - 1; i >= 0; i--) {
+      const p = this.parts[i]; p.life += dt;
+      if (p.life > p.max || p.y > innerHeight + 40) { this.parts.splice(i, 1); continue; }
+      p.vy += p.g * dt; p.x += p.vx * dt; p.y += p.vy * dt; p.rot += p.vr * dt;
+      ctx.globalAlpha = clamp01((p.max - p.life) / 0.4);
+      ctx.save(); ctx.translate(p.x, p.y); ctx.rotate(p.rot);
+      if (p.ch) { ctx.font = p.size + 'px serif'; ctx.fillText(p.ch, 0, 0); }
+      else { ctx.fillStyle = p.col; ctx.fillRect(-p.size / 2, -p.size / 3, p.size, p.size * 0.66); }
+      ctx.restore();
+    }
+    ctx.globalAlpha = 1;
+  }
+};
+
+/* =====================================================================
+   MAIN LOOP + BUTTONS
+   ===================================================================== */
+async function boot() {
+  if (App.busy) return; App.busy = true;
+  Sound.init(); Sound.say("Let's play!", true);              // spoken inside the tap, which unlocks voice on phones
+  UI.show('loading');
+  try {
+    await Promise.all([startCamera(), loadTracker()]);
+    loadFaceLater();
+    startCalib();
+  } catch (e) { showError(e); }
+  App.busy = false;
+}
+
+let lastFrame = performance.now();
+function frame(now) {
+  requestAnimationFrame(frame);
+  const dt = Math.min(0.1, (now - lastFrame) / 1000); lastFrame = now;
+  trackingStep(now);
+  if (App.screen === 'calib') { calibStep(dt, now); drawCam(el.calibCam, true); }
+  else if (App.screen === 'game') {
+    gameStep(dt, now);
+    drawCam(el.pvCam, false);
+    if (G.lost) drawCam(el.lostCam, false);
+    drawBuddy(now); drawCoach(now / 1000); liveFriend(now);
+  }
+  FX.step(dt);
+}
+
+el.btnStart.addEventListener('click', boot);
+el.btnRetry.addEventListener('click', boot);
+el.btnSkipCalib.addEventListener('click', () => { if (!C.done) { C.done = true; startGame(); } });
+el.btnPause.addEventListener('click', () => setPaused(true));
+el.btnResume.addEventListener('click', () => setPaused(false));
+el.btnSkip.addEventListener('click', skipStep);
+el.btnRestart.addEventListener('click', restart);
+el.btnRestart2.addEventListener('click', restart);
+el.btnAgain.addEventListener('click', () => { Sound.init(); restart(); });
+el.btnSound.addEventListener('click', () => {
+  Sound.on = !Sound.on; el.btnSound.textContent = Sound.on ? '🔊' : '🔇';
+  if (!Sound.on) Sound.hush(); else Sound.blip();
+});
+document.addEventListener('keydown', e => {
+  if ((e.code === 'Space' || e.key === 'p' || e.key === 'P') && App.screen === 'game' && G.running) {
+    if (e.target && e.target.tagName === 'BUTTON') return;
+    e.preventDefault(); setPaused(!G.paused);
+  }
+});
+document.addEventListener('visibilitychange', () => { if (document.hidden && G.running && !G.paused) setPaused(true); });
+
+let fitQueued = false;
+const queueFit = () => { if (fitQueued) return; fitQueued = true; requestAnimationFrame(() => { fitQueued = false; fitCams(); }); };
+window.addEventListener('resize', queueFit);
+window.addEventListener('orientationchange', queueFit);
+if (window.ResizeObserver) new ResizeObserver(queueFit).observe($('app'));
+
+fitCams();
+requestAnimationFrame(frame);
+})();
+</script>
+</body>
+</html>

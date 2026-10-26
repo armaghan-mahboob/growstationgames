@@ -1,0 +1,1929 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
+<meta name="theme-color" content="#ffe9d6">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<title>Touch the Color</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Fredoka:wght@500;600;700&display=swap" rel="stylesheet">
+<style>
+/* ==========================================================================
+   UI STYLES
+   One rounded family (Fredoka), plum ink, bubblegum pink for controls.
+   Pink is deliberately NOT one of the six game colors, so UI never competes
+   with the colors the child is learning.
+   ========================================================================== */
+:root{
+  --ink:#2d2654;
+  --ink-soft:#625b88;
+  --pink:#ff5fa2;
+  --pink-dark:#d93d83;
+  --mint:#1fc7a5;
+  --mint-dark:#139478;
+  --gold:#ffc93c;
+  --font:"Fredoka","Baloo 2","Chalkboard SE","Comic Sans MS","Trebuchet MS",system-ui,sans-serif;
+  --st:env(safe-area-inset-top,0px);
+  --sb:env(safe-area-inset-bottom,0px);
+  --sl:env(safe-area-inset-left,0px);
+  --sr:env(safe-area-inset-right,0px);
+  --cam-w:clamp(110px,17vw,230px);
+}
+*{box-sizing:border-box}
+html,body{margin:0;height:100%;overflow:hidden;background:#ffe9d6;color:var(--ink);font-family:var(--font);
+  -webkit-user-select:none;user-select:none;-webkit-touch-callout:none;touch-action:manipulation;
+  -webkit-tap-highlight-color:transparent;overscroll-behavior:none}
+button{font-family:var(--font);color:var(--ink);cursor:pointer;border:0}
+button:focus-visible{outline:4px solid var(--mint);outline-offset:4px}
+.hidden{display:none!important}
+#scene{position:fixed;inset:0;width:100%;height:100%;display:block;z-index:0}
+#safeProbe{position:fixed;left:0;top:0;visibility:hidden;pointer-events:none;padding:var(--st) var(--sr) var(--sb) var(--sl)}
+
+/* ---------- full screens ---------- */
+.screen{position:fixed;inset:0;z-index:20;display:flex;flex-direction:column;align-items:center;justify-content:center;
+  gap:clamp(8px,2.2vh,24px);text-align:center;
+  padding:calc(14px + var(--st)) calc(14px + var(--sr)) calc(14px + var(--sb)) calc(14px + var(--sl))}
+#startScreen{justify-content:flex-start;padding-top:calc(5vh + var(--st))}
+.title{margin:0;font-weight:700;line-height:.98;font-size:clamp(40px,min(8.5vw,13vh),118px);text-shadow:0 .05em 0 rgba(45,38,84,.12)}
+.title .rb i{font-style:normal;display:inline-block;color:var(--c);-webkit-text-stroke:.035em var(--ink);paint-order:stroke fill;animation:hop 2.2s ease-in-out infinite}
+.title .rb i:nth-child(2){animation-delay:.1s}.title .rb i:nth-child(3){animation-delay:.2s}
+.title .rb i:nth-child(4){animation-delay:.3s}.title .rb i:nth-child(5){animation-delay:.4s}.title .rb i:nth-child(6){animation-delay:.5s}
+.subtitle{margin:0;font-size:clamp(20px,min(3.4vw,5vh),36px);font-weight:600;color:var(--ink-soft)}
+.status{margin:0;font-size:clamp(16px,2.4vw,22px);font-weight:600;color:var(--ink-soft);min-height:1.3em}
+.note{margin:0;font-size:clamp(14px,1.9vw,18px);line-height:1.4;color:var(--ink-soft);max-width:34em;font-weight:500}
+
+/* ---------- buttons ---------- */
+.big-btn{font-weight:700;font-size:clamp(26px,min(5.5vw,8vh),60px);line-height:1;padding:.45em 1.35em .5em;border-radius:999px;
+  background:var(--pink);color:#fff;box-shadow:0 .14em 0 var(--pink-dark),0 .35em .6em rgba(45,38,84,.22);
+  transition:transform .08s ease,box-shadow .08s ease}
+.big-btn:active{transform:translateY(.1em);box-shadow:0 .04em 0 var(--pink-dark),0 .15em .3em rgba(45,38,84,.2)}
+.big-btn.mint{background:var(--mint);box-shadow:0 .14em 0 var(--mint-dark),0 .35em .6em rgba(45,38,84,.22)}
+.big-btn.mint:active{box-shadow:0 .04em 0 var(--mint-dark),0 .15em .3em rgba(45,38,84,.2)}
+#playBtn{animation:breathe 1.8s ease-in-out infinite}
+.small-btn{font-weight:600;font-size:clamp(16px,2.4vw,22px);padding:.55em 1.15em;border-radius:999px;background:#fff;box-shadow:0 4px 0 rgba(45,38,84,.16)}
+.small-btn:active{transform:translateY(3px);box-shadow:0 1px 0 rgba(45,38,84,.16)}
+.icon-btn{width:clamp(46px,min(6vw,8vh),62px);height:clamp(46px,min(6vw,8vh),62px);border-radius:50%;background:#fff;
+  display:grid;place-items:center;font-size:clamp(20px,min(2.8vw,3.8vh),28px);box-shadow:0 5px 0 rgba(45,38,84,.15)}
+.icon-btn:active{transform:translateY(3px);box-shadow:0 2px 0 rgba(45,38,84,.15)}
+.icon-btn svg{width:52%;height:52%}
+
+/* ---------- in-game HUD ---------- */
+#hud{position:fixed;inset:0;z-index:10;pointer-events:none}
+#hud button,#hud .chip{pointer-events:auto}
+#topLeft{position:absolute;top:calc(10px + var(--st));left:calc(10px + var(--sl));display:flex;flex-direction:column;gap:8px;align-items:flex-start}
+.chip{background:#fff;border-radius:999px;padding:.16em .62em .2em .42em;font-weight:700;font-size:clamp(24px,min(4vw,6vh),44px);
+  box-shadow:0 5px 0 rgba(45,38,84,.14);display:flex;align-items:center;gap:.22em;line-height:1}
+.chip.mini{font-size:clamp(18px,min(2.8vw,4vh),28px)}
+.chip.bump{animation:bump .5s cubic-bezier(.3,1.8,.5,1)}
+#banner{position:absolute;top:calc(10px + var(--st));left:0;right:0;margin:0 auto;width:fit-content;background:#fff;border-radius:30px;
+  padding:.22em .7em .3em;box-shadow:0 7px 0 rgba(45,38,84,.14);display:flex;flex-direction:column;align-items:center;gap:.25em;
+  max-width:calc(100vw - 2 * var(--cam-w) - 70px)}
+#banner.pop{animation:popP .45s cubic-bezier(.3,1.6,.5,1)}
+#bannerRow{display:flex;align-items:center;justify-content:center;gap:.3em;font-weight:700;font-size:clamp(28px,min(5vw,8.5vh),72px);line-height:1.08}
+#bannerText{white-space:nowrap}
+#bannerText.long{font-size:.74em;white-space:normal}
+#teacher{flex:none;display:inline-block;font-size:.9em;transform-origin:50% 90%}
+#teacher.talk{animation:talk .3s ease-in-out infinite alternate}
+#swatch{flex:none;width:1.2em;height:1.2em;border-radius:50%;display:grid;place-items:center;background:#fff;
+  box-shadow:inset 0 -.12em 0 rgba(0,0,0,.16),0 0 0 .07em #fff,0 0 0 .12em rgba(45,38,84,.18);transition:background .3s}
+#swatch span{font-size:.72em;line-height:1}
+#swatch.pop{animation:bump .5s cubic-bezier(.3,1.8,.5,1)}
+.cword{display:inline-block;padding:.02em .26em .06em;border-radius:.28em;box-shadow:inset 0 -.1em 0 rgba(0,0,0,.18);letter-spacing:.02em}
+#dots{display:flex;gap:6px;flex-wrap:wrap;justify-content:center}
+.dot{display:block;width:clamp(10px,1.5vw,16px);height:clamp(10px,1.5vw,16px);border-radius:50%;background:#efe3d3}
+.dot.done{background:var(--gold);box-shadow:0 0 0 2px #fff,0 0 0 3px rgba(224,154,0,.5)}
+.dot.miss{background:#d8cbe6}
+.dot.now{background:#fff;box-shadow:0 0 0 3px var(--pink);animation:pulse 1s ease-in-out infinite}
+#controls{position:absolute;left:calc(10px + var(--sl));bottom:calc(10px + var(--sb));display:flex;gap:10px}
+#toast{position:fixed;left:50%;top:50%;z-index:12;pointer-events:none;opacity:0;white-space:nowrap;
+  font-weight:700;font-size:clamp(34px,min(7vw,11vh),92px);color:var(--pink);
+  text-shadow:0 4px 0 #fff,0 -3px 0 #fff,3px 0 0 #fff,-3px 0 0 #fff,0 10px 18px rgba(45,38,84,.25);transform:translate(-50%,-50%)}
+#toast.show{animation:toastPop 1.25s ease-out forwards}
+
+/* ---------- camera preview (tracking visualization) ---------- */
+#camWrap{position:fixed;z-index:11;top:calc(10px + var(--st));right:calc(10px + var(--sr));width:var(--cam-w);aspect-ratio:4/3;
+  border-radius:18px;overflow:hidden;background:var(--ink);border:4px solid #fff;box-shadow:0 6px 0 rgba(45,38,84,.16);transition:opacity .3s}
+#camWrap.cam-off{opacity:0;pointer-events:none} /* keep it rendered: hidden videos can stop decoding frames */
+#camWrap video,#camWrap canvas{position:absolute;inset:0;width:100%;height:100%;object-fit:fill;transform:scaleX(-1)}
+#camDot{position:absolute;right:7px;top:7px;width:13px;height:13px;border-radius:50%;background:#b9b2c9;box-shadow:0 0 0 2px #fff}
+#camDot.on{background:#3cc13b}
+
+/* ---------- calibration ---------- */
+#calibScreen{background:rgba(255,233,214,.95)}
+#calibTitle{margin:0;font-size:clamp(28px,min(6vw,8vh),72px);font-weight:700;line-height:1.05}
+#calibStage{position:relative;border-radius:28px;overflow:hidden;background:var(--ink);box-shadow:0 0 0 7px #fff,0 12px 0 7px rgba(45,38,84,.12);transition:box-shadow .3s}
+#calibStage.ok{box-shadow:0 0 0 7px var(--mint),0 12px 0 7px rgba(45,38,84,.12)}
+#calibStage video,#calibStage canvas{position:absolute;inset:0;width:100%;height:100%;object-fit:fill;transform:scaleX(-1)}
+#calibStage svg{position:absolute;inset:0;width:100%;height:100%}
+#calibArrow{position:absolute;top:50%;font-size:clamp(48px,9vw,110px);transform:translate(-50%,-50%);animation:nudge .7s ease-in-out infinite alternate;filter:drop-shadow(0 4px 0 rgba(0,0,0,.25))}
+#calibLoading{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:12px;
+  color:#fff;font-weight:600;font-size:clamp(18px,3vw,28px);background:rgba(45,38,84,.78);text-align:center;padding:18px}
+#calibLoadingSub{font-size:.68em;font-weight:500;opacity:.85;max-width:26em}
+.spinner{width:54px;height:54px;border-radius:50%;border:8px solid rgba(255,255,255,.28);border-top-color:#fff;animation:spin 1s linear infinite}
+#calibMeter{width:min(520px,80vw);height:24px;border-radius:99px;background:#fff;box-shadow:inset 0 3px 0 rgba(45,38,84,.1);overflow:hidden}
+#calibFill{height:100%;width:0;background:linear-gradient(90deg,#8be37f,var(--mint));border-radius:99px}
+
+/* ---------- overlays & cards ---------- */
+.overlay{position:fixed;inset:0;z-index:30;display:flex;align-items:center;justify-content:center;padding:20px;background:rgba(45,38,84,.42)}
+.overlay.soft{background:rgba(255,233,214,.82)}
+.card{background:#fff;border-radius:36px;padding:clamp(18px,4vw,44px) clamp(22px,5vw,60px);text-align:center;
+  box-shadow:0 12px 0 rgba(45,38,84,.16);max-width:min(720px,94vw);display:flex;flex-direction:column;align-items:center;gap:clamp(8px,2vh,18px)}
+.card h2{margin:0;font-size:clamp(32px,min(6.5vw,10vh),80px);line-height:1}
+.card p{margin:0;font-size:clamp(20px,min(3.6vw,5.5vh),40px);font-weight:600;color:var(--ink-soft)}
+.card p.note{font-size:clamp(15px,2vw,19px)}
+.peek{font-size:clamp(64px,min(13vw,18vh),150px);line-height:1;animation:hop 1.4s ease-in-out infinite}
+#finishScreen{justify-content:flex-start;padding-top:calc(3vh + var(--st))}
+.trophy{font-size:clamp(64px,min(13vw,17vh),160px);line-height:1;animation:wiggle 1.6s ease-in-out infinite}
+#finishStars{display:flex;flex-wrap:wrap;justify-content:center;gap:.06em;font-size:clamp(26px,min(5vw,7vh),56px);max-width:min(90vw,640px);line-height:1}
+.fs{color:#eadfcf}
+.fs.got{color:var(--gold);text-shadow:0 3px 0 #e09a00;animation:starIn .5s cubic-bezier(.3,1.8,.5,1) both}
+
+/* ---------- animations ---------- */
+@keyframes hop{0%,100%{transform:translateY(0)}50%{transform:translateY(-.08em)}}
+@keyframes breathe{0%,100%{transform:scale(1)}50%{transform:scale(1.06)}}
+@keyframes bump{0%{transform:scale(1)}40%{transform:scale(1.3)}100%{transform:scale(1)}}
+@keyframes popP{0%{transform:scale(.9)}100%{transform:scale(1)}}
+@keyframes talk{from{transform:rotate(-7deg)}to{transform:rotate(7deg) scale(1.08)}}
+@keyframes pulse{0%,100%{transform:scale(1)}50%{transform:scale(1.25)}}
+@keyframes spin{to{transform:rotate(360deg)}}
+@keyframes nudge{from{margin-left:-10px}to{margin-left:10px}}
+@keyframes wiggle{0%,100%{transform:rotate(-6deg)}50%{transform:rotate(6deg) scale(1.05)}}
+@keyframes starIn{from{transform:scale(0) rotate(-90deg)}to{transform:scale(1) rotate(0)}}
+@keyframes toastPop{0%{opacity:0;transform:translate(-50%,-50%) scale(.5)}15%{opacity:1;transform:translate(-50%,-50%) scale(1.1)}
+  25%{transform:translate(-50%,-50%) scale(1)}80%{opacity:1;transform:translate(-50%,-50%) scale(1)}100%{opacity:0;transform:translate(-50%,-65%) scale(1)}}
+
+/* ---------- responsive ---------- */
+@media (orientation:portrait){
+  :root{--cam-w:clamp(88px,25vw,170px)}
+  #banner{left:calc(10px + var(--sl));right:calc(10px + var(--sr));top:calc(68px + var(--st));width:auto;max-width:none}
+  #bannerRow{font-size:clamp(24px,7.4vw,62px)}
+  #camWrap{top:auto;bottom:calc(10px + var(--sb))}
+  #topLeft{flex-direction:row;align-items:center}
+  .title .rb{display:block}
+}
+@media (max-height:520px) and (orientation:landscape){
+  #bannerRow{font-size:clamp(22px,4.2vw,40px)}
+  .chip{font-size:clamp(20px,3vw,30px)}
+  .hide-short,#calibHint{display:none}
+}
+@media (prefers-reduced-motion:reduce){
+  .title .rb i,#playBtn,.peek,.trophy{animation:none}
+}
+</style>
+</head>
+<body>
+<canvas id="scene"></canvas>
+<div id="safeProbe"></div>
+
+<!-- ======================= UI: in-game HUD ======================= -->
+<div id="hud" class="hidden">
+  <div id="topLeft">
+    <div id="starChip" class="chip"><span id="starIco">⭐</span><span id="starCount">0</span></div>
+    <div id="streakChip" class="chip mini hidden">🌈<span id="streakCount">0</span></div>
+  </div>
+  <div id="banner">
+    <div id="bannerRow">
+      <span id="teacher" aria-hidden="true">🦉</span>
+      <span id="swatch"></span>
+      <span id="bannerText">Touch the star!</span>
+    </div>
+    <div id="dots"></div>
+  </div>
+  <div id="controls">
+    <button class="icon-btn" id="pauseBtn" aria-label="Pause">⏸️</button>
+    <button class="icon-btn" id="restartBtn" aria-label="Start over">🔄</button>
+    <button class="icon-btn" id="soundBtn" aria-label="Sound on or off">🔊</button>
+    <button class="icon-btn" id="fsBtn" aria-label="Full screen">
+      <svg viewBox="0 0 24 24" fill="none" stroke="#2d2654" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M4 9V4h5M20 9V4h-5M4 15v5h5M20 15v5h-5"/></svg>
+    </button>
+  </div>
+</div>
+<div id="toast" aria-live="polite"></div>
+
+<!-- Small live camera preview with skeleton overlay -->
+<div id="camWrap" class="cam-off" aria-label="Camera preview">
+  <video id="camVideo" playsinline muted autoplay></video>
+  <canvas id="camOverlay"></canvas>
+  <span id="camDot"></span>
+</div>
+
+<!-- ======================= UI: start screen ======================= -->
+<section id="startScreen" class="screen">
+  <h1 class="title">Touch the <span class="rb"><i style="--c:#ff4b4b">C</i><i style="--c:#ff8c2a">o</i><i style="--c:#ffd23f">l</i><i style="--c:#3cc13b">o</i><i style="--c:#3d8bff">r</i><i style="--c:#a259f7">!</i></span></h1>
+  <p class="subtitle">Reach out and touch the colors</p>
+  <button id="playBtn" class="big-btn">▶ Play</button>
+  <p id="loadStatus" class="status">Getting ready… ✨</p>
+  <p class="note hide-short">For grown-ups: the game uses the camera to follow your child's hands. Put the screen at about chest height and let your child stand 1.5 to 2 meters away. The video stays on this device.</p>
+</section>
+
+<!-- ======================= UI: calibration ======================= -->
+<section id="calibScreen" class="screen hidden">
+  <h2 id="calibTitle">Getting ready!</h2>
+  <div id="calibStage">
+    <video id="calibVideo" playsinline muted autoplay></video>
+    <svg id="calibGuide" preserveAspectRatio="none"></svg>
+    <canvas id="calibOverlay"></canvas>
+    <div id="calibArrow" class="hidden">👉</div>
+    <div id="calibLoading"><div class="spinner"></div><div id="calibLoadingText">Starting the camera…</div><div id="calibLoadingSub"></div></div>
+  </div>
+  <div id="calibMeter"><div id="calibFill"></div></div>
+  <p id="calibHint" class="note">Stand back so the camera can see your head, shoulders and hands.</p>
+  <button id="skipBtn" class="small-btn hidden">Start anyway ▶</button>
+</section>
+
+<!-- ======================= UI: overlays ======================= -->
+<div id="pauseOverlay" class="overlay hidden">
+  <div class="card">
+    <div class="peek">😴</div>
+    <h2>Paused</h2>
+    <button id="resumeBtn" class="big-btn mint">▶ Play</button>
+    <button id="restartBtn2" class="small-btn">🔄 Start over</button>
+  </div>
+</div>
+
+<div id="lostOverlay" class="overlay soft hidden">
+  <div class="card">
+    <div class="peek">🙈</div>
+    <h2>I can't see you!</h2>
+    <p>Step back so I can see you!</p>
+  </div>
+</div>
+
+<section id="finishScreen" class="screen hidden">
+  <div class="card">
+    <div class="trophy" id="finishEmoji">🏆</div>
+    <h2 id="finishTitle">Hooray!</h2>
+    <div id="finishStars"></div>
+    <p id="finishMsg">You got 12 stars!</p>
+    <p id="finishStreak" class="note"></p>
+    <button id="againBtn" class="big-btn mint">🔄 Play again</button>
+  </div>
+</section>
+
+<section id="errorScreen" class="screen hidden">
+  <div class="card">
+    <div class="peek" id="errEmoji">📷</div>
+    <h2 id="errTitle">The camera did not start</h2>
+    <p id="errMsg" class="note"></p>
+    <button id="retryBtn" class="big-btn">Try again</button>
+  </div>
+</section>
+
+<script type="module">
+/* ============================================================================
+   TOUCH THE COLOR
+   A webcam reaching game for children aged 3 to 5.
+
+   Sections:
+     1. CONFIG & DATA
+     2. HELPERS
+     3. AUDIO + VOICE
+     4. TRACKING SYSTEM   camera, MediaPipe Hand + Pose, smoothing, mapping
+     5. GAME LOGIC        state machine, rounds, hit detection, scoring
+     6. RENDERING         canvas scene: room, cartoon objects, pointer, particles
+     7. UI                DOM screens, HUD, overlays
+     8. APP, MAIN LOOP & BOOT
+
+   Testing tip: add ?demo to the URL to play with the mouse (no camera).
+   ============================================================================ */
+
+/* ============================================================================
+   1. CONFIG & DATA
+   ============================================================================ */
+const CFG = {
+  MP_VERSION: '0.10.14',
+  TOTAL_ROUNDS: 12,
+  CONTEXT_ROUNDS: [3, 6, 9, 11],   // rounds that use "the color of grass" style questions
+  DWELL_MS: 420,                   // time the fingertip must stay on the target
+  WRONG_DWELL_MS: 850,             // wrong objects need a longer, deliberate touch
+  HIT_SCALE: 1.45,                 // hit radius = object radius * HIT_SCALE
+  NEAR_SCALE: 1.95,                // near-miss zone around the target, fills at half speed
+  REPEAT_AT: 7000,                 // repeat the instruction
+  HINT_AT: 14000,                  // target wiggles and gets a bigger hit area
+  REVEAL_AT: 28000,                // show the answer kindly and move on
+  LOST_AFTER_MS: 1600,
+  FOUND_AFTER_MS: 700,
+  CALIB_HOLD_MS: 1500,
+  SKIP_CALIB_AFTER: 12000,
+};
+const MODEL_URLS = {
+  hand: 'https://storage.googleapis.com/mediapipe-models/hand_landmarker/hand_landmarker/float16/1/hand_landmarker.task',
+  pose: 'https://storage.googleapis.com/mediapipe-models/pose_landmarker/pose_landmarker_lite/float16/1/pose_landmarker_lite.task',
+};
+const COLORS = {
+  red:    { hex:'#ff4b4b', dark:'#c92a2a', light:'#ff9d9d', text:'#ffffff', shape:'ball',    thing:'ball' },
+  blue:   { hex:'#3d8bff', dark:'#1d5cc4', light:'#9fc6ff', text:'#ffffff', shape:'star',    thing:'star' },
+  yellow: { hex:'#ffd23f', dark:'#e8b400', light:'#fff4b0', text:'#2d2654', shape:'sun',     thing:'sun' },
+  green:  { hex:'#3cc13b', dark:'#22862a', light:'#9fe792', text:'#ffffff', shape:'tree',    thing:'tree' },
+  purple: { hex:'#a259f7', dark:'#6a2cc0', light:'#d6b3ff', text:'#ffffff', shape:'balloon', thing:'balloon' },
+  orange: { hex:'#ff8c2a', dark:'#cc5f0a', light:'#ffc490', text:'#ffffff', shape:'box',     thing:'box' },
+};
+const COLOR_KEYS = Object.keys(COLORS);
+const RAINBOW_DEF = { hex:'#ffd23f', dark:'#e8b400', light:'#fff7c2', text:'#2d2654', shape:'star', thing:'star' };
+const RAINBOW_STOPS = ['#ff4b4b','#ff8c2a','#ffd23f','#3cc13b','#3d8bff','#a259f7'];
+const CONFETTI = [...RAINBOW_STOPS, '#ff9ad5', '#ffffff'];
+const CONTEXT_QUESTIONS = [
+  { color:'green',  what:'grass',        icon:'🌱', fact:'Grass is green!' },
+  { color:'yellow', what:'the sun',      icon:'🌞', fact:'The sun is yellow!' },
+  { color:'yellow', what:'a banana',     icon:'🍌', fact:'Bananas are yellow!' },
+  { color:'red',    what:'a strawberry', icon:'🍓', fact:'Strawberries are red!' },
+  { color:'orange', what:'a carrot',     icon:'🥕', fact:'Carrots are orange!' },
+  { color:'purple', what:'grapes',       icon:'🍇', fact:'Grapes are purple!' },
+  { color:'blue',   what:'the sea',      icon:'🌊', fact:'The sea is blue!' },
+];
+const PRAISE = ['Great job!', 'Super!', 'Wow!', 'Yay!', 'Well done!', 'You did it!', 'Awesome!', 'Brilliant!'];
+const CALIB_TEXT = {
+  none:  { title:'Stand in front of the camera! 👀', say:'Hello! Stand in front of the camera so I can see you!' },
+  far:   { title:'Come a little closer! 👣',          say:'Come a little closer!' },
+  close: { title:'Step back a little! 👣',            say:'Step back a little, so I can see you!' },
+  side:  { title:'Move to the middle! ⭐',            say:'Move to the middle!' },
+  ok:    { title:'Great! Stay right there! 🌟',       say:'Great! Stay right there!' },
+  hands: { title:'Wave your hand! 👋',                say:'Wave your hand so I can see it!' },
+};
+const DEMO = new URLSearchParams(location.search).has('demo');
+
+/* ============================================================================
+   2. HELPERS
+   ============================================================================ */
+const $ = (id) => document.getElementById(id);
+const TAU = Math.PI * 2;
+const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
+const lerp = (a, b, t) => a + (b - a) * t;
+const pick = (arr) => arr[Math.floor(Math.random() * arr.length)];
+const shuffle = (arr) => { const a = arr.slice(); for (let i = a.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [a[i], a[j]] = [a[j], a[i]]; } return a; };
+const cap = (s) => s.charAt(0).toUpperCase() + s.slice(1);
+const easeOutBack = (t) => { const c1 = 1.70158, c3 = c1 + 1; return 1 + c3 * Math.pow(t - 1, 3) + c1 * Math.pow(t - 1, 2); };
+const easeInCubic = (t) => t * t * t;
+const isTouchDevice = matchMedia('(pointer: coarse)').matches;
+
+function starPath(ctx, x, y, R, r, n = 5, rot = -Math.PI / 2) {
+  ctx.beginPath();
+  for (let i = 0; i < n * 2; i++) {
+    const a = rot + (i * Math.PI) / n, rr = i % 2 ? r : R;
+    ctx.lineTo(x + Math.cos(a) * rr, y + Math.sin(a) * rr);
+  }
+  ctx.closePath();
+}
+function roundRectPath(ctx, x, y, w, h, r) {
+  r = Math.min(r, w / 2, h / 2);
+  ctx.beginPath();
+  ctx.moveTo(x + r, y);
+  ctx.arcTo(x + w, y, x + w, y + h, r);
+  ctx.arcTo(x + w, y + h, x, y + h, r);
+  ctx.arcTo(x, y + h, x, y, r);
+  ctx.arcTo(x, y, x + w, y, r);
+  ctx.closePath();
+}
+
+/* One Euro filter: smooth when the hand is still, responsive when it moves fast. */
+class OneEuroFilter {
+  constructor(minCutoff = 1.3, beta = 2.5, dCutoff = 1.0) { this.minCutoff = minCutoff; this.beta = beta; this.dCutoff = dCutoff; this.reset(); }
+  reset() { this.x = null; this.dx = 0; this.t = null; }
+  static alpha(cutoff, dt) { const tau = 1 / (TAU * cutoff); return 1 / (1 + tau / dt); }
+  filter(value, t) {
+    if (this.x === null) { this.x = value; this.t = t; this.dx = 0; return value; }
+    const dt = Math.max(0.001, t - this.t); this.t = t;
+    const rawDx = (value - this.x) / dt;
+    this.dx += OneEuroFilter.alpha(this.dCutoff, dt) * (rawDx - this.dx);
+    const cutoff = this.minCutoff + this.beta * Math.abs(this.dx);
+    this.x += OneEuroFilter.alpha(cutoff, dt) * (value - this.x);
+    return this.x;
+  }
+}
+
+/* ============================================================================
+   3. AUDIO + VOICE
+   All sounds are synthesized (no files). Soft, never harsh.
+   ============================================================================ */
+const Sound = {
+  ctx: null, out: null, enabled: true, lastPop: 0,
+  init() {
+    try {
+      if (!this.ctx) {
+        const AC = window.AudioContext || window.webkitAudioContext;
+        if (!AC) return;
+        this.ctx = new AC();
+        this.out = this.ctx.createGain();
+        this.out.gain.value = 0.55;
+        this.out.connect(this.ctx.destination);
+      }
+      if (this.ctx.state === 'suspended') this.ctx.resume();
+    } catch (e) { console.warn('Audio not available', e); }
+  },
+  tone(f, at, dur, { type = 'sine', gain = 0.25, to = null } = {}) {
+    const c = this.ctx, o = c.createOscillator(), g = c.createGain();
+    o.type = type;
+    o.frequency.setValueAtTime(f, at);
+    if (to) o.frequency.exponentialRampToValueAtTime(to, at + dur);
+    g.gain.setValueAtTime(0.0001, at);
+    g.gain.exponentialRampToValueAtTime(gain, at + 0.02);
+    g.gain.exponentialRampToValueAtTime(0.0001, at + dur);
+    o.connect(g); g.connect(this.out);
+    o.start(at); o.stop(at + dur + 0.05);
+  },
+  play(name) {
+    if (!this.enabled || !this.ctx) return;
+    try {
+      if (this.ctx.state === 'suspended') this.ctx.resume();
+      const t = this.ctx.currentTime + 0.01;
+      switch (name) {
+        case 'success':
+          [523.25, 659.25, 783.99, 1046.5].forEach((f, i) => this.tone(f, t + i * 0.09, 0.28, { type: 'triangle', gain: 0.32 }));
+          this.tone(2093, t + 0.38, 0.45, { gain: 0.1 });
+          break;
+        case 'pop':    this.tone(520, t, 0.12, { to: 900, gain: 0.14 }); break;
+        case 'appear': this.tone(420, t, 0.18, { to: 760, gain: 0.08 }); break;
+        case 'oops':
+          this.tone(392, t, 0.22, { to: 330, gain: 0.16 });
+          this.tone(330, t + 0.16, 0.26, { to: 294, gain: 0.13 });
+          break;
+        case 'ding':
+          this.tone(1318.5, t, 0.32, { type: 'triangle', gain: 0.2 });
+          this.tone(1975.5, t + 0.06, 0.38, { gain: 0.08 });
+          break;
+        case 'streak':
+          for (let i = 0; i < 6; i++) this.tone(600 + i * 140, t + i * 0.055, 0.16, { type: 'triangle', gain: 0.16 });
+          break;
+        case 'fanfare': {
+          const notes = [[523.25, 0], [659.25, 0.15], [783.99, 0.3], [1046.5, 0.45], [783.99, 0.7], [1046.5, 0.85]];
+          notes.forEach(([f, d], i) => this.tone(f, t + d, i === notes.length - 1 ? 0.9 : 0.22, { type: 'triangle', gain: 0.28 }));
+          break;
+        }
+      }
+    } catch (e) { /* audio is optional */ }
+  },
+};
+
+const Voice = {
+  supported: 'speechSynthesis' in window && 'SpeechSynthesisUtterance' in window,
+  enabled: true, voice: null, token: 0, inited: false,
+  init() {
+    if (!this.supported || this.inited) return;
+    this.inited = true;
+    const choose = () => {
+      const all = speechSynthesis.getVoices();
+      if (!all.length) return;
+      const en = all.filter((v) => /^en([-_]|$)/i.test(v.lang));
+      const prefs = [/samantha/i, /google us english/i, /aria/i, /jenny/i, /zira/i, /karen/i, /moira/i, /tessa/i, /serena/i, /female/i];
+      for (const re of prefs) { const v = en.find((x) => re.test(x.name)); if (v) { this.voice = v; return; } }
+      this.voice = en.find((v) => /en[-_]US/i.test(v.lang)) || en[0] || null;
+    };
+    choose();
+    try { speechSynthesis.addEventListener('voiceschanged', choose); } catch (e) { speechSynthesis.onvoiceschanged = choose; }
+  },
+  say(text) {
+    if (!this.supported || !this.enabled || !text) return;
+    const my = ++this.token;
+    const u = new SpeechSynthesisUtterance(text);
+    if (this.voice) { u.voice = this.voice; u.lang = this.voice.lang; } else u.lang = 'en-US';
+    u.rate = 0.92; u.pitch = 1.25; u.volume = 1;
+    u.onstart = () => UI.talking(true);
+    u.onend = u.onerror = () => { if (my === this.token) UI.talking(false); };
+    const go = () => { if (my !== this.token) return; try { speechSynthesis.resume(); speechSynthesis.speak(u); } catch (e) {} };
+    try {
+      // Chrome sometimes drops an utterance spoken right after cancel(), so wait a moment.
+      if (speechSynthesis.speaking || speechSynthesis.pending) { speechSynthesis.cancel(); setTimeout(go, 80); }
+      else go();
+    } catch (e) {}
+  },
+  stop() {
+    if (!this.supported) return;
+    this.token++;
+    try { speechSynthesis.cancel(); } catch (e) {}
+    UI.talking(false);
+  },
+};
+
+/* ============================================================================
+   4. TRACKING SYSTEM
+   - Webcam via getUserMedia (front camera, mirrored on screen)
+   - MediaPipe Hand Landmarker: index fingertip = the child's "pointer"
+   - MediaPipe Pose Landmarker: is the child visible and centered, where are
+     the shoulders (to size the reach zone), and a fallback pointer when the
+     hands are too small for the hand model (child standing far away)
+   - One Euro smoothing + display interpolation against jitter
+   - Body-relative mapping: a comfortable arm reach covers the whole screen
+   ============================================================================ */
+const POSE_LINKS = [[11,12],[11,13],[13,15],[12,14],[14,16],[15,19],[16,20],[11,23],[12,24],[23,24],[23,25],[24,26],[25,27],[26,28]];
+const HAND_LINKS = [[0,1],[1,2],[2,3],[3,4],[0,5],[5,6],[6,7],[7,8],[5,9],[9,10],[10,11],[11,12],[9,13],[13,14],[14,15],[15,16],[13,17],[17,18],[18,19],[19,20],[0,17]];
+
+async function createLandmarker(Klass, fileset, options) {
+  try {
+    return await Klass.createFromOptions(fileset, { ...options, baseOptions: { ...options.baseOptions, delegate: 'GPU' } });
+  } catch (err) {
+    console.warn('GPU delegate not available, using CPU.', err);
+    return await Klass.createFromOptions(fileset, { ...options, baseOptions: { ...options.baseOptions, delegate: 'CPU' } });
+  }
+}
+
+const Tracking = {
+  demo: false, mouse: null,
+  video: null, stream: null, handLm: null, poseLm: null, modelsPromise: null,
+  hands: [], handTime: -1e9, lastHandSeen: -1e9,
+  pose: null, poseTime: -1e9, body: null, smooth: null, rejects: 0,
+  lastVideoTime: -1, lastDetectAt: 0, frameIdx: 0, detectMs: 20, runBoth: false, ts: 0, errors: 0,
+  lastPersonSeen: -1e9, seenSince: 0,
+  pointers: [],
+
+  init() {
+    this.video = $('camVideo');
+    this.pointers = [this.newSlot(), this.newSlot()];
+  },
+  newSlot() {
+    return { active: false, shown: false, rawU: 0, rawV: 0, u: 0, v: 0, x: 0, y: 0, lastSeen: -1e9, src: 'hand', trail: [],
+             fu: new OneEuroFilter(), fv: new OneEuroFilter() };
+  },
+  get vw() { return (this.video && this.video.videoWidth) || 640; },
+  get vh() { return (this.video && this.video.videoHeight) || 480; },
+  get ready() { return this.demo || (!!this.stream && !!(this.handLm || this.poseLm)); },
+
+  /* ---- MediaPipe models (loaded from CDN, retried on failure) ---- */
+  loadModels() {
+    if (this.modelsPromise) return this.modelsPromise;
+    const base = `https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@${CFG.MP_VERSION}`;
+    const p = (async () => {
+      const mp = await import(`${base}/vision_bundle.mjs`);
+      const fileset = await mp.FilesetResolver.forVisionTasks(`${base}/wasm`);
+      if (!this.handLm) {
+        try {
+          this.handLm = await createLandmarker(mp.HandLandmarker, fileset, {
+            baseOptions: { modelAssetPath: MODEL_URLS.hand }, runningMode: 'VIDEO', numHands: 2,
+            minHandDetectionConfidence: 0.45, minHandPresenceConfidence: 0.45, minTrackingConfidence: 0.45,
+          });
+        } catch (e) { console.warn('Hand model failed to load', e); }
+      }
+      if (!this.poseLm) {
+        try {
+          this.poseLm = await createLandmarker(mp.PoseLandmarker, fileset, {
+            baseOptions: { modelAssetPath: MODEL_URLS.pose }, runningMode: 'VIDEO', numPoses: 1,
+            minPoseDetectionConfidence: 0.5, minPosePresenceConfidence: 0.5, minTrackingConfidence: 0.5,
+          });
+        } catch (e) { console.warn('Pose model failed to load', e); }
+      }
+      if (!this.handLm && !this.poseLm) throw new Error('No tracking model could be loaded');
+    })();
+    this.modelsPromise = p;
+    p.catch(() => { if (this.modelsPromise === p) this.modelsPromise = null; });
+    return p;
+  },
+
+  /* ---- Camera ---- */
+  async startCamera() {
+    if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+      const e = new Error('getUserMedia unavailable');
+      e.name = window.isSecureContext === false ? 'InsecureContext' : 'NotSupported';
+      throw e;
+    }
+    this.stopCamera();
+    const small = isTouchDevice || Math.min(screen.width, screen.height) < 700;
+    const video = { facingMode: 'user', width: { ideal: small ? 640 : 960 }, height: { ideal: small ? 480 : 540 }, frameRate: { ideal: 30, max: 30 } };
+    let stream;
+    try {
+      stream = await navigator.mediaDevices.getUserMedia({ audio: false, video });
+    } catch (err) {
+      // Some phones reject the size hints. Try again with the simplest request.
+      if (err && ['OverconstrainedError', 'ConstraintNotSatisfiedError', 'TypeError'].includes(err.name)) {
+        stream = await navigator.mediaDevices.getUserMedia({ audio: false, video: true });
+      } else throw err;
+    }
+    this.stream = stream;
+    const track = stream.getVideoTracks()[0];
+    if (track) track.addEventListener('ended', () => App.onCameraEnded());
+    const vids = [this.video, $('calibVideo')];
+    for (const v of vids) { v.muted = true; v.setAttribute('playsinline', ''); v.srcObject = stream; }
+    await Promise.all(vids.map((v) => v.play().catch(() => {})));
+    await new Promise((res) => {
+      if (this.video.videoWidth) return res();
+      this.video.addEventListener('loadedmetadata', res, { once: true });
+      setTimeout(res, 5000);
+    });
+    this.lastVideoTime = -1;
+  },
+  stopCamera() {
+    if (this.stream) { this.stream.getTracks().forEach((t) => t.stop()); this.stream = null; }
+  },
+  cameraAlive() {
+    const t = this.stream && this.stream.getVideoTracks()[0];
+    return !!t && t.readyState === 'live';
+  },
+
+  /* ---- Per-frame detection ---- */
+  step(now) {
+    if (!this.ready) return;
+    if (this.demo) {
+      if (!this.seenSince) this.seenSince = now;
+      this.lastPersonSeen = now;
+      const c = [];
+      if (this.mouse) c.push({ u: this.mouse.x / innerWidth, v: this.mouse.y / innerHeight, src: 'mouse' });
+      this.assign(c, now);
+      return;
+    }
+    const v = this.video;
+    if (v.readyState < 2 || !v.videoWidth) return;
+    const freshFrame = v.currentTime !== this.lastVideoTime;
+    if (!freshFrame && now - this.lastDetectAt < 70) return;
+    this.lastVideoTime = v.currentTime; this.lastDetectAt = now; this.frameIdx++;
+
+    // Fast devices run both models every frame, slower ones alternate.
+    this.runBoth = this.runBoth ? this.detectMs < 15 : this.detectMs < 10;
+    const doHand = !!this.handLm && (this.runBoth || !this.poseLm || this.frameIdx % 2 === 0);
+    const doPose = !!this.poseLm && (this.runBoth || !this.handLm || this.frameIdx % 2 === 1);
+    const t0 = performance.now();
+    try {
+      if (doHand) {
+        const r = this.handLm.detectForVideo(v, this.nextTs());
+        this.hands = (r && r.landmarks) || [];
+        this.handTime = now;
+        if (this.hands.length) this.lastHandSeen = now;
+      }
+      if (doPose) {
+        const r = this.poseLm.detectForVideo(v, this.nextTs());
+        this.pose = (r && r.landmarks && r.landmarks[0]) || null;
+        this.poseTime = now;
+        this.analyzeBody();
+      }
+      this.errors = 0;
+    } catch (err) {
+      this.errors++;
+      if (this.errors === 1) console.warn('Tracking error', err);
+      if (this.errors > 45) App.onTrackingFailed();
+      return;
+    }
+    const n = (doHand ? 1 : 0) + (doPose ? 1 : 0);
+    if (n) this.detectMs = this.detectMs * 0.9 + ((performance.now() - t0) / n) * 0.1;
+    this.updatePresence(now);
+    this.updatePointers(now);
+  },
+  nextTs() { const t = performance.now(); this.ts = t > this.ts ? t : this.ts + 0.1; return this.ts; },
+
+  /* Where is the child, how big, is the head in view. Coordinates are mirrored video pixels. */
+  analyzeBody() {
+    const p = this.pose;
+    this.body = null;
+    if (!p) return;
+    const vis = (l) => (l ? (l.visibility ?? 1) : 0);
+    const ls = p[11], rs = p[12], nose = p[0];
+    const vw = this.vw, vh = this.vh, base = Math.min(vw, vh);
+    const b = { shouldersOK: vis(ls) > 0.5 && vis(rs) > 0.5, headOK: vis(nose) > 0.5 && nose.y > 0.02 && nose.y < 0.98 };
+    if (b.shouldersOK) {
+      const lx = (1 - ls.x) * vw, rx = (1 - rs.x) * vw, ly = ls.y * vh, ry = rs.y * vh;
+      b.cx = (lx + rx) / 2; b.cy = (ly + ry) / 2; b.sw = Math.hypot(lx - rx, ly - ry);
+      b.cxFrac = b.cx / vw; b.swFrac = b.sw / base;
+      // Slowly follow the child so the reach zone moves with them.
+      const sm = this.smooth;
+      if (!sm) this.smooth = { cx: b.cx, cy: b.cy, s: b.sw };
+      else if (b.sw > sm.s * 0.6 && b.sw < sm.s * 1.6) {
+        this.rejects = 0;
+        sm.cx = lerp(sm.cx, b.cx, 0.06); sm.cy = lerp(sm.cy, b.cy, 0.06); sm.s = lerp(sm.s, b.sw, 0.04);
+      } else if (++this.rejects > 20) { this.smooth = { cx: b.cx, cy: b.cy, s: b.sw }; this.rejects = 0; }
+    } else if (vis(nose) > 0.5) {
+      b.cxFrac = 1 - nose.x;
+    }
+    this.body = b;
+  },
+  snapRegion() {
+    if (this.body && this.body.shouldersOK) this.smooth = { cx: this.body.cx, cy: this.body.cy, s: this.body.sw };
+  },
+
+  /* The reach zone: the part of the camera image that maps to the full screen. */
+  getRegion() {
+    const vw = this.vw, vh = this.vh, sm = this.smooth;
+    if (!sm) return { left: vw * 0.14, right: vw * 0.86, top: vh * 0.08, bottom: vh * 0.74 };
+    const portrait = innerHeight > innerWidth * 1.1;
+    const k = portrait ? { w: 1.5, top: 1.8, bot: 1.15 } : { w: 1.85, top: 1.55, bot: 0.95 };
+    const S = sm.s;
+    let left = sm.cx - k.w * S, right = sm.cx + k.w * S, top = sm.cy - k.top * S, bottom = sm.cy + k.bot * S;
+    // Never ask the child to reach outside what the camera can see.
+    left = Math.max(left, vw * 0.03); right = Math.min(right, vw * 0.97);
+    top = Math.max(top, vh * 0.03); bottom = Math.min(bottom, vh * 0.97);
+    if (right - left < vw * 0.25) { const c = (left + right) / 2; left = c - vw * 0.125; right = c + vw * 0.125; }
+    if (bottom - top < vh * 0.25) { const c = (top + bottom) / 2; top = c - vh * 0.125; bottom = c + vh * 0.125; }
+    return { left, right, top, bottom };
+  },
+  toUV(nx, ny, R) {
+    const mx = (1 - nx) * this.vw, my = ny * this.vh;
+    return { u: (mx - R.left) / (R.right - R.left), v: (my - R.top) / (R.bottom - R.top) };
+  },
+  // Hands resting by the hips map below the screen: they are ignored.
+  usable(c) { return c.v < 1.06 && c.v > -0.35 && c.u > -0.3 && c.u < 1.3; },
+
+  updatePointers(now) {
+    const R = this.getRegion();
+    const cands = [];
+    if (now - this.handTime < 160) {
+      for (const h of this.hands) {
+        const tip = h[8];
+        if (!tip) continue;
+        const c = this.toUV(tip.x, tip.y, R);
+        if (this.usable(c)) cands.push({ ...c, src: 'hand' });
+      }
+    }
+    if (this.pose && now - this.poseTime < 220) {
+      for (const [idx, wi] of [[19, 15], [20, 16]]) {
+        const lm = this.pose[idx], w = this.pose[wi];
+        if (!lm || !w || (lm.visibility ?? 1) < 0.55) continue;
+        // Push a little past the knuckle toward where the fingertip is.
+        const c = this.toUV(lm.x + (lm.x - w.x) * 0.35, lm.y + (lm.y - w.y) * 0.35, R);
+        if (!this.usable(c)) continue;
+        if (cands.some((k) => Math.hypot(k.u - c.u, k.v - c.v) < 0.2)) continue;
+        cands.push({ ...c, src: 'pose' });
+      }
+    }
+    if (cands.length > 2) cands.length = 2;
+    this.assign(cands, now);
+  },
+  /* Keep each pointer attached to the same hand between frames. */
+  assign(cands, now) {
+    const slots = this.pointers, takenS = new Set(), takenC = new Set(), pairs = [];
+    slots.forEach((s, si) => { if (s.active) cands.forEach((c, ci) => pairs.push({ si, ci, d: Math.hypot(s.rawU - c.u, s.rawV - c.v) })); });
+    pairs.sort((a, b) => a.d - b.d);
+    for (const p of pairs) {
+      if (takenS.has(p.si) || takenC.has(p.ci) || p.d > 0.5) continue;
+      takenS.add(p.si); takenC.add(p.ci);
+      this.feed(slots[p.si], cands[p.ci], now, false);
+    }
+    cands.forEach((c, ci) => {
+      if (takenC.has(ci)) return;
+      let best = -1;
+      slots.forEach((s, si) => {
+        if (takenS.has(si)) return;
+        if (best < 0) { best = si; return; }
+        const b = slots[best];
+        if ((!s.active && b.active) || (s.active === b.active && s.lastSeen < b.lastSeen)) best = si;
+      });
+      if (best < 0) return;
+      takenS.add(best);
+      this.feed(slots[best], c, now, true);
+    });
+  },
+  feed(s, c, now, fresh) {
+    if (fresh || !s.active) { s.fu.reset(); s.fv.reset(); s.shown = false; s.trail.length = 0; }
+    s.active = true; s.rawU = c.u; s.rawV = c.v; s.src = c.src; s.lastSeen = now;
+    s.u = s.fu.filter(c.u, now / 1000);
+    s.v = s.fv.filter(c.v, now / 1000);
+  },
+  /* Interpolate pointer positions at display frame rate. */
+  updateDisplay(now, dt, W, H) {
+    const k = 1 - Math.pow(0.45, dt / 16.7);
+    for (const s of this.pointers) {
+      if (s.active && now - s.lastSeen > 300) s.active = false;
+      if (!s.active) { s.shown = false; s.trail.length = 0; continue; }
+      const tx = clamp(s.u, 0, 1) * W, ty = clamp(s.v, 0, 1) * H;
+      if (!s.shown) { s.x = tx; s.y = ty; s.shown = true; }
+      else { s.x += (tx - s.x) * k; s.y += (ty - s.y) * k; }
+    }
+  },
+  activePointers() { return this.pointers.filter((s) => s.active && s.shown); },
+  updatePresence(now) {
+    const poseSeen = this.pose && now - this.poseTime < 400;
+    const handSeen = now - this.lastHandSeen < 400;
+    if (poseSeen || handSeen) {
+      if (now - this.lastPersonSeen > 400) this.seenSince = now;
+      this.lastPersonSeen = now;
+    }
+  },
+
+  /* Skeleton drawing for the camera preview and the calibration view.
+     The canvas is mirrored with CSS, so raw landmark coordinates are used. */
+  drawSkeleton(ctx, w, h, showRegion) {
+    ctx.clearRect(0, 0, w, h);
+    if (this.demo || !w || !h) return;
+    const now = performance.now(), lw = Math.max(2, w / 110);
+    ctx.lineCap = 'round'; ctx.lineJoin = 'round';
+    if (showRegion) {
+      const R = this.getRegion(), vw = this.vw, vh = this.vh;
+      const x0 = ((vw - R.right) / vw) * w, x1 = ((vw - R.left) / vw) * w, y0 = (R.top / vh) * h, y1 = (R.bottom / vh) * h;
+      ctx.save(); ctx.setLineDash([lw * 3, lw * 3]); ctx.strokeStyle = 'rgba(255,210,63,.9)'; ctx.lineWidth = lw * 0.8;
+      roundRectPath(ctx, x0, y0, x1 - x0, y1 - y0, lw * 4); ctx.stroke(); ctx.restore();
+    }
+    const p = this.pose;
+    if (p && now - this.poseTime < 500) {
+      const ok = (i) => p[i] && (p[i].visibility ?? 1) > 0.45;
+      ctx.strokeStyle = 'rgba(255,255,255,.95)'; ctx.lineWidth = lw * 1.3;
+      for (const [a, b] of POSE_LINKS) {
+        if (!ok(a) || !ok(b)) continue;
+        ctx.beginPath(); ctx.moveTo(p[a].x * w, p[a].y * h); ctx.lineTo(p[b].x * w, p[b].y * h); ctx.stroke();
+      }
+      if (ok(0) && ok(11) && ok(12)) {
+        const sw = Math.hypot((p[11].x - p[12].x) * w, (p[11].y - p[12].y) * h);
+        ctx.beginPath(); ctx.arc(p[0].x * w, p[0].y * h, sw * 0.33, 0, TAU); ctx.stroke();
+      }
+      ctx.fillStyle = '#ff5fa2';
+      for (const i of [11, 12, 13, 14, 15, 16]) if (ok(i)) { ctx.beginPath(); ctx.arc(p[i].x * w, p[i].y * h, lw * 1.5, 0, TAU); ctx.fill(); }
+    }
+    if (now - this.handTime < 300) {
+      for (const hd of this.hands) {
+        ctx.strokeStyle = '#1fc7a5'; ctx.lineWidth = lw;
+        for (const [a, b] of HAND_LINKS) { ctx.beginPath(); ctx.moveTo(hd[a].x * w, hd[a].y * h); ctx.lineTo(hd[b].x * w, hd[b].y * h); ctx.stroke(); }
+        ctx.fillStyle = '#ffd23f'; ctx.beginPath(); ctx.arc(hd[8].x * w, hd[8].y * h, lw * 2.4, 0, TAU); ctx.fill();
+      }
+    }
+  },
+};
+
+/* ============================================================================
+   5. GAME LOGIC
+   ============================================================================ */
+function makeObject(color) {
+  const def = color === 'rainbow' ? RAINBOW_DEF : COLORS[color];
+  return {
+    color, def, shape: def.shape, cell: 0, jx: 0, jy: 0, size: 1, fixed: null,
+    x: 0, y: 0, r: 0, dwell: 0, gain: 0, hover: false, wasHover: false, hoverAmt: 0,
+    appearAt: null, exitAt: null, bounceAt: null, hopAt: null, shakeAt: null, happyUntil: -1, lastWrongAt: -1e9,
+    phase: Math.random() * TAU, blinkEvery: 2600 + Math.random() * 2600, menu: false, dance: false,
+  };
+}
+
+/* Play area = screen minus the HUD. Objects sit in a jittered 3x2 (or 2x3) grid,
+   so they never overlap and are always within reach. */
+const Layout = {
+  rect: { x: 0, y: 0, w: 300, h: 300 },
+  grid() { return this.rect.w >= this.rect.h ? { cols: 3, rows: 2 } : { cols: 2, rows: 3 }; },
+  update() {
+    const W = innerWidth, H = innerHeight, m = Math.max(8, Math.min(W, H) * 0.018);
+    const sp = getComputedStyle($('safeProbe'));
+    let left = m + (parseFloat(sp.paddingLeft) || 0), right = W - m - (parseFloat(sp.paddingRight) || 0);
+    let top = m, bottom = H - m;
+    const e = UI.el;
+    if (!e.hud.classList.contains('hidden')) {
+      const portrait = matchMedia('(orientation: portrait)').matches;
+      top = Math.max(top, e.banner.offsetTop + e.banner.offsetHeight + m);
+      const tl = e.topLeft.getBoundingClientRect();
+      top = Math.max(top, e.topLeft.offsetTop + e.starChip.offsetTop + e.starChip.offsetHeight + m * 0.5);
+      const cam = e.camWrap.getBoundingClientRect();
+      if (!portrait) top = Math.max(top, cam.bottom + m * 0.5);
+      else bottom = Math.min(bottom, cam.top - m * 0.5);
+      bottom = Math.min(bottom, e.controls.getBoundingClientRect().top - m * 0.5);
+      void tl;
+    }
+    if (bottom - top < H * 0.3) bottom = Math.min(H - m, top + H * 0.3);
+    this.rect = { x: left, y: top, w: Math.max(60, right - left), h: Math.max(60, bottom - top) };
+  },
+  place(o) {
+    const R = this.rect;
+    if (o.fixed) { o.r = Math.min(R.w, R.h) * o.fixed.rf; o.x = R.x + R.w * o.fixed.fx; o.y = R.y + R.h * o.fixed.fy; return; }
+    const { cols, rows } = this.grid(), cw = R.w / cols, ch = R.h / rows;
+    const col = o.cell % cols, row = Math.floor(o.cell / cols) % rows;
+    o.r = Math.min(cw, ch) * 0.4 * o.size;
+    const fx = Math.max(0, cw / 2 - o.r * 1.15), fy = Math.max(0, ch / 2 - o.r * 1.15);
+    o.x = R.x + cw * (col + 0.5) + o.jx * fx * 0.85;
+    o.y = R.y + ch * (row + 0.5) + o.jy * fy * 0.85;
+  },
+};
+
+/* The six friends shown on the start and celebration screens. */
+const Menu = {
+  objects: COLOR_KEYS.map((c) => Object.assign(makeObject(c), { menu: true })),
+  layout(W, H) {
+    const portrait = H > W, finished = Game.state === 'finished';
+    this.objects.forEach((o, i) => {
+      if (finished && portrait) {
+        const row = Math.floor(i / 3), col = i % 3;
+        o.r = Math.min((W / 3) * 0.26, H * 0.055);
+        o.x = (W * (col + 0.5)) / 3; o.y = H * (row ? 0.79 : 0.65);
+      } else if (finished) {
+        o.r = Math.min((W / 6) * 0.32, H * 0.065);
+        o.x = (W * (i + 0.5)) / 6; o.y = H - o.r * 1.6;
+      } else if (portrait) {
+        const row = Math.floor(i / 3), col = i % 3;
+        o.r = Math.min((W / 3) * 0.3, H * 0.07);
+        o.x = (W * (col + 0.5)) / 3; o.y = H * (row ? 0.87 : 0.71);
+      } else {
+        o.r = Math.min((W / 6) * 0.34, H * 0.1);
+        o.x = (W * (i + 0.5)) / 6; o.y = H * 0.8 + (i % 2 ? -o.r * 0.3 : o.r * 0.2);
+      }
+    });
+  },
+};
+
+const Game = {
+  state: 'menu',            // menu | calib | practice | playing | finished
+  paused: false, lost: false, practice: false,
+  clock: 0,                 // game time in ms, frozen while paused or lost
+  round: 0, stars: 0, streak: 0, bestStreak: 0, results: [],
+  objects: [], target: null, question: null,
+  phase: 'idle', phaseAt: 0, roundStart: 0, hintLevel: 0, wrongCount: 0,
+  lastTarget: null, lastTargetCell: -1, lastQuestion: null, prevCount: 0, introPrefix: '', lostSpokenAt: 0,
+  calib: { progress: 0, status: '', statusAt: 0, spoken: '', spokenAt: 0, startedAt: 0 },
+
+  isGameplay() { return this.state === 'practice' || this.state === 'playing'; },
+  setPhase(p) { this.phase = p; this.phaseAt = this.clock; },
+
+  /* ---------- calibration ---------- */
+  startCalib() {
+    this.state = 'calib'; this.paused = false; this.lost = false;
+    const now = performance.now();
+    Object.assign(this.calib, { progress: 0, status: '', statusAt: now, spoken: '', spokenAt: 0, startedAt: now });
+    UI.mode('calib');
+    UI.calibReady();
+  },
+  updateCalib(dt, now) {
+    const c = this.calib, b = Tracking.body;
+    let st;
+    if (Tracking.demo) st = 'ok';
+    else if (!Tracking.poseLm) st = now - Tracking.lastHandSeen < 600 ? 'ok' : 'hands';
+    else if (!Tracking.pose || now - Tracking.poseTime > 600 || !b) st = 'none';
+    else if (!b.shouldersOK) st = 'close';
+    else if (!b.headOK || b.swFrac > 0.34) st = 'close';
+    else if (b.swFrac < 0.075) st = 'far';
+    else if (Math.abs(b.cxFrac - 0.5) > 0.19) st = 'side';
+    else st = 'ok';
+
+    if (st === 'ok') c.progress = Math.min(1, c.progress + dt / CFG.CALIB_HOLD_MS);
+    else c.progress = Math.max(0, c.progress - dt / (CFG.CALIB_HOLD_MS * 2));
+    if (st !== c.status) { c.status = st; c.statusAt = now; UI.setCalibStatus(st); }
+
+    // Talk when something changes, but do not nag.
+    const stable = now - c.statusAt > 500;
+    if (stable && ((c.spoken !== st && now - c.spokenAt > 1600) || (st !== 'ok' && now - c.spokenAt > 8000))) {
+      c.spoken = st; c.spokenAt = now; Voice.say(CALIB_TEXT[st].say);
+    }
+    UI.setCalibProgress(c.progress, st, b);
+    if (now - c.startedAt > CFG.SKIP_CALIB_AFTER) UI.showSkip(true);
+    if (c.progress >= 1) { Tracking.snapRegion(); Sound.play('success'); this.startPractice(); }
+  },
+  skipCalib() {
+    if (this.state !== 'calib') return;
+    Tracking.snapRegion();
+    this.startPractice();
+  },
+
+  /* ---------- practice: one big star teaches "reach and hold" ---------- */
+  startPractice() {
+    this.state = 'practice'; this.practice = true; this.paused = false; this.lost = false;
+    UI.mode('game'); UI.showDots(false); UI.setStars(0); UI.setStreak(0);
+    UI.setBanner({ swatchIcon: '⭐', html: 'Touch the star!' });
+    Layout.update();
+    const o = makeObject('rainbow');
+    o.fixed = { fx: Math.random() < 0.5 ? 0.27 : 0.73, fy: 0.45, rf: 0.2 };
+    o.appearAt = this.clock;
+    this.objects = [o]; this.target = o; this.question = null;
+    this.hintLevel = 0; this.wrongCount = 0; this.introPrefix = '';
+    this.setPhase('intro');
+    Sound.play('appear');
+  },
+
+  /* ---------- rounds ---------- */
+  beginGame() {
+    this.state = 'playing'; this.practice = false; this.paused = false; this.lost = false;
+    this.round = 0; this.stars = 0; this.streak = 0; this.bestStreak = 0; this.results = [];
+    this.prevCount = 0; this.lastTarget = null; this.lastTargetCell = -1; this.lastQuestion = null;
+    Menu.objects.forEach((o) => { o.dance = false; });
+    UI.mode('game'); UI.showDots(true); UI.setStars(0); UI.setStreak(0);
+    UI.toast("Let's go! 🎉");
+    this.introPrefix = "Let's go! ";
+    this.startRound();
+  },
+  difficulty(i) {
+    const count = i < 3 ? 3 : i < 6 ? 4 : i < 9 ? 5 : 6;     // more distractors over time
+    const size = lerp(1.0, 0.8, i / (CFG.TOTAL_ROUNDS - 1)); // and slightly smaller objects
+    return { count, size };
+  },
+  startRound() {
+    const i = this.round, d = this.difficulty(i);
+    let target, q = null;
+    if (CFG.CONTEXT_ROUNDS.includes(i)) {
+      const pool = CONTEXT_QUESTIONS.filter((x) => x.color !== this.lastTarget && x !== this.lastQuestion);
+      q = pick(pool); target = q.color; this.lastQuestion = q;
+    } else {
+      target = pick(COLOR_KEYS.filter((c) => c !== this.lastTarget));
+    }
+    this.lastTarget = target; this.question = q;
+    const others = shuffle(COLOR_KEYS.filter((c) => c !== target)).slice(0, d.count - 1);
+    this.objects = shuffle([target, ...others]).map((c) => { const o = makeObject(c); o.size = d.size; return o; });
+    this.target = this.objects.find((o) => o.color === target);
+    if (this.prevCount && d.count > this.prevCount) { this.introPrefix = 'More friends! '; UI.toast('More friends! 🎈'); }
+    this.prevCount = d.count;
+
+    UI.setInstruction(target, q);
+    UI.renderDots(this.results, i, CFG.TOTAL_ROUNDS);
+    Layout.update();
+    this.assignCells();
+    this.objects.forEach((o, k) => { o.appearAt = this.clock + k * 110; });
+    this.hintLevel = 0; this.wrongCount = 0;
+    this.setPhase('intro');
+    Sound.play('appear');
+  },
+  assignCells() {
+    const { cols, rows } = Layout.grid();
+    let cells = shuffle([...Array(cols * rows).keys()]);
+    const t = this.target;
+    // Put the target somewhere new, so the child has to move.
+    const tc = cells.find((c) => c !== this.lastTargetCell);
+    cells = cells.filter((c) => c !== tc);
+    t.cell = tc; this.lastTargetCell = tc;
+    for (const o of this.objects) if (o !== t) o.cell = cells.pop();
+    for (const o of this.objects) { o.jx = Math.random() * 2 - 1; o.jy = Math.random() * 2 - 1; }
+  },
+  instructionSpeech() {
+    if (this.practice) return 'Reach out and touch the star!';
+    if (this.question) return `Touch the color of ${this.question.what}!`;
+    return `Touch ${this.target.color}!`;
+  },
+
+  update(dt, now) {
+    if (this.state === 'calib') { this.updateCalib(dt, now); return; }
+    if (!this.isGameplay()) return;
+    this.checkPresence(now);
+    if (this.paused || this.lost) return;
+    this.clock += dt;
+    const t = this.clock - this.phaseAt;
+    switch (this.phase) {
+      case 'intro': {
+        const wait = !this.practice && this.round === 0 ? 1200 : 650;
+        if (t > wait) {
+          this.setPhase('active'); this.roundStart = this.clock;
+          Voice.say(this.introPrefix + this.instructionSpeech()); this.introPrefix = '';
+        }
+        break;
+      }
+      case 'active':  this.interact(dt); if (this.phase === 'active') this.checkHints(); break;
+      case 'success': if (t > (this.practice ? 2600 : 2300)) this.endRound(); break;
+      case 'reveal':  if (t > 2800) this.endRound(); break;
+      case 'outro':   if (t > 380) this.afterOutro(); break;
+    }
+  },
+
+  /* Hit detection. Each fingertip "belongs" to the nearest object.
+     Target: inside the hit zone fills fast, a near miss still fills at half speed.
+     Wrong objects need a full, longer touch, so passing over them is harmless. */
+  interact(dt) {
+    const ptrs = Tracking.activePointers();
+    for (const o of this.objects) { o.gain = 0; o.hover = false; }
+    for (const p of ptrs) {
+      let best = null, bd = Infinity;
+      for (const o of this.objects) {
+        if (o.r <= 0) continue;
+        const d = Math.hypot(p.x - o.x, p.y - o.y) / o.r;
+        if (d < bd) { bd = d; best = o; }
+      }
+      if (!best) continue;
+      const boost = best === this.target && this.hintLevel >= 2 ? 1.3 : 1;
+      let g = 0;
+      if (bd <= CFG.HIT_SCALE * boost) g = 1;
+      else if (best === this.target && bd <= CFG.NEAR_SCALE * boost) g = 0.5;
+      if (g > 0) { best.gain = Math.max(best.gain, g); best.hover = true; }
+    }
+    const now = performance.now();
+    for (const o of this.objects) {
+      if (o.hover && !o.wasHover && now - Sound.lastPop > 180) { Sound.lastPop = now; Sound.play('pop'); }
+      o.wasHover = o.hover;
+      if (o === this.target) {
+        if (o.gain > 0) o.dwell += dt * o.gain; else o.dwell = Math.max(0, o.dwell - dt * 1.5);
+        if (o.dwell >= CFG.DWELL_MS) { this.success(o); return; }
+      } else {
+        if (o.gain >= 1 && this.clock - o.lastWrongAt > 2500) o.dwell += dt; else o.dwell = Math.max(0, o.dwell - dt * 1.5);
+        if (o.dwell >= CFG.WRONG_DWELL_MS) this.wrong(o);
+      }
+    }
+  },
+  checkHints() {
+    const el = this.clock - this.roundStart, col = this.target.color;
+    if (this.hintLevel < 1 && el > CFG.REPEAT_AT) {
+      this.hintLevel = 1;
+      if (this.practice) Voice.say('Lift your hand up and touch the star!');
+      else if (this.question) { Voice.say(`${this.question.fact} Touch ${col}!`); UI.revealSwatch(col); }
+      else Voice.say(`Where is ${col}? Touch ${col}!`);
+    }
+    if (this.hintLevel < 2 && el > CFG.HINT_AT) {
+      this.hintLevel = 2;
+      if (this.practice) Voice.say('Wave your hand! Can you see your sparkle? Move it to the star!');
+      else Voice.say(`Look! ${cap(col)} is wiggling! Touch ${col}!`);
+    }
+    if (this.hintLevel < 3 && el > CFG.REVEAL_AT) { this.hintLevel = 3; this.reveal(); }
+  },
+  success(o) {
+    this.setPhase('success');
+    for (const x of this.objects) { x.hover = false; x.dwell = 0; }
+    o.bounceAt = this.clock; o.happyUntil = this.clock + 2300;
+    for (const x of this.objects) if (x !== o) { x.hopAt = this.clock + Math.random() * 250; x.happyUntil = this.clock + 1600; }
+    Sound.play('success');
+    Render.burst(o.x, o.y, o.def.hex, 46, o.color === 'rainbow');
+    if (this.practice) {
+      Voice.say("Yay! You did it! Now let's play!");
+      UI.setBanner({ swatchIcon: '⭐', html: 'Yay! You did it!' });
+      return;
+    }
+    this.stars++; this.streak++; this.bestStreak = Math.max(this.bestStreak, this.streak);
+    this.results.push(true);
+    Render.flyStar(o.x, o.y, () => { UI.setStars(this.stars, true); Sound.play('ding'); });
+    let line = `${cap(o.color)}! ${pick(PRAISE)}`;
+    if (this.streak >= 3 && this.streak % 3 === 0) {
+      line += ` ${this.streak} in a row!`;
+      const s = this.streak;
+      setTimeout(() => { Sound.play('streak'); UI.toast(`${s} in a row! 🌈`); }, 600);
+    }
+    Voice.say(line);
+    UI.setBanner({ swatchColor: o.def.hex, html: `${UI.pill(o.color)} Yes! ⭐` });
+    UI.setStreak(this.streak);
+    UI.renderDots(this.results, this.round, CFG.TOTAL_ROUNDS);
+  },
+  wrong(o) {
+    o.shakeAt = this.clock; o.lastWrongAt = this.clock; o.dwell = 0;
+    this.wrongCount++;
+    if (this.streak) { this.streak = 0; UI.setStreak(0); }
+    Sound.play('oops');
+    const t = this.target.color;
+    Voice.say(this.question ? `That's ${o.color}. Try again!` : `That's ${o.color}. Find ${t}!`);
+    if (this.wrongCount >= 2 && this.hintLevel < 1) {   // help sooner after two tries
+      this.hintLevel = 1;
+      if (this.question) UI.revealSwatch(t);
+    }
+  },
+  reveal() {
+    const o = this.target;
+    this.setPhase('reveal');
+    for (const x of this.objects) { x.hover = false; x.dwell = 0; }
+    o.bounceAt = this.clock; o.happyUntil = this.clock + 2400;
+    if (this.practice) {
+      Voice.say("Good try! Let's play!");
+      UI.setBanner({ swatchIcon: '⭐', html: "Let's play!" });
+      return;
+    }
+    this.results.push(false);
+    this.streak = 0; UI.setStreak(0);
+    UI.renderDots(this.results, this.round, CFG.TOTAL_ROUNDS);
+    Sound.play('ding');
+    Voice.say(`Here is ${o.color}! Let's try another one!`);
+    UI.setBanner({ swatchColor: o.def.hex, html: `Here is ${UI.pill(o.color)}!` });
+  },
+  endRound() {
+    this.setPhase('outro');
+    for (const o of this.objects) o.exitAt = this.clock;
+  },
+  afterOutro() {
+    if (this.practice) { this.beginGame(); return; }
+    this.round++;
+    if (this.round >= CFG.TOTAL_ROUNDS) this.finish(); else this.startRound();
+  },
+  finish() {
+    this.state = 'finished'; this.objects = []; this.phase = 'idle';
+    Menu.objects.forEach((o) => { o.dance = true; });
+    Menu.layout(Render.W, Render.H);
+    const n = this.stars;
+    UI.showFinish(n, CFG.TOTAL_ROUNDS, this.bestStreak);
+    Sound.play('fanfare');
+    Render.confetti(4500);
+    const line = n >= 10 ? `Hooray! You are a color champion! You got ${n} stars!`
+      : n >= 6 ? `Hooray! You are a super star! You got ${n} stars!`
+      : `Hooray! Great playing! You got ${n} ${n === 1 ? 'star' : 'stars'}!`;
+    setTimeout(() => Voice.say(line), 400);
+  },
+
+  /* ---------- pause, lost tracking, restart ---------- */
+  checkPresence(now) {
+    if (!Tracking.poseLm || this.paused) return;   // need body tracking to judge this
+    const since = now - Tracking.lastPersonSeen;
+    if (!this.lost && since > CFG.LOST_AFTER_MS) this.setLost(true);
+    else if (this.lost) {
+      if (since < 250 && now - Tracking.seenSince > CFG.FOUND_AFTER_MS) this.setLost(false);
+      else if (now - this.lostSpokenAt > 9000) { this.lostSpokenAt = now; Voice.say("I can't see you! Step back so I can see you!"); }
+    }
+  },
+  setLost(v) {
+    this.lost = v;
+    UI.showLost(v);
+    if (v) {
+      this.lostSpokenAt = performance.now();
+      for (const o of this.objects) o.dwell = 0;
+      Voice.say("I can't see you! Step back so I can see you!");
+    } else {
+      Voice.say(`There you are! ${this.phase === 'active' ? this.instructionSpeech() : ''}`);
+    }
+  },
+  setPaused(v, silent = false) {
+    if (!this.isGameplay() || this.paused === v) return;
+    this.paused = v;
+    if (v) {
+      if (this.lost) { this.lost = false; UI.showLost(false); }
+      UI.showPause(true);
+      Voice.stop();
+      if (!silent) Voice.say('Paused.');
+    } else {
+      UI.showPause(false);
+      Tracking.lastPersonSeen = performance.now();   // short grace period after resuming
+      Voice.say(this.phase === 'active' ? this.instructionSpeech() : 'Here we go!');
+    }
+  },
+  restart() {
+    Voice.stop();
+    this.paused = false; this.lost = false;
+    UI.showPause(false); UI.showLost(false);
+    Menu.objects.forEach((o) => { o.dance = false; });
+    Menu.layout(Render.W, Render.H);
+    if (!Tracking.ready) { this.state = 'menu'; UI.mode('start'); return; }
+    this.beginGame();
+  },
+};
+
+/* ============================================================================
+   6. RENDERING
+   Everything in the room is drawn on one canvas: background, cartoon objects
+   with faces, the glowing fingertip pointer, and particles.
+   ============================================================================ */
+const Render = {
+  canvas: null, ctx: null, W: 0, H: 0, dpr: 1, bg: null,
+  particles: [], flyers: [], confettiUntil: 0,
+
+  init() { this.canvas = $('scene'); this.ctx = this.canvas.getContext('2d'); },
+  resize() {
+    this.W = innerWidth; this.H = innerHeight; this.dpr = Math.min(2, window.devicePixelRatio || 1);
+    this.canvas.width = Math.round(this.W * this.dpr); this.canvas.height = Math.round(this.H * this.dpr);
+    this.buildBackground();
+  },
+  /* A calm, neutral playroom so the six colors stand out. Cached off-screen. */
+  buildBackground() {
+    const W = this.W, H = this.H, c = document.createElement('canvas');
+    c.width = Math.round(W * this.dpr); c.height = Math.round(H * this.dpr);
+    const g = c.getContext('2d');
+    g.scale(this.dpr, this.dpr);
+    const floorY = H * 0.74;
+    let gr = g.createLinearGradient(0, 0, 0, floorY);
+    gr.addColorStop(0, '#fff3e6'); gr.addColorStop(1, '#ffe6cf');
+    g.fillStyle = gr; g.fillRect(0, 0, W, floorY);
+    const step = Math.max(38, Math.min(W, H) * 0.075);
+    g.fillStyle = 'rgba(236,196,150,.3)';
+    for (let y = step * 0.5, row = 0; y < floorY - 12; y += step, row++) {
+      for (let x = row % 2 ? step * 0.5 : 0; x < W + step; x += step) { g.beginPath(); g.arc(x, y, step * 0.08, 0, TAU); g.fill(); }
+    }
+    g.fillStyle = '#fffaf3'; g.fillRect(0, floorY - H * 0.02, W, H * 0.02);
+    gr = g.createLinearGradient(0, floorY, 0, H);
+    gr.addColorStop(0, '#f4d2a4'); gr.addColorStop(1, '#eabf88');
+    g.fillStyle = gr; g.fillRect(0, floorY, W, H - floorY);
+    g.strokeStyle = 'rgba(176,124,70,.2)'; g.lineWidth = 2;
+    for (let i = 1; i < 8; i++) { const y = floorY + (H - floorY) * Math.pow(i / 8, 1.4); g.beginPath(); g.moveTo(0, y); g.lineTo(W, y); g.stroke(); }
+    const rugY = floorY + (H - floorY) * 0.55;
+    g.fillStyle = 'rgba(255,255,255,.38)';
+    g.beginPath(); g.ellipse(W / 2, rugY, W * 0.36, (H - floorY) * 0.32, 0, 0, TAU); g.fill();
+    g.strokeStyle = 'rgba(255,255,255,.7)'; g.lineWidth = 4; g.setLineDash([10, 12]);
+    g.beginPath(); g.ellipse(W / 2, rugY, W * 0.32, (H - floorY) * 0.25, 0, 0, TAU); g.stroke();
+    this.bg = c;
+  },
+
+  draw(now, dt) {
+    const ctx = this.ctx;
+    ctx.setTransform(1, 0, 0, 1, 0, 0);
+    if (this.bg) ctx.drawImage(this.bg, 0, 0);
+    ctx.setTransform(this.dpr, 0, 0, this.dpr, 0, 0);
+    const gameplay = Game.isGameplay();
+    const objs = gameplay ? Game.objects : Menu.objects;
+    for (const o of objs) { if (!o.menu) Layout.place(o); this.drawObject(o, now); }
+    if (gameplay || Game.state === 'finished') for (const p of Tracking.activePointers()) this.drawPointer(p, now);
+    this.updateParticles(now, dt);
+    this.drawParticles();
+  },
+
+  drawObject(o, now) {
+    const ctx = this.ctx, tc = o.menu ? now : Game.clock, tr = now / 1000, r = o.r;
+    if (r <= 0) return;
+    let s = 1;
+    if (o.appearAt !== null) { const a = (tc - o.appearAt) / 420; if (a < 0) return; s = a < 1 ? Math.max(0, easeOutBack(a)) : 1; }
+    if (o.exitAt !== null) { s *= 1 - easeInCubic(clamp((tc - o.exitAt) / 350, 0, 1)); if (s <= 0.01) return; }
+    o.hoverAmt = lerp(o.hoverAmt, o.hover ? 1 : 0, 0.2);
+
+    let yOff = Math.sin(tr * 2.1 + o.phase) * r * 0.045;
+    let rot = Math.sin(tr * 1.3 + o.phase) * 0.03;
+    let sx = 1, sy = 1;
+    if (o.bounceAt !== null) {                       // success: big happy bounce with squash
+      const b = (tc - o.bounceAt) / 1000;
+      if (b >= 0 && b < 1.6) {
+        const decay = Math.exp(-b * 2.2);
+        yOff -= Math.abs(Math.sin(b * Math.PI * 2.6)) * r * 0.55 * decay;
+        const sq = Math.sin(b * Math.PI * 5.2) * 0.14 * decay; sx += sq; sy -= sq;
+        rot += Math.sin(b * Math.PI * 4) * 0.12 * decay;
+      }
+    }
+    if (o.hopAt !== null) { const b = (tc - o.hopAt) / 1000; if (b > 0 && b < 0.6) yOff -= Math.sin((b / 0.6) * Math.PI) * r * 0.22; }
+    if (o.dance) yOff -= Math.abs(Math.sin(tr * 3 + o.phase)) * r * 0.3;
+    if (o.shakeAt !== null) {                        // wrong: a gentle "not me" wiggle
+      const b = (tc - o.shakeAt) / 1000;
+      if (b >= 0 && b < 0.9) rot += Math.sin(b * Math.PI * 7) * 0.16 * Math.exp(-b * 3);
+    }
+    const hint = !o.menu && o === Game.target && Game.phase === 'active' && Game.hintLevel >= 1;
+    if (hint && Game.hintLevel >= 2) rot += Math.sin(tr * 11) * 0.09;
+    const scale = s * (1 + o.hoverAmt * 0.08) * (hint ? 1 + Math.sin(tr * 5) * 0.03 : 1);
+
+    // floor shadow
+    ctx.save();
+    const lift = 1 - clamp(-yOff / (r * 0.8), 0, 0.5);
+    ctx.globalAlpha = 0.16 * s; ctx.fillStyle = '#5b4632';
+    ctx.beginPath(); ctx.ellipse(o.x, o.y + r * 1.1, r * 0.72 * lift * s, r * 0.15 * lift * s, 0, 0, TAU); ctx.fill();
+    ctx.restore();
+
+    if (hint) {
+      const a = 0.4 + 0.2 * Math.sin(tr * 6);
+      const g = ctx.createRadialGradient(o.x, o.y, r * 0.5, o.x, o.y, r * 1.75);
+      g.addColorStop(0, `rgba(255,255,255,${a})`); g.addColorStop(1, 'rgba(255,255,255,0)');
+      ctx.fillStyle = g; ctx.beginPath(); ctx.arc(o.x, o.y, r * 1.75, 0, TAU); ctx.fill();
+      if (Game.hintLevel >= 2) {
+        ctx.fillStyle = '#ffc93c';
+        for (let k = 0; k < 3; k++) { const a2 = tr * 2 + (k * TAU) / 3; starPath(ctx, o.x + Math.cos(a2) * r * 1.4, o.y + Math.sin(a2) * r * 1.4, r * 0.16, r * 0.06, 4, tr * 3); ctx.fill(); }
+      }
+    }
+    if (o.hoverAmt > 0.02) {
+      ctx.save(); ctx.globalAlpha = o.hoverAmt * 0.5; ctx.fillStyle = '#fff';
+      ctx.beginPath(); ctx.arc(o.x, o.y + yOff, r * 1.22 * scale, 0, TAU); ctx.fill(); ctx.restore();
+    }
+
+    ctx.save();
+    ctx.translate(o.x, o.y + yOff); ctx.rotate(rot); ctx.scale(scale * sx, scale * sy);
+    this.drawShape(ctx, o, r, tr, tc);
+    ctx.restore();
+
+    // progress ring while the child holds their hand on an object
+    if (!o.menu && o.dwell > 0 && Game.phase === 'active') {
+      const need = o === Game.target ? CFG.DWELL_MS : CFG.WRONG_DWELL_MS;
+      this.drawRing(ctx, o, clamp(o.dwell / need, 0, 1));
+    }
+  },
+  drawRing(ctx, o, f) {
+    const R = o.r * 1.32, lw = Math.max(6, o.r * 0.13);
+    ctx.save(); ctx.lineCap = 'round';
+    ctx.lineWidth = lw; ctx.strokeStyle = 'rgba(255,255,255,.55)';
+    ctx.beginPath(); ctx.arc(o.x, o.y, R, 0, TAU); ctx.stroke();
+    ctx.beginPath(); ctx.arc(o.x, o.y, R, -Math.PI / 2, -Math.PI / 2 + TAU * f);
+    ctx.strokeStyle = '#fff'; ctx.lineWidth = lw + 6; ctx.stroke();
+    ctx.strokeStyle = o.color === 'rainbow' ? '#ff5fa2' : o.def.hex; ctx.lineWidth = lw; ctx.stroke();
+    ctx.restore();
+  },
+
+  /* Cartoon objects. Each is drawn around (0,0) and fits roughly inside radius r. */
+  drawShape(ctx, o, r, tr, tc) {
+    const d = o.def, OL = 'rgba(45,38,84,.9)', lw = Math.max(2, r * 0.07);
+    const happy = o.dance || tc < o.happyUntil;
+    const blink = ((tr * 1000 + o.phase * 977) % o.blinkEvery) < 140;
+    const mood = happy ? 'happy' : o.hoverAmt > 0.5 ? 'excited' : 'smile';
+    const radial = (R) => {
+      const g = ctx.createRadialGradient(-R * 0.35, -R * 0.4, R * 0.08, 0, 0, R * 1.05);
+      g.addColorStop(0, d.light); g.addColorStop(0.5, d.hex); g.addColorStop(1, d.dark); return g;
+    };
+    ctx.lineJoin = 'round'; ctx.lineCap = 'round';
+    switch (o.shape) {
+      case 'ball': {
+        const R = r * 0.95;
+        ctx.beginPath(); ctx.arc(0, 0, R, 0, TAU); ctx.fillStyle = radial(R); ctx.fill();
+        ctx.lineWidth = lw; ctx.strokeStyle = OL; ctx.stroke();
+        ctx.save(); ctx.beginPath(); ctx.arc(0, 0, R - lw * 0.5, 0, TAU); ctx.clip();
+        ctx.strokeStyle = 'rgba(255,255,255,.26)'; ctx.lineWidth = R * 0.1;
+        ctx.beginPath(); ctx.ellipse(0, R * 1.05, R * 1.3, R * 0.5, 0, Math.PI * 1.05, Math.PI * 1.95); ctx.stroke();
+        ctx.restore();
+        this.shine(ctx, -R * 0.42, -R * 0.5, R * 0.24, R * 0.13, -0.6);
+        this.drawFace(ctx, 0, R * 0.04, R * 0.82, mood, blink);
+        break;
+      }
+      case 'star': {
+        const R = r * 0.98, oy = R * 0.08;
+        let fill;
+        if (o.color === 'rainbow') {
+          fill = ctx.createLinearGradient(-R, -R, R, R);
+          RAINBOW_STOPS.forEach((c, i) => fill.addColorStop(i / (RAINBOW_STOPS.length - 1), c));
+        } else {
+          fill = ctx.createLinearGradient(0, -R, 0, R);
+          fill.addColorStop(0, d.light); fill.addColorStop(0.45, d.hex); fill.addColorStop(1, d.dark);
+        }
+        starPath(ctx, 0, oy, R, R * 0.52, 5);
+        ctx.lineWidth = r * 0.2 + lw * 2; ctx.strokeStyle = OL; ctx.stroke();
+        ctx.lineWidth = r * 0.2; ctx.strokeStyle = fill; ctx.stroke();
+        ctx.fillStyle = fill; ctx.fill();
+        this.shine(ctx, -R * 0.18, -R * 0.36, R * 0.14, R * 0.08, -0.5);
+        if (o.color === 'rainbow') { ctx.fillStyle = 'rgba(255,255,255,.55)'; ctx.beginPath(); ctx.arc(0, R * 0.16, R * 0.38, 0, TAU); ctx.fill(); }
+        this.drawFace(ctx, 0, R * 0.16, R * 0.58, mood, blink);
+        break;
+      }
+      case 'sun': {
+        ctx.save(); ctx.rotate(tr * 0.35 + o.phase);
+        for (let i = 0; i < 12; i++) {
+          ctx.save(); ctx.rotate((i * TAU) / 12);
+          const L = i % 2 ? r * 0.9 : r * 1.02;
+          ctx.beginPath(); ctx.moveTo(-r * 0.13, -r * 0.6); ctx.lineTo(0, -L); ctx.lineTo(r * 0.13, -r * 0.6); ctx.closePath();
+          ctx.fillStyle = d.hex; ctx.fill(); ctx.lineWidth = lw * 0.8; ctx.strokeStyle = OL; ctx.stroke();
+          ctx.restore();
+        }
+        ctx.restore();
+        const R = r * 0.68;
+        ctx.beginPath(); ctx.arc(0, 0, R, 0, TAU); ctx.fillStyle = radial(R); ctx.fill();
+        ctx.lineWidth = lw; ctx.strokeStyle = OL; ctx.stroke();
+        this.shine(ctx, -R * 0.4, -R * 0.48, R * 0.22, R * 0.12, -0.6);
+        this.drawFace(ctx, 0, R * 0.06, R * 0.9, mood, blink);
+        break;
+      }
+      case 'tree': {
+        ctx.fillStyle = '#a8703f'; ctx.strokeStyle = OL; ctx.lineWidth = lw;
+        roundRectPath(ctx, -r * 0.17, r * 0.3, r * 0.34, r * 0.72, r * 0.08); ctx.fill(); ctx.stroke();
+        const blobs = [[0, -r * 0.42, r * 0.5], [-r * 0.45, -r * 0.12, r * 0.45], [r * 0.45, -r * 0.12, r * 0.45], [-r * 0.25, r * 0.2, r * 0.42], [r * 0.25, r * 0.2, r * 0.42]];
+        ctx.fillStyle = OL;
+        for (const [x, y, rr] of blobs) { ctx.beginPath(); ctx.arc(x, y, rr + lw, 0, TAU); ctx.fill(); }
+        const g = ctx.createLinearGradient(0, -r * 0.95, 0, r * 0.65);
+        g.addColorStop(0, d.light); g.addColorStop(0.5, d.hex); g.addColorStop(1, d.dark);
+        ctx.fillStyle = g;
+        for (const [x, y, rr] of blobs) { ctx.beginPath(); ctx.arc(x, y, rr, 0, TAU); ctx.fill(); }
+        ctx.fillStyle = 'rgba(255,255,255,.22)';
+        for (const [x, y, rr] of [[-r * 0.2, -r * 0.62, r * 0.12], [r * 0.55, -r * 0.3, r * 0.08], [-r * 0.6, -r * 0.2, r * 0.07]]) { ctx.beginPath(); ctx.arc(x, y, rr, 0, TAU); ctx.fill(); }
+        this.drawFace(ctx, 0, -r * 0.08, r * 0.62, mood, blink);
+        break;
+      }
+      case 'balloon': {
+        const sway = Math.sin(tr * 2 + o.phase) * r * 0.08;
+        ctx.strokeStyle = 'rgba(45,38,84,.7)'; ctx.lineWidth = Math.max(1.5, r * 0.035);
+        ctx.beginPath(); ctx.moveTo(0, r * 0.78); ctx.bezierCurveTo(r * 0.12 + sway, r * 0.86, -r * 0.12 + sway, r * 0.96, sway * 0.6, r * 1.1); ctx.stroke();
+        ctx.beginPath(); ctx.ellipse(0, -r * 0.12, r * 0.7, r * 0.8, 0, 0, TAU);
+        ctx.fillStyle = radial(r * 0.78); ctx.fill(); ctx.lineWidth = lw; ctx.strokeStyle = OL; ctx.stroke();
+        ctx.beginPath(); ctx.moveTo(-r * 0.09, r * 0.8); ctx.lineTo(r * 0.09, r * 0.8); ctx.lineTo(0, r * 0.64); ctx.closePath();
+        ctx.fillStyle = d.dark; ctx.fill(); ctx.lineWidth = lw * 0.7; ctx.stroke();
+        this.shine(ctx, -r * 0.32, -r * 0.48, r * 0.17, r * 0.1, -0.7);
+        this.drawFace(ctx, 0, -r * 0.1, r * 0.7, mood, blink);
+        break;
+      }
+      case 'box': {
+        const g = ctx.createLinearGradient(0, -r * 0.5, 0, r * 0.85);
+        g.addColorStop(0, d.light); g.addColorStop(0.35, d.hex); g.addColorStop(1, d.dark);
+        roundRectPath(ctx, -r * 0.72, -r * 0.45, r * 1.44, r * 1.3, r * 0.14);
+        ctx.fillStyle = g; ctx.fill(); ctx.lineWidth = lw; ctx.strokeStyle = OL; ctx.stroke();
+        roundRectPath(ctx, -r * 0.84, -r * 0.72, r * 1.68, r * 0.36, r * 0.12);
+        const lg = ctx.createLinearGradient(0, -r * 0.72, 0, -r * 0.36);
+        lg.addColorStop(0, d.light); lg.addColorStop(1, d.hex);
+        ctx.fillStyle = lg; ctx.fill(); ctx.stroke();
+        this.shine(ctx, -r * 0.5, -r * 0.6, r * 0.18, r * 0.06, 0);
+        this.drawFace(ctx, 0, r * 0.2, r * 0.66, mood, blink);
+        break;
+      }
+    }
+  },
+  shine(ctx, x, y, rx, ry, rot) {
+    ctx.fillStyle = 'rgba(255,255,255,.6)';
+    ctx.beginPath(); ctx.ellipse(x, y, rx, ry, rot, 0, TAU); ctx.fill();
+  },
+  drawFace(ctx, x, y, s, mood, blink) {
+    const ink = '#2d2654', ex = s * 0.31, ey = y - s * 0.1, er = s * 0.13;
+    ctx.save(); ctx.lineCap = 'round'; ctx.lineJoin = 'round';
+    if (mood === 'happy' || blink) {
+      ctx.strokeStyle = ink; ctx.lineWidth = Math.max(2, s * 0.07);
+      for (const k of [-1, 1]) {
+        ctx.beginPath();
+        if (mood === 'happy') ctx.arc(x + k * ex, ey + er * 0.5, er, Math.PI * 1.15, Math.PI * 1.85);
+        else { ctx.moveTo(x + k * ex - er, ey); ctx.quadraticCurveTo(x + k * ex, ey + er * 0.7, x + k * ex + er, ey); }
+        ctx.stroke();
+      }
+    } else {
+      for (const k of [-1, 1]) {
+        ctx.fillStyle = ink; ctx.beginPath(); ctx.ellipse(x + k * ex, ey, er * 0.85, er * 1.12, 0, 0, TAU); ctx.fill();
+        ctx.fillStyle = '#fff'; ctx.beginPath(); ctx.arc(x + k * ex + er * 0.28, ey - er * 0.42, er * 0.36, 0, TAU); ctx.fill();
+      }
+    }
+    ctx.fillStyle = 'rgba(255,105,150,.42)';
+    for (const k of [-1, 1]) { ctx.beginPath(); ctx.ellipse(x + k * s * 0.5, y + s * 0.1, s * 0.12, s * 0.08, 0, 0, TAU); ctx.fill(); }
+    ctx.strokeStyle = ink; ctx.fillStyle = ink; ctx.lineWidth = Math.max(2, s * 0.07);
+    if (mood === 'happy' || mood === 'excited') {
+      const w = mood === 'happy' ? s * 0.22 : s * 0.15, my = y + s * 0.08;
+      ctx.beginPath(); ctx.moveTo(x - w, my); ctx.quadraticCurveTo(x, my + w * 1.9, x + w, my); ctx.closePath(); ctx.fill();
+      ctx.save(); ctx.clip();
+      ctx.fillStyle = '#ff7aa8'; ctx.beginPath(); ctx.ellipse(x, my + w * 0.8, w * 0.5, w * 0.32, 0, 0, TAU); ctx.fill();
+      ctx.restore();
+    } else {
+      ctx.beginPath(); ctx.arc(x, y + s * 0.02, s * 0.16, Math.PI * 0.18, Math.PI * 0.82); ctx.stroke();
+    }
+    ctx.restore();
+  },
+
+  /* The child's fingertip: a glowing sparkle with a short trail. */
+  drawPointer(p, now) {
+    const ctx = this.ctx, R = Math.max(15, Math.min(this.W, this.H) * 0.03);
+    p.trail.push({ x: p.x, y: p.y, t: now });
+    while (p.trail.length > 14 || (p.trail.length && now - p.trail[0].t > 280)) p.trail.shift();
+    ctx.save();
+    p.trail.forEach((q, i) => {
+      const a = (i + 1) / p.trail.length;
+      ctx.globalAlpha = a * 0.3; ctx.fillStyle = '#ff8cc3';
+      ctx.beginPath(); ctx.arc(q.x, q.y, R * 0.7 * a, 0, TAU); ctx.fill();
+    });
+    ctx.globalAlpha = 1;
+    const g = ctx.createRadialGradient(p.x, p.y, R * 0.4, p.x, p.y, R * 2.3);
+    g.addColorStop(0, 'rgba(255,255,255,.85)'); g.addColorStop(1, 'rgba(255,255,255,0)');
+    ctx.fillStyle = g; ctx.beginPath(); ctx.arc(p.x, p.y, R * 2.3, 0, TAU); ctx.fill();
+    ctx.beginPath(); ctx.arc(p.x, p.y, R, 0, TAU); ctx.fillStyle = '#fff'; ctx.fill();
+    ctx.lineWidth = R * 0.26; ctx.strokeStyle = '#ff5fa2'; ctx.stroke();
+    ctx.fillStyle = '#ffc93c'; starPath(ctx, p.x, p.y, R * 0.62, R * 0.24, 4, now / 500); ctx.fill();
+    ctx.restore();
+  },
+
+  /* ---------- particles ---------- */
+  burst(x, y, color, n, rainbow) {
+    const k = Math.min(this.W, this.H) / 700;
+    for (let i = 0; i < n; i++) {
+      const a = Math.random() * TAU, sp = (200 + Math.random() * 520) * k;
+      this.particles.push({ x, y, vx: Math.cos(a) * sp, vy: Math.sin(a) * sp - 250 * k, g: 900 * k, life: 0, max: 900 + Math.random() * 700,
+        size: (7 + Math.random() * 10) * Math.max(0.7, k), rot: Math.random() * TAU, vr: (Math.random() - 0.5) * 10,
+        type: i % 3 === 0 ? 'star' : i % 3 === 1 ? 'dot' : 'rect', color: rainbow ? pick(RAINBOW_STOPS) : Math.random() < 0.25 ? '#ffffff' : color });
+    }
+  },
+  flyStar(x, y, cb) {
+    const t = UI.starTarget(), size = Math.max(18, Math.min(this.W, this.H) * 0.035);
+    this.flyers.push({ x0: x, y0: y, x1: t.x, y1: t.y, cx: (x + t.x) / 2, cy: Math.min(y, t.y) - Math.min(this.W, this.H) * 0.25, t: 0, dur: 800, size, cb, done: false });
+  },
+  confetti(ms) { this.confettiUntil = performance.now() + ms; },
+  updateParticles(now, dt) {
+    const s = dt / 1000;
+    if (now < this.confettiUntil) {
+      for (let i = 0; i < 3; i++) {
+        this.particles.push({ x: Math.random() * this.W, y: -20, vx: (Math.random() - 0.5) * 120, vy: 120 + Math.random() * 160, g: 120, life: 0, max: 5000,
+          size: 8 + Math.random() * 9, rot: Math.random() * TAU, vr: (Math.random() - 0.5) * 6, type: Math.random() < 0.3 ? 'star' : 'rect', color: pick(CONFETTI) });
+      }
+    }
+    for (const p of this.particles) { p.life += dt; p.vy += p.g * s; p.vx *= 0.995; p.x += p.vx * s; p.y += p.vy * s; p.rot += p.vr * s; }
+    this.particles = this.particles.filter((p) => p.life < p.max && p.y < this.H + 40);
+    if (this.particles.length > 500) this.particles.splice(0, this.particles.length - 500);
+    for (const f of this.flyers) { f.t += dt; if (f.t >= f.dur && !f.done) { f.done = true; if (f.cb) f.cb(); } }
+    this.flyers = this.flyers.filter((f) => !f.done);
+  },
+  drawParticles() {
+    const ctx = this.ctx;
+    for (const p of this.particles) {
+      ctx.globalAlpha = clamp(1 - Math.max(0, (p.life - p.max * 0.7) / (p.max * 0.3)), 0, 1);
+      ctx.fillStyle = p.color;
+      ctx.save(); ctx.translate(p.x, p.y); ctx.rotate(p.rot);
+      if (p.type === 'star') { starPath(ctx, 0, 0, p.size, p.size * 0.48, 5); ctx.fill(); }
+      else if (p.type === 'dot') { ctx.beginPath(); ctx.arc(0, 0, p.size * 0.5, 0, TAU); ctx.fill(); }
+      else ctx.fillRect(-p.size * 0.5, -p.size * 0.3, p.size, p.size * 0.6);
+      ctx.restore();
+    }
+    ctx.globalAlpha = 1;
+    for (const f of this.flyers) {
+      const t = clamp(f.t / f.dur, 0, 1), e = t < 0.5 ? 2 * t * t : 1 - Math.pow(-2 * t + 2, 2) / 2;
+      const x = (1 - e) * (1 - e) * f.x0 + 2 * (1 - e) * e * f.cx + e * e * f.x1;
+      const y = (1 - e) * (1 - e) * f.y0 + 2 * (1 - e) * e * f.cy + e * e * f.y1;
+      const size = f.size * (1 + Math.sin(t * Math.PI) * 0.6);
+      ctx.save(); ctx.translate(x, y); ctx.rotate(t * TAU);
+      ctx.fillStyle = '#ffc93c'; ctx.strokeStyle = '#e09a00'; ctx.lineWidth = 3;
+      starPath(ctx, 0, 0, size, size * 0.48, 5); ctx.fill(); ctx.stroke();
+      ctx.restore();
+    }
+  },
+};
+
+/* ============================================================================
+   7. UI  (DOM screens, HUD, overlays)
+   ============================================================================ */
+const UI = {
+  el: {}, current: 'start', retryAction: 'start',
+
+  init() {
+    const ids = ['hud','topLeft','starChip','starIco','starCount','streakChip','streakCount','banner','bannerRow','teacher','swatch','bannerText','dots',
+      'controls','pauseBtn','restartBtn','soundBtn','fsBtn','toast','camWrap','camVideo','camOverlay','camDot',
+      'startScreen','playBtn','loadStatus','calibScreen','calibTitle','calibStage','calibVideo','calibGuide','calibOverlay','calibArrow',
+      'calibLoading','calibLoadingText','calibLoadingSub','calibMeter','calibFill','calibHint','skipBtn',
+      'pauseOverlay','resumeBtn','restartBtn2','lostOverlay','finishScreen','finishEmoji','finishTitle','finishStars','finishMsg','finishStreak','againBtn',
+      'errorScreen','errEmoji','errTitle','errMsg','retryBtn'];
+    for (const id of ids) this.el[id] = $(id);
+    const e = this.el;
+    this.camCtx = e.camOverlay.getContext('2d');
+    this.calibCtx = e.calibOverlay.getContext('2d');
+
+    e.playBtn.addEventListener('click', () => App.start());
+    e.retryBtn.addEventListener('click', () => (this.retryAction === 'reload' ? location.reload() : App.start()));
+    e.pauseBtn.addEventListener('click', () => Game.setPaused(!Game.paused));
+    e.resumeBtn.addEventListener('click', () => { Sound.init(); Game.setPaused(false); });
+    e.restartBtn.addEventListener('click', () => Game.restart());
+    e.restartBtn2.addEventListener('click', () => Game.restart());
+    e.againBtn.addEventListener('click', () => { Sound.init(); Game.restart(); });
+    e.skipBtn.addEventListener('click', () => Game.skipCalib());
+    e.soundBtn.addEventListener('click', () => this.toggleSound());
+    if (document.fullscreenEnabled || document.webkitFullscreenEnabled) e.fsBtn.addEventListener('click', () => this.toggleFullscreen());
+    else e.fsBtn.classList.add('hidden');
+  },
+
+  mode(m) {
+    const e = this.el;
+    this.current = m;
+    e.startScreen.classList.toggle('hidden', m !== 'start');
+    e.calibScreen.classList.toggle('hidden', m !== 'calib');
+    e.finishScreen.classList.toggle('hidden', m !== 'finish');
+    e.errorScreen.classList.toggle('hidden', m !== 'error');
+    e.hud.classList.toggle('hidden', m !== 'game');
+    e.camWrap.classList.toggle('cam-off', !(m === 'game' || m === 'finish'));
+    if (m !== 'game') { this.showPause(false); this.showLost(false); }
+    if (m === 'calib') this.layoutCalib();
+    if (m === 'game' || m === 'finish') this.layoutCamera();
+  },
+
+  /* ---------- instruction banner ---------- */
+  pill(color) {
+    const d = COLORS[color];
+    return `<span class="cword" style="background:${d.hex};color:${d.text}">${color.toUpperCase()}</span>`;
+  },
+  setBanner({ swatchColor = '#fff', swatchIcon = '', html = '', long = false }) {
+    const e = this.el;
+    e.swatch.style.background = swatchColor;
+    e.swatch.innerHTML = swatchIcon ? `<span>${swatchIcon}</span>` : '';
+    e.bannerText.innerHTML = html;
+    e.bannerText.classList.toggle('long', long);
+    e.banner.classList.remove('pop'); void e.banner.offsetWidth; e.banner.classList.add('pop');
+    this.fitBanner();
+  },
+  /* Shrink the instruction text until it fits on the screen (never below 60%). */
+  fitBanner() {
+    const row = this.el.bannerRow;
+    row.style.fontSize = '';
+    if (this.el.hud.classList.contains('hidden')) return;
+    const base = parseFloat(getComputedStyle(row).fontSize);
+    let f = base;
+    for (let i = 0; i < 8 && row.scrollWidth > row.clientWidth + 1 && f > base * 0.6; i++) {
+      f *= 0.92; row.style.fontSize = `${f}px`;
+    }
+  },
+  setInstruction(color, q) {
+    if (q) this.setBanner({ swatchIcon: q.icon, html: `Touch the color of ${q.what}!`, long: true });
+    else this.setBanner({ swatchColor: COLORS[color].hex, html: `Touch ${this.pill(color)}!` });
+  },
+  revealSwatch(color) {
+    const s = this.el.swatch;
+    s.style.background = COLORS[color].hex;
+    s.classList.remove('pop'); void s.offsetWidth; s.classList.add('pop');
+  },
+  talking(v) { if (this.el.teacher) this.el.teacher.classList.toggle('talk', v); },
+
+  /* ---------- score, streak, progress ---------- */
+  renderDots(results, current, total) {
+    let h = '';
+    for (let i = 0; i < total; i++) {
+      const cls = i < results.length ? (results[i] ? 'done' : 'miss') : i === current ? 'now' : '';
+      h += `<i class="dot ${cls}"></i>`;
+    }
+    this.el.dots.innerHTML = h;
+  },
+  showDots(v) { this.el.dots.classList.toggle('hidden', !v); },
+  setStars(n, bump = false) {
+    this.el.starCount.textContent = n;
+    if (bump) { const c = this.el.starChip; c.classList.remove('bump'); void c.offsetWidth; c.classList.add('bump'); }
+  },
+  setStreak(n) {
+    const c = this.el.streakChip;
+    c.classList.toggle('hidden', n < 2);
+    this.el.streakCount.textContent = n;
+    if (n >= 2) { c.classList.remove('bump'); void c.offsetWidth; c.classList.add('bump'); }
+  },
+  starTarget() {
+    const r = this.el.starIco.getBoundingClientRect();
+    return r.width ? { x: r.left + r.width / 2, y: r.top + r.height / 2 } : { x: 40, y: 40 };
+  },
+  toast(text) {
+    const t = this.el.toast;
+    t.textContent = text;
+    t.classList.remove('show'); void t.offsetWidth; t.classList.add('show');
+  },
+
+  /* ---------- overlays ---------- */
+  showPause(v) { this.el.pauseOverlay.classList.toggle('hidden', !v); },
+  showLost(v) { this.el.lostOverlay.classList.toggle('hidden', !v); },
+  showFinish(n, total, best) {
+    const e = this.el;
+    e.finishEmoji.textContent = n >= 10 ? '🏆' : n >= 6 ? '🌟' : '🎈';
+    e.finishTitle.textContent = n >= 10 ? 'Color Champion!' : n >= 6 ? 'Super Star!' : 'Great Playing!';
+    e.finishStars.innerHTML = Array.from({ length: total }, (_, i) => `<span class="fs ${i < n ? 'got' : ''}" style="animation-delay:${0.3 + i * 0.08}s">★</span>`).join('');
+    e.finishMsg.textContent = `You got ${n} ${n === 1 ? 'star' : 'stars'}!`;
+    e.finishStreak.textContent = best >= 2 ? `Best rainbow streak: ${best} in a row 🌈` : '';
+    this.mode('finish');
+  },
+  showError(emoji, title, msg, action = 'start') {
+    Game.state = 'menu';
+    Voice.stop();
+    const e = this.el;
+    e.errEmoji.textContent = emoji; e.errTitle.textContent = title; e.errMsg.textContent = msg;
+    e.retryBtn.textContent = action === 'reload' ? 'Reload' : 'Try again';
+    this.retryAction = action;
+    this.mode('error');
+  },
+  showCameraError(err) {
+    const n = (err && err.name) || '';
+    if (n === 'NotAllowedError' || n === 'PermissionDeniedError' || n === 'SecurityError') {
+      this.showError('🔒', 'The camera is blocked', isTouchDevice
+        ? 'Tap the icon next to the web address, allow the camera for this page, then tap Try again.'
+        : 'Click the camera or lock icon in the address bar, allow the camera for this page, then click Try again.');
+    } else if (n === 'NotFoundError' || n === 'DevicesNotFoundError' || n === 'OverconstrainedError') {
+      this.showError('📷', 'No camera found', 'Connect a camera, or open the game on a device with a front camera, then try again.');
+    } else if (n === 'NotReadableError' || n === 'TrackStartError' || n === 'AbortError') {
+      this.showError('📷', 'The camera is busy', 'Close other apps or tabs that use the camera, then try again.');
+    } else if (n === 'InsecureContext' || n === 'NotSupported') {
+      this.showError('🔐', 'The camera needs a secure page', 'Open the game from an https:// address or from localhost. Some browsers block the camera on local files.');
+    } else {
+      this.showError('📷', 'The camera did not start', 'Check that no other app is using it, then try again.');
+    }
+  },
+
+  /* ---------- calibration screen ---------- */
+  setCalibLoading(text, sub = '') {
+    const e = this.el;
+    e.calibLoading.classList.remove('hidden');
+    e.calibLoadingText.textContent = text; e.calibLoadingSub.textContent = sub;
+    e.calibTitle.textContent = 'Getting ready!';
+    e.calibFill.style.width = '0%';
+    e.calibArrow.classList.add('hidden');
+    e.calibStage.classList.remove('ok');
+    this.showSkip(false);
+  },
+  calibReady() {
+    this.el.calibLoading.classList.add('hidden');
+    this.showSkip(false);
+    this.setCalibStatus('none');
+  },
+  setCalibStatus(st) {
+    this.el.calibTitle.textContent = CALIB_TEXT[st].title;
+    this.el.calibStage.classList.toggle('ok', st === 'ok');
+  },
+  setCalibProgress(p, st, b) {
+    const e = this.el;
+    e.calibFill.style.width = `${Math.round(p * 100)}%`;
+    if (st === 'side' && b && typeof b.cxFrac === 'number') {
+      const leftSide = b.cxFrac < 0.5;   // child appears on the left of the mirrored view
+      e.calibArrow.textContent = leftSide ? '👉' : '👈';
+      e.calibArrow.style.left = `${clamp(b.cxFrac * 100 + (leftSide ? 16 : -16), 8, 92)}%`;
+      e.calibArrow.classList.remove('hidden');
+    } else e.calibArrow.classList.add('hidden');
+  },
+  showSkip(v) { this.el.skipBtn.classList.toggle('hidden', !v); },
+
+  /* ---------- camera views ---------- */
+  layoutCamera() {
+    const w = this.el.camWrap, c = this.el.camOverlay;
+    w.style.aspectRatio = `${Tracking.vw} / ${Tracking.vh}`;
+    const dpr = Math.min(2, window.devicePixelRatio || 1);
+    c.width = Math.round(w.clientWidth * dpr); c.height = Math.round(w.clientHeight * dpr);
+  },
+  layoutCalib() {
+    const e = this.el, vw = Tracking.vw, vh = Tracking.vh, ar = vw / vh, W = innerWidth, H = innerHeight;
+    const maxW = W * 0.92, maxH = H * (H < 520 ? 0.48 : 0.5);
+    let w = maxW, h = w / ar;
+    if (h > maxH) { h = maxH; w = h * ar; }
+    e.calibStage.style.width = `${Math.round(w)}px`; e.calibStage.style.height = `${Math.round(h)}px`;
+    const dpr = Math.min(2, window.devicePixelRatio || 1);
+    e.calibOverlay.width = Math.round(w * dpr); e.calibOverlay.height = Math.round(h * dpr);
+    // Dashed "stand here" outline sized for a good distance.
+    const b = Math.min(vw, vh), cx = vw / 2, headR = b * 0.075, headY = vh * 0.27, shY = headY + headR + b * 0.07, half = b * 0.13;
+    e.calibGuide.setAttribute('viewBox', `0 0 ${vw} ${vh}`);
+    e.calibGuide.innerHTML = `<g fill="rgba(255,255,255,.13)" stroke="rgba(255,255,255,.9)" stroke-width="${b * 0.012}" stroke-dasharray="${b * 0.03} ${b * 0.022}" stroke-linecap="round">
+      <circle cx="${cx}" cy="${headY}" r="${headR}"/>
+      <path d="M${cx - half} ${vh + 10} L${cx - half} ${shY + b * 0.07} Q${cx - half} ${shY} ${cx - half + b * 0.07} ${shY} L${cx + half - b * 0.07} ${shY} Q${cx + half} ${shY} ${cx + half} ${shY + b * 0.07} L${cx + half} ${vh + 10}"/></g>`;
+  },
+  drawPreviews() {
+    if (this.current === 'game' || this.current === 'finish') {
+      const c = this.el.camOverlay;
+      Tracking.drawSkeleton(this.camCtx, c.width, c.height, true);
+      this.el.camDot.classList.toggle('on', performance.now() - Tracking.lastPersonSeen < 600);
+    } else if (this.current === 'calib') {
+      const c = this.el.calibOverlay;
+      Tracking.drawSkeleton(this.calibCtx, c.width, c.height, false);
+    }
+  },
+
+  /* ---------- settings ---------- */
+  toggleSound() {
+    Sound.init();
+    Sound.enabled = !Sound.enabled;
+    Voice.enabled = Sound.enabled;
+    if (!Voice.enabled) Voice.stop();
+    this.el.soundBtn.textContent = Sound.enabled ? '🔊' : '🔇';
+  },
+  toggleFullscreen() {
+    const d = document, el = d.documentElement;
+    try {
+      if (d.fullscreenElement || d.webkitFullscreenElement) { const x = (d.exitFullscreen || d.webkitExitFullscreen).call(d); if (x && x.catch) x.catch(() => {}); }
+      else { const req = el.requestFullscreen || el.webkitRequestFullscreen; if (req) { const x = req.call(el); if (x && x.catch) x.catch(() => {}); } }
+    } catch (e) {}
+  },
+};
+
+/* ============================================================================
+   8. APP, MAIN LOOP & BOOT
+   ============================================================================ */
+let wakeLock = null;
+async function requestWakeLock() {
+  try { if ('wakeLock' in navigator && !document.hidden) wakeLock = await navigator.wakeLock.request('screen'); } catch (e) {}
+}
+
+const App = {
+  busy: false,
+  async start() {
+    if (this.busy) return;
+    this.busy = true;
+    // These must happen inside the tap/click so audio and speech are allowed on phones.
+    Sound.init(); Voice.init();
+    Voice.say("Let's play Touch the Color!");
+    requestWakeLock();
+    UI.mode('calib');
+
+    if (DEMO) {
+      Tracking.demo = true;
+      window.addEventListener('pointermove', (e) => { Tracking.mouse = { x: e.clientX, y: e.clientY }; });
+      this.busy = false;
+      Game.startCalib();
+      return;
+    }
+
+    UI.setCalibLoading('Starting the camera… 📷', isTouchDevice ? 'Tap "Allow" when your phone asks to use the camera.' : 'Click "Allow" when the browser asks to use the camera.');
+    try {
+      await Tracking.startCamera();
+    } catch (err) {
+      console.warn(err);
+      this.busy = false;
+      UI.showCameraError(err);
+      return;
+    }
+    UI.layoutCalib(); UI.layoutCamera();
+    UI.setCalibLoading('Getting the magic ready… ✨', 'This can take a few seconds the first time.');
+    try {
+      await Tracking.loadModels();
+    } catch (err) {
+      console.error(err);
+      this.busy = false;
+      UI.showError('🧩', 'The game could not load', 'The hand tracking files did not download. Check the internet connection, then try again.');
+      return;
+    }
+    this.busy = false;
+    Game.startCalib();
+  },
+  onCameraEnded() {
+    if (document.hidden || Tracking.demo) return;
+    UI.showError('📷', 'The camera stopped', 'Another app may have taken the camera. Tap Try again to turn it back on.');
+  },
+  onTrackingFailed() {
+    Tracking.errors = 0;
+    UI.showError('🧩', 'Tracking stopped working', 'Reload the page to start again.', 'reload');
+  },
+};
+
+let lastFrame = performance.now();
+function loop(now) {
+  const dt = Math.min(50, Math.max(0, now - lastFrame));
+  lastFrame = now;
+  try {
+    Tracking.step(now);
+    Tracking.updateDisplay(now, dt, Render.W, Render.H);
+    Game.update(dt, now);
+    Render.draw(now, dt);
+    UI.drawPreviews();
+  } catch (err) { console.error(err); }
+  requestAnimationFrame(loop);
+}
+
+function onResize() {
+  Render.resize();
+  Menu.layout(Render.W, Render.H);
+  UI.layoutCamera();
+  if (UI.current === 'calib') UI.layoutCalib();
+  if (UI.current === 'game') { UI.fitBanner(); Layout.update(); }
+}
+
+function boot() {
+  Tracking.init();
+  UI.init();
+  Render.init();
+  Voice.init();
+  onResize();
+  UI.mode('start');
+  if (document.fonts && document.fonts.ready) document.fonts.ready.then(() => { if (UI.current === 'game') { UI.fitBanner(); Layout.update(); } });
+
+  let rz = 0;
+  window.addEventListener('resize', () => { clearTimeout(rz); rz = setTimeout(onResize, 60); });
+  window.addEventListener('orientationchange', () => setTimeout(onResize, 350));
+
+  // Pause when the tab or app goes to the background; reconnect the camera on return.
+  document.addEventListener('visibilitychange', async () => {
+    if (document.hidden) {
+      Voice.stop();
+      if (Game.isGameplay()) Game.setPaused(true, true);
+      return;
+    }
+    requestWakeLock();
+    if (!Tracking.stream || Tracking.demo) return;
+    if (!Tracking.cameraAlive()) {
+      try { await Tracking.startCamera(); UI.layoutCamera(); }
+      catch (e) { UI.showCameraError(e); }
+    } else {
+      Tracking.video.play().catch(() => {});
+      $('calibVideo').play().catch(() => {});
+    }
+  });
+
+  // Keyboard shortcuts for grown-ups: Space or P pauses, R starts over.
+  window.addEventListener('keydown', (e) => {
+    if ((e.code === 'Space' || e.key === 'p') && Game.isGameplay()) { e.preventDefault(); Game.setPaused(!Game.paused); }
+    else if (e.key === 'r' && (Game.isGameplay() || Game.state === 'finished')) Game.restart();
+  });
+
+  // Start downloading the tracking models right away so Play feels fast.
+  if (DEMO) UI.el.loadStatus.textContent = 'Demo mode: move the mouse to play 🖱️';
+  else {
+    Tracking.loadModels()
+      .then(() => { UI.el.loadStatus.textContent = 'Ready! ✨'; })
+      .catch(() => { UI.el.loadStatus.textContent = 'Press Play to start'; });
+  }
+
+  requestAnimationFrame(loop);
+}
+
+boot();
+</script>
+</body>
+</html>

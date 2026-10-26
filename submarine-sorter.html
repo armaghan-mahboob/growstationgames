@@ -1,0 +1,1090 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#0b3d63">
+<title>Submarine Sorter</title>
+<style>
+/* ===================== UI: layout, safe areas, large text ===================== */
+:root{
+  --sa-top:env(safe-area-inset-top,0px);
+  --sa-right:env(safe-area-inset-right,0px);
+  --sa-bottom:env(safe-area-inset-bottom,0px);
+  --sa-left:env(safe-area-inset-left,0px);
+  --fs:clamp(17px,2.6vmin,26px);
+  --accent:#ffd54f;
+  --deep:#0b3d63;
+  --hud-h:64px;   /* measured HUD height (set by JS) */
+  --cam-h:0px;    /* camera preview height + gap, 0 when hidden (set by JS) */
+}
+*{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+html,body{margin:0;height:100%;overflow:hidden;background:var(--deep);
+  font-family:"Trebuchet MS","Segoe UI",Verdana,sans-serif;font-size:var(--fs);color:#fff;
+  touch-action:none;overscroll-behavior:none;user-select:none;-webkit-user-select:none}
+#app{position:fixed;inset:0}
+#game{position:absolute;inset:0;width:100%;height:100%;display:block;touch-action:none}
+
+#hud{position:absolute;left:var(--sa-left);right:var(--sa-right);top:var(--sa-top);
+  padding:8px 10px;display:none;flex-wrap:wrap;gap:8px;align-items:center;pointer-events:none}
+#hud.show{display:flex}
+#hud>*{pointer-events:auto}
+.pill{background:rgba(0,30,60,.55);border:2px solid rgba(255,255,255,.35);border-radius:999px;
+  padding:6px 14px;font-weight:bold;white-space:nowrap}
+.btn{min-height:48px;min-width:48px;border:none;border-radius:999px;background:var(--accent);color:#1b2a3a;
+  font:inherit;font-weight:bold;padding:10px 20px;cursor:pointer;box-shadow:0 4px 0 #c9a227}
+.btn:active{transform:translateY(3px);box-shadow:0 1px 0 #c9a227}
+.btn:disabled{opacity:.45;cursor:default}
+.btn.secondary{background:#e3f2fd;box-shadow:0 4px 0 #90a4ae}
+.btn.icon{padding:8px 14px}
+.btn.off{opacity:.55}
+#progress{flex:1;min-width:110px;height:18px;background:rgba(0,0,0,.35);border-radius:999px;overflow:hidden;
+  border:2px solid rgba(255,255,255,.35)}
+#progressFill{height:100%;width:0;background:linear-gradient(90deg,#69f0ae,#00e5ff);transition:width .3s}
+
+/* Camera preview (mirrored) */
+#camWrap{position:absolute;right:calc(var(--sa-right) + 10px);top:calc(var(--sa-top) + var(--hud-h) + 8px);
+  width:min(32vw,170px);aspect-ratio:4/3;border-radius:14px;overflow:hidden;
+  border:3px solid rgba(255,255,255,.5);background:#000;display:none;opacity:.9}
+#camWrap.show{display:block}
+#cam,#camOverlay{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;transform:scaleX(-1)}
+#camStatus{position:absolute;left:0;right:0;bottom:0;font-size:.65em;text-align:center;
+  background:rgba(0,0,0,.55);padding:2px;transform:none}
+
+#banner{position:absolute;left:50%;top:calc(var(--sa-top) + var(--hud-h) + 8px);transform:translateX(-50%);
+  background:#fff3e0;color:#5d4037;padding:10px 18px;border-radius:999px;font-weight:bold;
+  box-shadow:0 4px 12px rgba(0,0,0,.3);display:none;max-width:88vw;text-align:center;z-index:5}
+#banner.show{display:block;animation:pop .3s}
+@keyframes pop{from{transform:translateX(-50%) scale(.7);opacity:0}to{transform:translateX(-50%) scale(1);opacity:1}}
+
+.overlay{position:absolute;inset:0;display:none;align-items:center;justify-content:center;
+  background:rgba(3,30,60,.6);overflow:auto;z-index:10;
+  padding:calc(var(--sa-top) + 12px) calc(var(--sa-right) + 12px) calc(var(--sa-bottom) + 12px) calc(var(--sa-left) + 12px)}
+.overlay.show{display:flex}
+.overlay.clear{background:transparent;align-items:flex-end;pointer-events:none}
+.overlay.clear .card{pointer-events:auto}
+.card{background:linear-gradient(180deg,#1e88e5,#0d47a1);border:4px solid #fff;border-radius:28px;
+  padding:22px 26px;max-width:min(640px,100%);width:100%;text-align:center;box-shadow:0 12px 40px rgba(0,0,0,.4)}
+.card.err{background:linear-gradient(180deg,#ef6c00,#bf360c)}
+.card h1{font-size:2em;margin:0 0 .3em;color:var(--accent);text-shadow:2px 3px 0 #000}
+.card h2{font-size:1.5em;margin:0 0 .4em;color:var(--accent)}
+.card p{margin:.4em 0;line-height:1.4}
+.row{display:flex;flex-wrap:wrap;gap:12px;justify-content:center;margin-top:16px}
+.small{font-size:.8em;opacity:.9}
+label.toggle{display:inline-flex;align-items:center;gap:8px;cursor:pointer;margin-top:10px;min-height:44px}
+label.toggle input{width:24px;height:24px}
+.stars{font-size:2.4em;letter-spacing:.08em}
+#calibBar{height:20px;background:rgba(0,0,0,.35);border-radius:999px;overflow:hidden;margin:12px 0}
+#calibFill{height:100%;width:0;background:#69f0ae;transition:width .2s}
+@media (max-width:600px){.card{padding:16px}.btn{padding:10px 16px}.card h1{font-size:1.6em}}
+@media (orientation:portrait){#camWrap{width:min(38vw,140px)}}
+/* ===================== Mobile / compact layout fixes ===================== */
+/* Cards taller than the screen scroll instead of being clipped at the top */
+.overlay:not(.clear) .card{margin:auto}
+@media (max-width:600px), (max-height:500px){
+  #hud{font-size:13px;padding:6px 8px;gap:6px}
+  .pill{padding:4px 10px;text-align:center}
+  #hud .btn{min-height:42px;min-width:0;padding:6px 8px;white-space:nowrap}
+  #progress{min-width:60px;height:16px}
+  #camWrap{pointer-events:none;opacity:.8;border-width:2px;border-radius:10px}
+  #camStatus{font-size:.6em}
+  #banner{font-size:14px;padding:8px 14px;border-radius:20px;max-width:calc(100% - 24px)}
+  .card{padding:14px 16px;border-width:3px;border-radius:22px}
+  .card h1{font-size:1.5em}
+  .card h2{font-size:1.3em}
+  .card p{margin:.3em 0;line-height:1.3}
+  .row{gap:8px;margin-top:12px}
+  .row .btn{flex:1 1 auto;max-width:100%;line-height:1.15}
+  .stars{font-size:2em}
+  #calibScreen{align-items:center}   /* keep the bottom calibration targets visible */
+}
+@media (max-width:600px) and (orientation:portrait){
+  /* Row 1: stage / progress / stars.  Row 2: four equal buttons. */
+  #hud.show{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));align-items:center}
+  #stageLabel{grid-column:1}
+  #progress{grid-column:2 / 4;min-width:0}
+  #starLabel{grid-column:4}
+  .pill{padding:4px 4px;overflow:hidden}
+  #hud .btn{padding:6px 2px}
+  #camWrap{width:min(28vw,104px)}
+  /* banner sits below the camera preview instead of on top of it */
+  #banner{top:calc(var(--sa-top) + var(--hud-h) + var(--cam-h) + 8px)}
+}
+@media (max-width:360px){ #hud{font-size:12px} }
+@media (max-height:500px) and (orientation:landscape){
+  #camWrap{width:min(24vw,104px)}
+  #banner{max-width:calc(100% - 260px)}
+  #calibScreen .card{max-width:min(380px, calc(100% - 260px))}
+}
+</style>
+</head>
+<body>
+<div id="app">
+  <canvas id="game" aria-label="Submarine Sorter game"></canvas>
+
+  <!-- HUD -->
+  <div id="hud">
+    <div class="pill" id="stageLabel">Stage 1</div>
+    <div id="progress" aria-label="Progress"><div id="progressFill"></div></div>
+    <div class="pill" id="starLabel">⭐ 0</div>
+    <button class="btn icon" id="btnPause">⏸ Pause</button>
+    <button class="btn icon secondary" id="btnRestart">↻ Restart</button>
+    <button class="btn icon secondary" id="btnVoice">🔊 Voice</button>
+    <button class="btn icon secondary" id="btnCam">📷 Cam</button>
+  </div>
+
+  <!-- Mirrored webcam preview with landmark overlay -->
+  <div id="camWrap">
+    <video id="cam" playsinline muted autoplay></video>
+    <canvas id="camOverlay"></canvas>
+    <div id="camStatus">Looking for a hand…</div>
+  </div>
+
+  <div id="banner"></div>
+
+  <!-- Start -->
+  <div class="overlay show" id="startScreen">
+    <div class="card">
+      <h1>🚢 Submarine Sorter</h1>
+      <p>Pilot the little submarine and sort the sea friends into the big tubes!</p>
+      <p class="small">☝️ <b>Point</b> your index finger at something to pick it up.<br>
+        🖐️ <b>Open your hand</b> over a tube to let it go.<br>
+        Or tap and drag on the screen. Keyboard: arrows, Space, P, R.</p>
+      <label class="toggle"><input type="checkbox" id="voiceToggle" checked> Read instructions out loud</label>
+      <div class="row">
+        <button class="btn" id="btnStartCam">📷 Play with camera</button>
+        <button class="btn secondary" id="btnStartTouch">👆 Play with touch / keyboard</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Loading -->
+  <div class="overlay" id="loadingScreen">
+    <div class="card"><h2>Getting ready…</h2><p id="loadingText">Asking for the camera</p></div>
+  </div>
+
+  <!-- Calibration -->
+  <div class="overlay clear" id="calibScreen">
+    <div class="card">
+      <h2>Let's calibrate!</h2>
+      <p>Hold up one hand and <b>slowly move it to all four corners</b> of the screen.</p>
+      <div id="calibBar"><div id="calibFill"></div></div>
+      <p class="small" id="calibText">Waiting for your hand…</p>
+      <div class="row">
+        <button class="btn" id="btnCalibDone" disabled>Done ✔</button>
+        <button class="btn secondary" id="btnCalibSkip">Skip</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Stage intro -->
+  <div class="overlay" id="stageScreen">
+    <div class="card">
+      <h2 id="stageTitle">Stage 1</h2>
+      <p id="stageIntro"></p>
+      <div class="row"><button class="btn" id="btnGo">Dive in! 🫧</button></div>
+    </div>
+  </div>
+
+  <!-- Pause -->
+  <div class="overlay" id="pauseScreen">
+    <div class="card">
+      <h2>Paused</h2>
+      <div class="row">
+        <button class="btn" id="btnResume">▶ Resume</button>
+        <button class="btn secondary" id="btnRestart2">↻ Restart</button>
+        <button class="btn secondary" id="btnRecalib">🎯 Recalibrate</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Stage results -->
+  <div class="overlay" id="stageDoneScreen">
+    <div class="card">
+      <h2>Stage complete! 🎉</h2>
+      <div class="stars" id="stageStars">⭐⭐⭐</div>
+      <p id="stageSummary"></p>
+      <div class="row"><button class="btn" id="btnNext">Next stage ➜</button></div>
+    </div>
+  </div>
+
+  <!-- Final celebration (aquarium drawn on canvas behind) -->
+  <div class="overlay clear" id="finalScreen">
+    <div class="card">
+      <h1>🐠 Your aquarium! 🐚</h1>
+      <p id="finalSummary"></p>
+      <div class="row"><button class="btn" id="btnPlayAgain">Play again ↻</button></div>
+    </div>
+  </div>
+
+  <!-- Errors -->
+  <div class="overlay" id="errorScreen">
+    <div class="card err">
+      <h2>Hmm, a little hiccup</h2>
+      <p id="errorText"></p>
+      <div class="row">
+        <button class="btn" id="btnRetryCam">Try camera again</button>
+        <button class="btn secondary" id="btnNoCam">Play without camera</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script type="module">
+/* ==========================================================================
+   SUBMARINE SORTER
+   1) UI helpers        2) TRACKING (getUserMedia + MediaPipe Hand Landmarker)
+   3) GAMEPLAY          4) RENDERING         5) INPUT + BOOT
+   ========================================================================== */
+const $ = id => document.getElementById(id);
+const clamp = (v,a,b) => Math.max(a, Math.min(b, v));
+const rand = (a,b) => a + Math.random()*(b-a);
+const pick = arr => arr[Math.floor(Math.random()*arr.length)];
+const shuffle = a => { for (let i=a.length-1;i>0;i--){ const j=Math.floor(Math.random()*(i+1)); [a[i],a[j]]=[a[j],a[i]]; } return a; };
+
+const canvas = $('game'), ctx = canvas.getContext('2d');
+let W = 0, H = 0, u = 6, dpr = 1;          // u = 1% of the shorter screen side
+let SA = {top:0,right:0,bottom:0,left:0};  // safe-area insets in px
+let HUD_H = 64, CAM_BOTTOM = 0;            // measured HUD height / camera-preview bottom edge (px)
+const compactMQ = window.matchMedia('(max-width:600px), (max-height:500px)');
+
+/* ============================== 1) UI HELPERS ============================== */
+const OVERLAYS = ['startScreen','loadingScreen','calibScreen','stageScreen','pauseScreen','stageDoneScreen','finalScreen','errorScreen'];
+function showOverlay(id){ OVERLAYS.forEach(o => $(o).classList.toggle('show', o === id)); }
+function hideOverlays(){ showOverlay(null); }
+
+let bannerTimer = null;
+function setBanner(text, ms){
+  const b = $('banner'); b.textContent = text; b.classList.add('show');
+  clearTimeout(bannerTimer);
+  if (ms) bannerTimer = setTimeout(() => b.classList.remove('show'), ms);
+}
+function hideBanner(){ $('banner').classList.remove('show'); }
+
+let voiceOn = true;
+function speak(text){
+  if (!voiceOn || !('speechSynthesis' in window)) return;
+  try {
+    speechSynthesis.cancel();
+    const ut = new SpeechSynthesisUtterance(text);
+    ut.rate = 0.95; ut.pitch = 1.15;
+    speechSynthesis.speak(ut);
+  } catch(e){}
+}
+function updateVoiceBtn(){ $('btnVoice').classList.toggle('off', !voiceOn); $('btnVoice').textContent = voiceOn ? '🔊 Voice' : '🔇 Voice'; }
+
+let actx = null;
+function tone(freq, dur, type='sine', vol=0.12){
+  try {
+    if (!actx) actx = new (window.AudioContext || window.webkitAudioContext)();
+    const o = actx.createOscillator(), g = actx.createGain();
+    o.type = type; o.frequency.value = freq;
+    g.gain.setValueAtTime(vol, actx.currentTime);
+    g.gain.exponentialRampToValueAtTime(0.001, actx.currentTime + dur);
+    o.connect(g).connect(actx.destination);
+    o.start(); o.stop(actx.currentTime + dur);
+  } catch(e){}
+}
+
+function readSafeArea(){
+  const cs = getComputedStyle(document.documentElement);
+  const g = n => parseFloat(cs.getPropertyValue(n)) || 0;
+  SA = { top:g('--sa-top'), right:g('--sa-right'), bottom:g('--sa-bottom'), left:g('--sa-left') };
+}
+function updateLayoutMetrics(){
+  const hud = $('hud'), cam = $('camWrap'), rs = document.documentElement.style;
+  const hh = hud.offsetHeight;
+  if (hh > 0){ HUD_H = hh; rs.setProperty('--hud-h', hh + 'px'); }
+  const ch = cam.offsetHeight;
+  rs.setProperty('--cam-h', ch > 0 ? (ch + 8) + 'px' : '0px');
+  CAM_BOTTOM = ch > 0 ? cam.getBoundingClientRect().bottom : 0;
+}
+function resize(){
+  dpr = Math.min(window.devicePixelRatio || 1, 2);
+  W = window.innerWidth; H = window.innerHeight;
+  canvas.width = W * dpr; canvas.height = H * dpr;
+  ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+  u = Math.min(W, H) / 100;
+  readSafeArea();
+  updateLayoutMetrics();
+  layoutTubes();
+  buildScenery();
+}
+window.addEventListener('resize', resize);
+if ('ResizeObserver' in window){ const ro = new ResizeObserver(updateLayoutMetrics); ro.observe($('hud')); ro.observe($('camWrap')); }
+window.addEventListener('orientationchange', () => setTimeout(resize, 200));
+
+/* ================= 2) TRACKING: camera + MediaPipe Hand Landmarker =================
+   - Camera via getUserMedia (front camera, mirrored preview).
+   - MediaPipe Tasks Vision HandLandmarker loaded from CDN, VIDEO mode, 1 hand.
+   - Gestures: "point" = index up, others curled; "open" = index + ≥2 more fingers up.
+   - Debounce: a gesture must be seen 3 frames in a row before it counts.
+   - Smoothing: exponential moving average on the cursor.
+   - Calibration maps the child's comfortable hand range to the whole screen.
+   - Tracking loss: friendly banner, held object is released after a grace period. */
+const T = {
+  enabled:false, ready:false, landmarker:null,
+  video:$('cam'), overlay:$('camOverlay'), octx:null,
+  lastVideoTime:-1, lastSeen:0, lost:false, lostSince:0,
+  smooth:{x:0,y:0,init:false},
+  gesture:'none', cand:'none', candCount:0,
+  calib:{minX:0.15,maxX:0.85,minY:0.15,maxY:0.85},
+  landmarks:null
+};
+const MP_BASE = 'https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.14';
+const MODEL_URL = 'https://storage.googleapis.com/mediapipe-models/hand_landmarker/hand_landmarker/float16/1/hand_landmarker.task';
+const CONN = [[0,1],[1,2],[2,3],[3,4],[0,5],[5,6],[6,7],[7,8],[5,9],[9,10],[10,11],[11,12],
+              [9,13],[13,14],[14,15],[15,16],[13,17],[17,18],[18,19],[19,20],[0,17]];
+
+async function startCamera(){
+  if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia)
+    throw new Error('This browser cannot open the camera. Try Chrome, Edge, Safari or Firefox (camera needs https:// or localhost).');
+  let stream;
+  try {
+    stream = await navigator.mediaDevices.getUserMedia({ video:{ facingMode:'user', width:{ideal:640}, height:{ideal:480} }, audio:false });
+  } catch(err){
+    const map = {
+      NotAllowedError:'Camera permission was not given. Allow the camera in your browser and try again, or play with touch.',
+      NotFoundError:'No camera was found on this device.',
+      NotReadableError:'The camera is busy in another app. Close it and try again.',
+      OverconstrainedError:'The camera does not support the requested settings.',
+      SecurityError:'The camera is blocked on this page (it needs https:// or localhost).'
+    };
+    throw new Error(map[err.name] || ('Camera error: ' + err.message));
+  }
+  T.video.srcObject = stream;
+  await T.video.play();
+  if (T.video.readyState < 2) await new Promise(r => T.video.onloadeddata = r);
+  T.overlay.width = T.video.videoWidth || 640; T.overlay.height = T.video.videoHeight || 480;
+  T.octx = T.overlay.getContext('2d');
+}
+
+async function loadHandModel(setStatus){
+  setStatus('Loading hand tracking (first time can take a moment)…');
+  let vision;
+  try { vision = await import(`${MP_BASE}/vision_bundle.mjs`); }
+  catch(e){ vision = await import(MP_BASE); }
+  const { FilesetResolver, HandLandmarker } = vision;
+  const fileset = await FilesetResolver.forVisionTasks(`${MP_BASE}/wasm`);
+  const make = delegate => HandLandmarker.createFromOptions(fileset, {
+    baseOptions:{ modelAssetPath:MODEL_URL, delegate },
+    runningMode:'VIDEO', numHands:1,
+    minHandDetectionConfidence:0.5, minHandPresenceConfidence:0.5, minTrackingConfidence:0.5
+  });
+  try { T.landmarker = await make('GPU'); }
+  catch(e){ setStatus('Using CPU tracking…'); T.landmarker = await make('CPU'); }
+  T.ready = true;
+}
+
+function classifyGesture(lm){
+  const d = (a,b) => Math.hypot(lm[a].x-lm[b].x, lm[a].y-lm[b].y);
+  const ext = (tip,pip) => d(tip,0) > d(pip,0) * 1.15;   // finger extended if tip is further from the wrist than its middle joint
+  const idx = ext(8,6), others = (ext(12,10)?1:0) + (ext(16,14)?1:0) + (ext(20,18)?1:0);
+  if (idx && others === 0) return 'point';
+  if (idx && others >= 2) return 'open';
+  return 'other';
+}
+
+function trackFrame(now){
+  if (!T.ready || !T.enabled) return;
+  const v = T.video; if (v.readyState < 2) return;
+  if (v.currentTime === T.lastVideoTime) return;
+  T.lastVideoTime = v.currentTime;
+  let res;
+  try { res = T.landmarker.detectForVideo(v, now); } catch(e){ return; }
+  const lm = res && res.landmarks && res.landmarks[0];
+  if (lm){
+    T.lastSeen = now; T.landmarks = lm;
+    if (T.lost){ T.lost = false; onTrackingBack(); }
+    onHand(lm);
+  } else {
+    T.landmarks = null;
+    if (!T.lost && now - T.lastSeen > 1200){ T.lost = true; T.lostSince = now; onTrackingLost(); }
+  }
+  drawCamOverlay(lm);
+}
+
+function onHand(lm){
+  // Gesture debouncing
+  const g = classifyGesture(lm);
+  if (g === T.cand) T.candCount++; else { T.cand = g; T.candCount = 1; }
+  if (T.candCount >= 3 && T.gesture !== g){ T.gesture = g; onGestureChange(g); }
+  $('camStatus').textContent = g === 'point' ? '☝️ Pointing' : g === 'open' ? '🖐️ Open hand' : '✊ Hand seen';
+
+  // Cursor = index fingertip, mirrored so it matches the mirrored preview
+  const nx = 1 - lm[8].x, ny = lm[8].y;
+  if (G.state === 'calibrating'){ updateCalibration(nx, ny); }
+  const c = T.calib;
+  const mx = clamp((nx - c.minX) / (c.maxX - c.minX), 0, 1);
+  const my = clamp((ny - c.minY) / (c.maxY - c.minY), 0, 1);
+  const tx = SA.left + mx * (W - SA.left - SA.right), ty = SA.top + my * (H - SA.top - SA.bottom);
+  if (!T.smooth.init){ T.smooth = { x:tx, y:ty, init:true }; }
+  else { const a = 0.35; T.smooth.x += (tx - T.smooth.x) * a; T.smooth.y += (ty - T.smooth.y) * a; }
+  if (G.state === 'playing' || G.state === 'calibrating') setCursor(T.smooth.x, T.smooth.y, 'hand');
+}
+
+function onGestureChange(g){
+  if (G.state !== 'playing') return;
+  if (g === 'open' && G.held && G.held.source === 'hand') releaseHeld();
+  if (g === 'point'){ G.dwell.obj = null; G.dwell.t = 0; }
+}
+function onTrackingLost(){
+  if (G.state === 'playing' && G.controlMode === 'camera') setBanner("I can't see your hand. Wave hello! 👋");
+  $('camStatus').textContent = 'Looking for a hand…';
+}
+function onTrackingBack(){
+  if (G.state === 'playing' && G.controlMode === 'camera') setBanner('There you are! 😊', 1200);
+}
+
+function drawCamOverlay(lm){
+  const c = T.octx; if (!c) return;
+  const w = T.overlay.width, h = T.overlay.height;
+  c.clearRect(0, 0, w, h);
+  if (!lm) return;
+  const col = T.gesture === 'point' ? '#ffd54f' : T.gesture === 'open' ? '#69f0ae' : '#80deea';
+  c.strokeStyle = col; c.lineWidth = 3;
+  c.beginPath();
+  CONN.forEach(([a,b]) => { c.moveTo(lm[a].x*w, lm[a].y*h); c.lineTo(lm[b].x*w, lm[b].y*h); });
+  c.stroke();
+  c.fillStyle = '#fff';
+  lm.forEach((p,i) => { c.beginPath(); c.arc(p.x*w, p.y*h, i === 8 ? 7 : 4, 0, Math.PI*2); c.fill(); });
+}
+
+/* Calibration: collect the index fingertip's min/max while the child waves to the corners */
+const CAL = { minX:1, maxX:0, minY:1, maxY:0, samples:0, progress:0, doneAt:0 };
+function startCalibration(returnTo){
+  Object.assign(CAL, { minX:1, maxX:0, minY:1, maxY:0, samples:0, progress:0, doneAt:0 });
+  G.calibReturn = returnTo;
+  G.state = 'calibrating';
+  $('calibFill').style.width = '0%'; $('btnCalibDone').disabled = true;
+  $('calibText').textContent = 'Waiting for your hand…';
+  showOverlay('calibScreen');
+  speak('Hold up your hand and move it to all four corners of the screen.');
+}
+function updateCalibration(nx, ny){
+  CAL.minX = Math.min(CAL.minX, nx); CAL.maxX = Math.max(CAL.maxX, nx);
+  CAL.minY = Math.min(CAL.minY, ny); CAL.maxY = Math.max(CAL.maxY, ny);
+  CAL.samples++;
+  const sx = CAL.maxX - CAL.minX, sy = CAL.maxY - CAL.minY;
+  CAL.progress = clamp((clamp(sx/0.45,0,1) + clamp(sy/0.4,0,1)) / 2, 0, 1);
+  $('calibFill').style.width = (CAL.progress*100).toFixed(0) + '%';
+  $('calibText').textContent = CAL.progress >= 1 ? 'Perfect! 🎉' : 'Keep going, reach for the corners…';
+  $('btnCalibDone').disabled = CAL.progress < 0.5;
+  if (CAL.progress >= 1){
+    if (!CAL.doneAt) CAL.doneAt = performance.now();
+    else if (performance.now() - CAL.doneAt > 800) finishCalibration();
+  }
+}
+function finishCalibration(){
+  const sx = CAL.maxX - CAL.minX, sy = CAL.maxY - CAL.minY;
+  if (sx > 0.2 && sy > 0.2){
+    const px = sx*0.08, py = sy*0.08;   // small padding so the edges are easy to reach
+    T.calib = { minX:CAL.minX+px, maxX:CAL.maxX-px, minY:CAL.minY+py, maxY:CAL.maxY-py };
+  } else {
+    T.calib = { minX:0.15, maxX:0.85, minY:0.15, maxY:0.85 };
+  }
+  T.smooth.init = false;
+  if (G.calibReturn === 'playing'){ G.state = 'playing'; hideOverlays(); }
+  else startGame('camera');
+}
+
+/* ================================= 3) GAMEPLAY =================================
+   Stages: 1) fish vs shells  2) big vs small  3) both rules combined (4 tubes).
+   Objects drift slowly and wrap around the screen so nothing gets lost.
+   Correct drop → bubbles + stars. Wrong drop → object floats back with a hint. */
+const STAGES = [
+  { name:'Stage 1: Fish and Shells', rule:'type', count:8, maxOnScreen:3,
+    intro:'Fish go in the fish tube, shells go in the shell tube. Point at something to pick it up, then open your hand over a tube to let it go!',
+    tubes:[{key:'fish',label:'Fish',icon:{type:'fish',size:'big'}},{key:'shell',label:'Shells',icon:{type:'shell',size:'big'}}] },
+  { name:'Stage 2: Big and Small', rule:'size', count:8, maxOnScreen:3,
+    intro:'Now sort by size! Big things go in the BIG tube and small things go in the small tube. Fish or shell does not matter this time.',
+    tubes:[{key:'big',label:'BIG',icon:{type:'fish',size:'big'}},{key:'small',label:'small',icon:{type:'fish',size:'small'}}] },
+  { name:'Stage 3: Mix it up!', rule:'both', count:12, maxOnScreen:4,
+    intro:'Two rules at once! Look at what it is AND how big it is. Four tubes for four kinds of friends.',
+    tubes:[{key:'big-fish',label:'Big fish',icon:{type:'fish',size:'big'}},{key:'small-fish',label:'Small fish',icon:{type:'fish',size:'small'}},
+           {key:'big-shell',label:'Big shell',icon:{type:'shell',size:'big'}},{key:'small-shell',label:'Small shell',icon:{type:'shell',size:'small'}}] }
+];
+const COLORS = {
+  fish:['#ff7043','#ffca28','#42a5f5','#ab47bc','#26c6da','#ec407a','#9ccc65'],
+  shell:['#f8bbd0','#ffe0b2','#fff9c4','#e1bee7','#b2dfdb','#ffccbc']
+};
+const PRAISE = ['Yes!','Great job!','Super!','You did it!','Wonderful!','Nice sorting!'];
+
+const G = {
+  state:'start', controlMode:'touch', stage:0, stars:0, stageMistakes:0, stageCorrect:0,
+  objects:[], queue:[], tubes:[], sorted:0, needed:0, held:null,
+  cursor:{x:0,y:0,active:false,source:'none'},
+  sub:{x:0,y:0,dir:1,prop:0}, dwell:{obj:null,t:0},
+  hint:null, bubbles:[], confetti:[], bgFish:[], seaweed:[], coral:[], sortedAll:[], aqua:[],
+  msg:null, time:0, lostHoldTimer:0, doneTimer:0, keys:{}, ptr:{down:false,moved:false,sx:0,sy:0}
+};
+
+function radiusFor(size){ return (size === 'big' ? 6.5 : 3.8) * u; }
+function makeObj(type, size){
+  return { id:Math.random(), type, size, color:pick(COLORS[type]), x:0, y:0, baseY:0, vx:0, phase:rand(0,6.28),
+           dir:1, state:'queued', r:radiusFor(size), mistake:false, wiggle:0, sinkT:0, scale:1, source:'none' };
+}
+function keyOf(o){ const r = STAGES[G.stage].rule; return r === 'type' ? o.type : r === 'size' ? o.size : `${o.size}-${o.type}`; }
+
+function buildQueue(st){
+  const list = [], types = ['fish','shell'], sizes = ['big','small'];
+  if (st.rule === 'both'){
+    for (let i = 0; i < st.count/4; i++) for (const t of types) for (const s of sizes) list.push(makeObj(t, s));
+  } else {
+    for (let i = 0; i < st.count; i++){
+      const t = st.rule === 'type' ? types[i % 2] : pick(types);
+      const s = st.rule === 'size' ? sizes[i % 2] : pick(sizes);
+      list.push(makeObj(t, s));
+    }
+  }
+  return shuffle(list);
+}
+
+function layoutTubes(){
+  const n = G.tubes.length; if (!n) return;
+  const portrait = H > W;
+  const h = (portrait ? 22 : 26) * u, gap = 2*u;
+  const avail = W - SA.left - SA.right - 4*u;
+  const w = Math.min(20*u, (avail - gap*(n-1)) / n);
+  const total = n*w + gap*(n-1);
+  const x0 = (W - total) / 2, y = H - SA.bottom - 2*u - h;
+  G.tubes.forEach((t, i) => { t.x = x0 + i*(w+gap); t.y = y; t.w = w; t.h = h; });
+}
+function laneRange(r){
+  let top = SA.top + (compactMQ.matches ? HUD_H + 10 : Math.max(90, HUD_H + 10)) + r;
+  if (H > W && CAM_BOTTOM) top = Math.max(top, CAM_BOTTOM + 8 + r);   // don't hide things behind the camera preview
+  const tubeTop = G.tubes.length ? G.tubes[0].y - G.tubes[0].w*0.75 : H*0.65;
+  const bottom = Math.max(top + 10, tubeTop - 3*u - r);
+  return [top, bottom];
+}
+
+function spawnNext(){
+  const o = G.queue.shift(); if (!o) return;
+  o.r = radiusFor(o.size);
+  const [top, bottom] = laneRange(o.r);
+  const side = Math.random() < 0.5 ? -1 : 1;
+  o.baseY = rand(top, bottom); o.y = o.baseY;
+  o.x = side < 0 ? -o.r*1.5 : W + o.r*1.5;
+  o.vx = -side * u * rand(6, 10); o.dir = o.vx > 0 ? 1 : -1;
+  o.state = 'float';
+  G.objects.push(o);
+}
+
+function startGame(mode){
+  G.controlMode = mode; G.stage = 0; G.stars = 0; G.sortedAll = []; G.aqua = []; G.confetti = [];
+  if (mode === 'camera') $('camWrap').classList.add('show');
+  $('hud').classList.add('show');
+  beginStage(0);
+}
+function beginStage(i){
+  const st = STAGES[i];
+  G.stage = i; G.objects = []; G.held = null; G.hint = null; G.sorted = 0; G.needed = st.count;
+  G.stageMistakes = 0; G.stageCorrect = 0; G.doneTimer = 0;
+  G.queue = buildQueue(st);
+  G.tubes = st.tubes.map(t => ({ ...t, items:[], pulse:0, shake:0, hover:false, x:0, y:0, w:0, h:0 }));
+  layoutTubes();
+  G.cursor.active = false; G.sub.x = W/2; G.sub.y = H*0.35;
+  G.state = 'intro';
+  $('stageTitle').textContent = st.name;
+  $('stageIntro').textContent = st.intro;
+  $('stageLabel').textContent = `Stage ${i+1}/3`;
+  updateHUD();
+  showOverlay('stageScreen');
+  speak(st.name.replace(/Stage \d: /,'') + '. ' + st.intro);
+}
+function goStage(){
+  G.state = 'playing'; hideOverlays(); hideBanner();
+  if (G.controlMode === 'keyboard'){ setCursor(W/2, H*0.4, 'keyboard'); }
+  speechSynthesis && speechSynthesis.cancel();
+}
+function updateHUD(){
+  $('progressFill').style.width = (G.needed ? G.sorted/G.needed*100 : 0) + '%';
+  $('starLabel').textContent = `⭐ ${G.stars}`;
+}
+
+function setCursor(x, y, source){
+  G.cursor.x = clamp(x, 0, W); G.cursor.y = clamp(y, 0, H); G.cursor.active = true; G.cursor.source = source;
+}
+function objAt(x, y){
+  let best = null, bd = 1e9;
+  for (const o of G.objects){
+    if (o.state !== 'float' && o.state !== 'returning') continue;
+    const d = Math.hypot(o.x - x, o.y - y);
+    if (d < o.r*1.5 + 1.5*u && d < bd){ best = o; bd = d; }
+  }
+  return best;
+}
+function tubeAt(x, y){
+  return G.tubes.find(t => x >= t.x - u && x <= t.x + t.w + u && y >= t.y - t.w*0.9 && y <= t.y + t.h) || null;
+}
+
+function grab(o, source){
+  if (G.held) return;
+  G.held = o; o.state = 'held'; o.source = source; o.wiggle = 0;
+  G.dwell.obj = null; G.dwell.t = 0; G.lostHoldTimer = 0;
+  tone(520, 0.12, 'triangle', 0.08);
+}
+function releaseHeld(){
+  const o = G.held; if (!o) return;
+  G.held = null;
+  const t = tubeAt(o.x, o.y);
+  if (t){ dropInto(t, o); return; }
+  // Let go in open water: keep floating from here
+  const [top, bottom] = laneRange(o.r);
+  o.baseY = clamp(o.y, top, bottom); o.state = 'float';
+  o.x = clamp(o.x, o.r, W - o.r);
+}
+function dropInto(t, o){
+  const st = STAGES[G.stage];
+  if (t.key === keyOf(o)){
+    o.state = 'sinking'; o.sinkT = 0; o.tube = t;
+    G.sorted++; G.stageCorrect++;
+    const gained = o.mistake ? 1 : 2; G.stars += gained;
+    burst(o.x, o.y, 18);
+    tone(660, 0.15); setTimeout(() => tone(880, 0.25), 120);
+    G.msg = { text:`+${gained} ⭐  ${pick(PRAISE)}`, x:o.x, y:o.y - o.r, t:1.4 };
+    if (Math.random() < 0.6) speak(pick(PRAISE));
+    G.hint = null;
+    updateHUD();
+    if (G.sorted >= G.needed) G.doneTimer = 1.4;
+  } else {
+    o.mistake = true; G.stageMistakes++;
+    const [top, bottom] = laneRange(o.r);
+    o.state = 'returning'; o.baseY = rand(top, bottom); o.returnX = clamp(o.x, o.r*2, W - o.r*2); o.wiggle = 1;
+    t.shake = 0.5;
+    const correct = G.tubes.find(tt => tt.key === keyOf(o));
+    if (correct) correct.pulse = 3;
+    const text = st.rule === 'type' ? `This is a ${o.type}! Try the ${correct.label} tube.` :
+                 st.rule === 'size' ? `This one is ${o.size}! Try the ${correct.label} tube.` :
+                 `It's a ${o.size} ${o.type}! Try that tube.`;
+    G.hint = { obj:o, text, tube:correct, t:3.2 };
+    tone(300, 0.25, 'triangle', 0.06);
+    speak(text);
+  }
+}
+function burst(x, y, n){
+  for (let i = 0; i < n; i++) G.bubbles.push({ x:x + rand(-u*2,u*2), y:y + rand(-u,u), r:rand(0.6,2)*u, vy:rand(20,60)*u/10, vx:rand(-1,1)*u*2, life:rand(1,2) });
+}
+
+function stageComplete(){
+  G.state = 'stageDone';
+  G.objects.forEach(o => { if (o.state === 'done') return; });
+  const rating = G.stageMistakes === 0 ? 3 : G.stageMistakes <= 2 ? 2 : 1;
+  $('stageStars').textContent = '⭐'.repeat(rating) + '☆'.repeat(3 - rating);
+  const acc = G.stageMistakes === 0 ? 'Not a single mix-up!' : `Only ${G.stageMistakes} little mix-up${G.stageMistakes > 1 ? 's' : ''}.`;
+  $('stageSummary').textContent = `You sorted ${G.needed} sea friends. ${acc} Total stars: ${G.stars}.`;
+  $('btnNext').textContent = G.stage < 2 ? 'Next stage ➜' : 'See your aquarium 🐠';
+  showOverlay('stageDoneScreen');
+  speak(`Stage complete! ${acc}`);
+}
+function nextStage(){ if (G.stage < 2) beginStage(G.stage + 1); else finishGame(); }
+
+function finishGame(){
+  G.state = 'finished'; G.held = null; G.objects = []; G.hint = null;
+  G.aqua = G.sortedAll.map(o => ({ type:o.type, size:o.size, color:o.color, x:rand(u*10, W-u*10), y:rand(SA.top+80, H*0.8),
+                                   vx:rand(-1,1) * u*rand(4,8) || u*5, phase:rand(0,6.28) }));
+  for (let i = 0; i < 80; i++) G.confetti.push({ x:rand(0,W), y:rand(-H,0), vy:rand(30,80)*u/10, vx:rand(-20,20), c:pick(['#ffd54f','#69f0ae','#ff7043','#80deea','#f8bbd0']), s:rand(1,2.2)*u, rot:rand(0,6.28), vr:rand(-3,3) });
+  $('finalSummary').textContent = `You sorted ${G.sortedAll.length} sea friends and earned ${G.stars} stars! Look at them all swimming together.`;
+  $('hud').classList.remove('show');
+  showOverlay('finalScreen');
+  speak('Hooray! You finished! Look at your beautiful aquarium.');
+  tone(523, 0.2); setTimeout(() => tone(659, 0.2), 180); setTimeout(() => tone(784, 0.4), 360);
+}
+function restartGame(){
+  G.hint = null; G.held = null; G.confetti = []; hideBanner();
+  startGame(G.controlMode);
+}
+function pauseGame(){
+  if (G.state !== 'playing') return;
+  G.state = 'paused'; showOverlay('pauseScreen');
+  $('btnRecalib').style.display = G.controlMode === 'camera' ? '' : 'none';
+}
+function resumeGame(){ if (G.state === 'paused'){ G.state = 'playing'; hideOverlays(); } }
+
+/* Per-frame game logic */
+function update(dt, now){
+  G.time += dt;
+  const st = STAGES[G.stage];
+
+  // Keyboard cursor
+  if (G.keys.ArrowLeft || G.keys.ArrowRight || G.keys.ArrowUp || G.keys.ArrowDown){
+    const sp = 70*u*dt;
+    let cx = G.cursor.active ? G.cursor.x : W/2, cy = G.cursor.active ? G.cursor.y : H/2;
+    if (G.keys.ArrowLeft) cx -= sp; if (G.keys.ArrowRight) cx += sp;
+    if (G.keys.ArrowUp) cy -= sp;   if (G.keys.ArrowDown) cy += sp;
+    setCursor(cx, cy, 'keyboard');
+  }
+
+  // Hand: dwell-to-grab while pointing
+  if (G.cursor.source === 'hand' && T.gesture === 'point' && !G.held && !T.lost){
+    const o = objAt(G.cursor.x, G.cursor.y);
+    if (o && o === G.dwell.obj){ G.dwell.t += dt; if (G.dwell.t >= 0.35) grab(o, 'hand'); }
+    else { G.dwell.obj = o; G.dwell.t = 0; }
+  } else if (!G.held){ G.dwell.obj = null; G.dwell.t = 0; }
+
+  // Tracking loss while holding: release gently after a grace period
+  if (G.held && G.held.source === 'hand' && T.lost){
+    G.lostHoldTimer += dt;
+    if (G.lostHoldTimer > 2.5){ const o = G.held; G.held = null; o.state = 'float'; G.lostHoldTimer = 0; }
+  } else G.lostHoldTimer = 0;
+
+  // Submarine follows the cursor
+  if (G.cursor.active){
+    const dx = G.cursor.x - G.sub.x;
+    G.sub.x += dx * 0.18; G.sub.y += (G.cursor.y - G.sub.y) * 0.18;
+    if (Math.abs(dx) > 1.5*u) G.sub.dir = dx > 0 ? 1 : -1;
+    G.sub.prop += dt * (4 + Math.min(20, Math.abs(dx)/u));
+  } else {
+    G.sub.y = H*0.35 + Math.sin(G.time*1.2)*u*2; G.sub.prop += dt*4;
+  }
+
+  // Spawn
+  const onScreen = G.objects.filter(o => o.state !== 'sinking').length;
+  if (onScreen < st.maxOnScreen && G.queue.length) spawnNext();
+
+  // Objects
+  for (const o of G.objects){
+    o.r = radiusFor(o.size);
+    if (o.state === 'float'){
+      o.x += o.vx * dt; o.y = o.baseY + Math.sin(G.time*1.5 + o.phase) * u*1.5;
+      o.dir = o.vx > 0 ? 1 : -1;
+      if (o.vx > 0 && o.x > W + o.r*2){ o.x = -o.r*2; o.baseY = rand(...laneRange(o.r)); }
+      if (o.vx < 0 && o.x < -o.r*2){ o.x = W + o.r*2; o.baseY = rand(...laneRange(o.r)); }
+    } else if (o.state === 'held'){
+      const tx = G.sub.x, ty = G.sub.y + 8*u + o.r;
+      o.x += (tx - o.x) * 0.35; o.y += (ty - o.y) * 0.35; o.dir = G.sub.dir;
+    } else if (o.state === 'returning'){
+      o.x += (o.returnX - o.x) * 0.08; o.y += (o.baseY - o.y) * 0.08;
+      o.wiggle = Math.max(0, o.wiggle - dt*0.8);
+      if (Math.abs(o.x - o.returnX) < u && Math.abs(o.y - o.baseY) < u){ o.state = 'float'; o.vx = (Math.random()<.5?-1:1) * u*rand(6,10); }
+    } else if (o.state === 'sinking'){
+      o.sinkT += dt;
+      const t = o.tube, tx = t.x + t.w/2, ty = t.y + t.h*0.6;
+      o.x += (tx - o.x) * 0.15; o.y += (ty - o.y) * 0.12; o.scale = Math.max(0.3, 1 - o.sinkT*0.9);
+      if (o.sinkT > 0.9){ o.state = 'done'; t.items.push({ type:o.type, size:o.size, color:o.color }); G.sortedAll.push(o); burst(tx, t.y, 6); }
+    }
+  }
+  G.objects = G.objects.filter(o => o.state !== 'done');
+
+  // Tubes
+  for (const t of G.tubes){
+    t.pulse = Math.max(0, t.pulse - dt); t.shake = Math.max(0, t.shake - dt);
+    t.hover = !!(G.held && tubeAt(G.held.x, G.held.y) === t);
+  }
+  if (G.hint){ G.hint.t -= dt; if (G.hint.t <= 0) G.hint = null; }
+  if (G.msg){ G.msg.t -= dt; G.msg.y -= 20*dt; if (G.msg.t <= 0) G.msg = null; }
+
+  if (G.doneTimer > 0){ G.doneTimer -= dt; if (G.doneTimer <= 0) stageComplete(); }
+}
+
+function updateAmbient(dt){
+  for (const b of G.bubbles){ b.y -= b.vy*dt; b.x += b.vx*dt + Math.sin(G.time*3 + b.r)*0.3; b.life -= dt; }
+  G.bubbles = G.bubbles.filter(b => b.life > 0 && b.y > -10);
+  if (Math.random() < 0.08) G.bubbles.push({ x:rand(0,W), y:H, r:rand(0.4,1.2)*u, vy:rand(20,40)*u/10, vx:0, life:rand(4,8) });
+  for (const f of G.bgFish){ f.x += f.vx*dt; if (f.vx > 0 && f.x > W + 10*u) f.x = -10*u; if (f.vx < 0 && f.x < -10*u) f.x = W + 10*u; }
+  for (const c of G.confetti){ c.y += c.vy*dt; c.x += c.vx*dt; c.rot += c.vr*dt; if (c.y > H + 10) { c.y = -10; c.x = rand(0,W); } }
+  for (const a of G.aqua){ a.x += a.vx*dt; if (a.x < 5*u || a.x > W - 5*u) a.vx *= -1; }
+}
+
+/* ================================= 4) RENDERING ================================= */
+function buildScenery(){
+  G.bgFish = []; G.seaweed = []; G.coral = [];
+  for (let i = 0; i < 7; i++) G.bgFish.push({ x:rand(0,W), y:rand(SA.top+60, H*0.75), vx:(Math.random()<.5?-1:1)*u*rand(2,5), r:rand(1.2,2.2)*u, color:pick(COLORS.fish), phase:rand(0,6) });
+  for (let i = 0; i < 9; i++) G.seaweed.push({ x:rand(0,W), h:rand(10,22)*u, w:rand(1.2,2.2)*u, phase:rand(0,6), col:pick(['#2e7d32','#43a047','#66bb6a','#00897b']) });
+  for (let i = 0; i < 5; i++) G.coral.push({ x:rand(0,W), r:rand(3,6)*u, col:pick(['#ff8a80','#ffab91','#f48fb1','#ffcc80','#ce93d8']) });
+}
+function roundRect(x, y, w, h, r){
+  r = Math.min(r, w/2, h/2);
+  ctx.beginPath(); ctx.moveTo(x+r, y); ctx.arcTo(x+w, y, x+w, y+h, r); ctx.arcTo(x+w, y+h, x, y+h, r);
+  ctx.arcTo(x, y+h, x, y, r); ctx.arcTo(x, y, x+w, y, r); ctx.closePath();
+}
+function drawFish(x, y, r, color, dir, t, scale=1){
+  ctx.save(); ctx.translate(x, y); ctx.scale(dir*scale, scale);
+  const wag = Math.sin(t*6 + r)*0.25;
+  ctx.fillStyle = color;
+  ctx.beginPath(); ctx.moveTo(-r*0.7, 0); ctx.lineTo(-r*1.35, -r*0.6 + wag*r); ctx.lineTo(-r*1.35, r*0.6 + wag*r); ctx.closePath(); ctx.fill();
+  ctx.beginPath(); ctx.ellipse(0, 0, r, r*0.65, 0, 0, Math.PI*2); ctx.fill();
+  ctx.fillStyle = 'rgba(255,255,255,.35)'; ctx.beginPath(); ctx.ellipse(-r*0.15, 0, r*0.18, r*0.6, 0, 0, Math.PI*2); ctx.fill();
+  ctx.fillStyle = 'rgba(0,0,0,.18)'; ctx.beginPath(); ctx.moveTo(0, -r*0.05); ctx.quadraticCurveTo(-r*0.35, r*0.5, r*0.15, r*0.45); ctx.closePath(); ctx.fill();
+  ctx.fillStyle = '#fff'; ctx.beginPath(); ctx.arc(r*0.5, -r*0.15, r*0.22, 0, Math.PI*2); ctx.fill();
+  ctx.fillStyle = '#222'; ctx.beginPath(); ctx.arc(r*0.56, -r*0.13, r*0.11, 0, Math.PI*2); ctx.fill();
+  ctx.strokeStyle = '#222'; ctx.lineWidth = Math.max(1, r*0.06); ctx.beginPath(); ctx.arc(r*0.62, r*0.12, r*0.16, 0.3, Math.PI-0.3); ctx.stroke();
+  ctx.restore();
+}
+function drawShell(x, y, r, color, scale=1){
+  ctx.save(); ctx.translate(x, y); ctx.scale(scale, scale);
+  ctx.fillStyle = color; ctx.strokeStyle = 'rgba(0,0,0,.28)'; ctx.lineWidth = Math.max(1, r*0.06);
+  const n = 7;
+  ctx.beginPath(); ctx.moveTo(0, r*0.8);
+  for (let i = 0; i <= n; i++){
+    const a = Math.PI + (i/n)*Math.PI, px = Math.cos(a)*r, py = Math.sin(a)*r*0.9 + r*0.1;
+    if (i === 0) ctx.lineTo(px, py);
+    else { const am = Math.PI + ((i-0.5)/n)*Math.PI; ctx.quadraticCurveTo(Math.cos(am)*r*1.18, Math.sin(am)*r*1.08 + r*0.1, px, py); }
+  }
+  ctx.closePath(); ctx.fill(); ctx.stroke();
+  ctx.beginPath(); for (let i = 1; i < n; i++){ const a = Math.PI + (i/n)*Math.PI; ctx.moveTo(0, r*0.8); ctx.lineTo(Math.cos(a)*r*0.95, Math.sin(a)*r*0.85 + r*0.1); } ctx.stroke();
+  ctx.fillStyle = 'rgba(0,0,0,.15)'; ctx.beginPath(); ctx.ellipse(0, r*0.8, r*0.35, r*0.18, 0, 0, Math.PI*2); ctx.fill();
+  for (const ex of [-r*0.25, r*0.25]){
+    ctx.fillStyle = '#fff'; ctx.beginPath(); ctx.arc(ex, -r*0.05, r*0.16, 0, Math.PI*2); ctx.fill();
+    ctx.fillStyle = '#222'; ctx.beginPath(); ctx.arc(ex + r*0.04, -r*0.03, r*0.08, 0, Math.PI*2); ctx.fill();
+  }
+  ctx.strokeStyle = '#222'; ctx.beginPath(); ctx.arc(0, r*0.2, r*0.14, 0.3, Math.PI-0.3); ctx.stroke();
+  ctx.restore();
+}
+function drawCreature(c, x, y, r, dir, t, scale=1){
+  if (c.type === 'fish') drawFish(x, y, r, c.color, dir, t, scale); else drawShell(x, y, r, c.color, scale);
+}
+
+function drawBackground(){
+  const g = ctx.createLinearGradient(0, 0, 0, H); g.addColorStop(0, '#4fc3f7'); g.addColorStop(0.5, '#0288d1'); g.addColorStop(1, '#01426e');
+  ctx.fillStyle = g; ctx.fillRect(0, 0, W, H);
+  // Light rays
+  ctx.save(); ctx.globalAlpha = 0.07; ctx.fillStyle = '#fff';
+  for (let i = 0; i < 5; i++){
+    const x = W*(0.1 + i*0.2) + Math.sin(G.time*0.4 + i)*u*6;
+    ctx.beginPath(); ctx.moveTo(x - u*4, 0); ctx.lineTo(x + u*4, 0); ctx.lineTo(x + u*14, H); ctx.lineTo(x - u*10, H); ctx.closePath(); ctx.fill();
+  }
+  ctx.restore();
+  for (const f of G.bgFish){ ctx.save(); ctx.globalAlpha = 0.55; drawFish(f.x, f.y + Math.sin(G.time + f.phase)*u, f.r, f.color, f.vx > 0 ? 1 : -1, G.time); ctx.restore(); }
+}
+function drawFloor(){
+  const sandY = H - SA.bottom - 7*u;
+  for (const s of G.seaweed){
+    ctx.strokeStyle = s.col; ctx.lineWidth = s.w; ctx.lineCap = 'round';
+    ctx.beginPath(); ctx.moveTo(s.x, sandY + u);
+    const sway = Math.sin(G.time*1.3 + s.phase)*u*3;
+    ctx.bezierCurveTo(s.x + sway, sandY - s.h*0.4, s.x - sway, sandY - s.h*0.7, s.x + sway*1.5, sandY - s.h);
+    ctx.stroke();
+  }
+  for (const c of G.coral){
+    ctx.fillStyle = c.col;
+    [[0,0,1],[-0.8,-0.5,0.7],[0.8,-0.4,0.75],[0.1,-1,0.55],[-0.4,-1.3,0.4]].forEach(([dx,dy,k]) => {
+      ctx.beginPath(); ctx.arc(c.x + dx*c.r, sandY - c.r*0.3 + dy*c.r, c.r*k*0.6, 0, Math.PI*2); ctx.fill();
+    });
+  }
+  ctx.fillStyle = '#f4d58d'; ctx.beginPath(); ctx.moveTo(0, H);
+  for (let x = 0; x <= W; x += 20) ctx.lineTo(x, sandY + Math.sin(x/(8*u))*u*0.8);
+  ctx.lineTo(W, H); ctx.closePath(); ctx.fill();
+}
+function drawTube(t){
+  const { x, y, w, h } = t, cx = x + w/2;
+  ctx.save();
+  if (t.shake > 0) ctx.translate(Math.sin(G.time*40)*t.shake*u, 0);
+  if (t.hover || t.pulse > 0){ ctx.shadowColor = t.pulse > 0 ? '#ffeb3b' : '#80deea'; ctx.shadowBlur = 25; }
+  ctx.fillStyle = t.hover ? 'rgba(255,255,255,.32)' : 'rgba(255,255,255,.18)'; roundRect(x, y, w, h, w*0.15); ctx.fill();
+  ctx.shadowBlur = 0;
+  // collected items stacked inside
+  t.items.slice(-6).forEach((it, i) => {
+    const ix = cx + (i % 2 ? w*0.2 : -w*0.2), iy = y + h - w*0.28 - Math.floor(i/2)*w*0.3;
+    drawCreature(it, ix, iy, w*0.13, 1, G.time);
+  });
+  ctx.strokeStyle = t.pulse > 0 ? '#ffeb3b' : 'rgba(255,255,255,.85)'; ctx.lineWidth = t.pulse > 0 ? 4 : 3; roundRect(x, y, w, h, w*0.15); ctx.stroke();
+  ctx.fillStyle = 'rgba(255,255,255,.25)'; roundRect(x + w*0.1, y + h*0.1, w*0.1, h*0.78, w*0.05); ctx.fill();
+  ctx.fillStyle = 'rgba(255,255,255,.35)'; ctx.beginPath(); ctx.ellipse(cx, y, w/2, w*0.12, 0, 0, Math.PI*2); ctx.fill(); ctx.stroke();
+  // icon badge above
+  const by = y - w*0.42, pulseScale = t.pulse > 0 ? 1 + Math.sin(G.time*10)*0.1 : 1;
+  ctx.fillStyle = 'rgba(255,255,255,.9)'; ctx.beginPath(); ctx.arc(cx, by, w*0.3*pulseScale, 0, Math.PI*2); ctx.fill();
+  drawCreature(t.icon, cx, by, (t.icon.size === 'big' ? 0.2 : 0.12)*w*pulseScale, 1, G.time);
+  // label inside tube
+  let fs = Math.min(w*0.19, 4.2*u); ctx.font = `bold ${fs}px Trebuchet MS, Verdana, sans-serif`;
+  while (ctx.measureText(t.label).width > w*0.92 && fs > 9){ fs -= 1; ctx.font = `bold ${fs}px Trebuchet MS, Verdana, sans-serif`; }
+  ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.fillStyle = '#fff'; ctx.strokeStyle = 'rgba(0,0,0,.5)'; ctx.lineWidth = 3;
+  ctx.strokeText(t.label, cx, y + h*0.17); ctx.fillText(t.label, cx, y + h*0.17);
+  ctx.restore();
+}
+function drawSubmarine(){
+  const s = G.sub, r = 8*u;
+  if (G.held){ // claw cable
+    const o = G.held;
+    ctx.strokeStyle = '#90a4ae'; ctx.lineWidth = Math.max(2, u*0.5); ctx.beginPath(); ctx.moveTo(s.x, s.y + r*0.45); ctx.lineTo(o.x, o.y - o.r*0.9); ctx.stroke();
+    ctx.fillStyle = '#78909c'; ctx.beginPath(); ctx.arc(o.x, o.y - o.r*0.9, u, 0, Math.PI*2); ctx.fill();
+  }
+  ctx.save(); ctx.translate(s.x, s.y); ctx.scale(s.dir, 1);
+  ctx.save(); ctx.translate(-r*1.15, 0); ctx.rotate(s.prop); ctx.fillStyle = '#90a4ae';
+  ctx.fillRect(-r*0.08, -r*0.5, r*0.16, r); ctx.fillRect(-r*0.5, -r*0.08, r, r*0.16); ctx.restore();
+  ctx.fillStyle = '#ffb300'; roundRect(-r*0.4, -r*0.95, r*0.65, r*0.5, r*0.12); ctx.fill();
+  ctx.strokeStyle = '#546e7a'; ctx.lineWidth = r*0.1; ctx.lineCap = 'round';
+  ctx.beginPath(); ctx.moveTo(0, -r*0.95); ctx.lineTo(0, -r*1.35); ctx.lineTo(r*0.3, -r*1.35); ctx.stroke();
+  ctx.fillStyle = '#ffca28'; ctx.beginPath(); ctx.ellipse(0, 0, r, r*0.55, 0, 0, Math.PI*2); ctx.fill();
+  ctx.fillStyle = '#ffa000'; ctx.beginPath(); ctx.ellipse(0, r*0.2, r*0.92, r*0.3, 0, 0, Math.PI); ctx.fill();
+  for (const dx of [-r*0.45, 0, r*0.45]){
+    ctx.fillStyle = '#546e7a'; ctx.beginPath(); ctx.arc(dx, -r*0.05, r*0.2, 0, Math.PI*2); ctx.fill();
+    ctx.fillStyle = '#80deea'; ctx.beginPath(); ctx.arc(dx, -r*0.05, r*0.14, 0, Math.PI*2); ctx.fill();
+    ctx.fillStyle = 'rgba(255,255,255,.6)'; ctx.beginPath(); ctx.arc(dx - r*0.05, -r*0.1, r*0.05, 0, Math.PI*2); ctx.fill();
+  }
+  ctx.fillStyle = '#fff59d'; ctx.beginPath(); ctx.arc(r*0.95, 0, r*0.14, 0, Math.PI*2); ctx.fill();
+  ctx.restore();
+}
+function drawObjects(){
+  for (const o of G.objects){
+    ctx.save();
+    if (o.wiggle > 0) ctx.translate(Math.sin(G.time*30)*o.wiggle*u*1.2, 0);
+    if (o === G.dwell.obj && G.dwell.t > 0){ ctx.shadowColor = '#fff'; ctx.shadowBlur = 20; }
+    drawCreature(o, o.x, o.y, o.r, o.dir, G.time, o.scale);
+    ctx.restore();
+  }
+}
+function drawBubbles(){
+  ctx.strokeStyle = 'rgba(255,255,255,.7)'; ctx.fillStyle = 'rgba(255,255,255,.18)'; ctx.lineWidth = 1.5;
+  for (const b of G.bubbles){ ctx.beginPath(); ctx.arc(b.x, b.y, b.r, 0, Math.PI*2); ctx.fill(); ctx.stroke(); }
+}
+function drawHintAndMsg(){
+  if (G.hint && G.hint.tube){
+    const t = G.hint.tube, cx = t.x + t.w/2, ay = t.y - t.w*0.95 - Math.abs(Math.sin(G.time*5))*u*3;
+    ctx.fillStyle = '#ffeb3b'; ctx.strokeStyle = '#5d4037'; ctx.lineWidth = 2;
+    ctx.beginPath(); ctx.moveTo(cx, ay); ctx.lineTo(cx - 2.5*u, ay - 3*u); ctx.lineTo(cx - u, ay - 3*u); ctx.lineTo(cx - u, ay - 6*u);
+    ctx.lineTo(cx + u, ay - 6*u); ctx.lineTo(cx + u, ay - 3*u); ctx.lineTo(cx + 2.5*u, ay - 3*u); ctx.closePath(); ctx.fill(); ctx.stroke();
+    const o = G.hint.obj; drawSpeech(G.hint.text, o.x, o.y - o.r - 2*u, '#fff3e0', '#5d4037');
+  }
+  if (G.msg){ ctx.save(); ctx.globalAlpha = clamp(G.msg.t, 0, 1); drawSpeech(G.msg.text, G.msg.x, G.msg.y, '#e8f5e9', '#1b5e20'); ctx.restore(); }
+}
+function drawSpeech(text, x, y, bg, fg){
+  const fs = Math.max(14, 3.2*u); ctx.font = `bold ${fs}px Trebuchet MS, Verdana, sans-serif`;
+  const tw = ctx.measureText(text).width, pw = tw + 3*u, ph = fs*1.7;
+  let bx = clamp(x - pw/2, SA.left + u, W - SA.right - pw - u), by = Math.max(SA.top + Math.max(70, HUD_H + 6), y - ph);
+  ctx.fillStyle = bg; ctx.strokeStyle = fg; ctx.lineWidth = 2; roundRect(bx, by, pw, ph, ph/2); ctx.fill(); ctx.stroke();
+  ctx.fillStyle = fg; ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.fillText(text, bx + pw/2, by + ph/2);
+}
+function drawCursor(){
+  const c = G.cursor; if (!c.active || c.source === 'touch') return;
+  ctx.save();
+  ctx.strokeStyle = 'rgba(255,255,255,.9)'; ctx.lineWidth = 3; ctx.beginPath(); ctx.arc(c.x, c.y, 2.2*u, 0, Math.PI*2); ctx.stroke();
+  ctx.fillStyle = 'rgba(255,255,255,.5)'; ctx.beginPath(); ctx.arc(c.x, c.y, 0.7*u, 0, Math.PI*2); ctx.fill();
+  if (G.dwell.obj && G.dwell.t > 0){ ctx.strokeStyle = '#ffd54f'; ctx.lineWidth = 4; ctx.beginPath(); ctx.arc(c.x, c.y, 3*u, -Math.PI/2, -Math.PI/2 + Math.PI*2*clamp(G.dwell.t/0.35, 0, 1)); ctx.stroke(); }
+  ctx.restore();
+}
+function drawCalibrationTargets(){
+  const pad = 6*u, pts = [[SA.left+pad, SA.top+pad],[W-SA.right-pad, SA.top+pad],[SA.left+pad, H-SA.bottom-pad],[W-SA.right-pad, H-SA.bottom-pad]];
+  pts.forEach(([x,y]) => { ctx.strokeStyle = '#ffd54f'; ctx.lineWidth = 4; ctx.beginPath(); ctx.arc(x, y, 3*u + Math.sin(G.time*4)*u*0.5, 0, Math.PI*2); ctx.stroke(); ctx.fillStyle = '#fff'; ctx.beginPath(); ctx.arc(x, y, u, 0, Math.PI*2); ctx.fill(); });
+  if (G.cursor.active){ ctx.fillStyle = 'rgba(255,213,79,.8)'; ctx.beginPath(); ctx.arc(G.cursor.x, G.cursor.y, 2.5*u, 0, Math.PI*2); ctx.fill(); }
+}
+function drawAquarium(){
+  for (const a of G.aqua) drawCreature(a, a.x, a.y + Math.sin(G.time*1.5 + a.phase)*u*2, radiusFor(a.size), a.vx > 0 ? 1 : -1, G.time);
+  for (const c of G.confetti){ ctx.save(); ctx.translate(c.x, c.y); ctx.rotate(c.rot); ctx.fillStyle = c.c; ctx.fillRect(-c.s/2, -c.s/4, c.s, c.s/2); ctx.restore(); }
+}
+
+function render(){
+  ctx.clearRect(0, 0, W, H);
+  drawBackground();
+  drawFloor();
+  if (G.state === 'finished'){ drawAquarium(); drawBubbles(); return; }
+  if (G.state === 'calibrating'){ drawBubbles(); drawCalibrationTargets(); return; }
+  if (G.tubes.length){ G.tubes.forEach(drawTube); }
+  drawObjects();
+  if (G.state !== 'start' && G.state !== 'loading') drawSubmarine();
+  drawBubbles();
+  drawHintAndMsg();
+  if (G.state === 'playing') drawCursor();
+}
+
+/* ============================= 5) INPUT + MAIN LOOP ============================= */
+function ptFromEvent(e){ const r = canvas.getBoundingClientRect(); return { x:e.clientX - r.left, y:e.clientY - r.top }; }
+canvas.addEventListener('pointerdown', e => {
+  if (G.state !== 'playing') return;
+  canvas.setPointerCapture && canvas.setPointerCapture(e.pointerId);
+  const p = ptFromEvent(e);
+  setCursor(p.x, p.y, 'touch');
+  G.ptr = { down:true, moved:false, sx:p.x, sy:p.y };
+  if (G.held){
+    const t = tubeAt(p.x, p.y);
+    if (t){ G.held.x = p.x; G.held.y = p.y; releaseHeld(); G.ptr.down = false; return; }
+    if (Math.hypot(G.held.x - p.x, G.held.y - p.y) < G.held.r*2 + 2*u) return; // keep dragging the held item
+    releaseHeld(); return;
+  }
+  const o = objAt(p.x, p.y);
+  if (o) grab(o, 'touch');
+});
+canvas.addEventListener('pointermove', e => {
+  if (G.state !== 'playing' || !G.ptr.down) return;
+  const p = ptFromEvent(e);
+  setCursor(p.x, p.y, 'touch');
+  if (Math.hypot(p.x - G.ptr.sx, p.y - G.ptr.sy) > 12) G.ptr.moved = true;
+});
+function pointerEnd(){
+  if (G.state !== 'playing' || !G.ptr.down) return;
+  G.ptr.down = false;
+  if (G.held && G.held.source === 'touch'){
+    if (G.ptr.moved) releaseHeld();
+    else setBanner('Now tap a tube to drop it in! 🫧', 1800);  // sticky tap-to-select mode
+  }
+}
+canvas.addEventListener('pointerup', pointerEnd);
+canvas.addEventListener('pointercancel', pointerEnd);
+
+window.addEventListener('keydown', e => {
+  if (['ArrowLeft','ArrowRight','ArrowUp','ArrowDown',' '].includes(e.key)) e.preventDefault();
+  G.keys[e.key] = true;
+  if (e.key === ' '){
+    if (G.state !== 'playing') return;
+    if (!G.cursor.active) setCursor(W/2, H*0.4, 'keyboard');
+    if (G.held){ releaseHeld(); }
+    else { const o = objAt(G.cursor.x, G.cursor.y) || nearestObj(G.cursor.x, G.cursor.y, 14*u); if (o) grab(o, 'keyboard'); }
+  }
+  if (e.key === 'p' || e.key === 'P' || e.key === 'Escape'){ G.state === 'playing' ? pauseGame() : resumeGame(); }
+  if ((e.key === 'r' || e.key === 'R') && ['playing','paused','stageDone','finished'].includes(G.state)) restartGame();
+  if (e.key === 'Enter'){
+    const prim = { start:'btnStartTouch', intro:'btnGo', paused:'btnResume', stageDone:'btnNext', finished:'btnPlayAgain', calibrating:'btnCalibSkip' }[G.state];
+    if (prim) $(prim).click();
+  }
+});
+window.addEventListener('keyup', e => { G.keys[e.key] = false; });
+function nearestObj(x, y, maxD){
+  let best = null, bd = maxD;
+  for (const o of G.objects){ if (o.state !== 'float') continue; const d = Math.hypot(o.x-x, o.y-y); if (d < bd){ bd = d; best = o; } }
+  return best;
+}
+
+/* Buttons */
+$('voiceToggle').addEventListener('change', e => { voiceOn = e.target.checked; updateVoiceBtn(); });
+$('btnVoice').addEventListener('click', () => { voiceOn = !voiceOn; $('voiceToggle').checked = voiceOn; updateVoiceBtn(); if (!voiceOn && 'speechSynthesis' in window) speechSynthesis.cancel(); });
+$('btnCam').addEventListener('click', () => { if (G.controlMode === 'camera') $('camWrap').classList.toggle('show'); else setBanner('Camera is off. Restart and choose "Play with camera".', 2500); });
+$('btnStartTouch').addEventListener('click', () => { tone(440, 0.05, 'sine', 0.01); startGame(('ontouchstart' in window) ? 'touch' : 'keyboard'); });
+$('btnStartCam').addEventListener('click', startWithCamera);
+$('btnRetryCam').addEventListener('click', startWithCamera);
+$('btnNoCam').addEventListener('click', () => startGame('touch'));
+$('btnCalibDone').addEventListener('click', finishCalibration);
+$('btnCalibSkip').addEventListener('click', () => { T.calib = { minX:0.15, maxX:0.85, minY:0.15, maxY:0.85 }; T.smooth.init = false; if (G.calibReturn === 'playing'){ G.state = 'playing'; hideOverlays(); } else startGame('camera'); });
+$('btnGo').addEventListener('click', goStage);
+$('btnPause').addEventListener('click', pauseGame);
+$('btnResume').addEventListener('click', resumeGame);
+$('btnRestart').addEventListener('click', restartGame);
+$('btnRestart2').addEventListener('click', restartGame);
+$('btnRecalib').addEventListener('click', () => startCalibration('playing'));
+$('btnNext').addEventListener('click', nextStage);
+$('btnPlayAgain').addEventListener('click', restartGame);
+document.addEventListener('visibilitychange', () => { if (document.hidden) pauseGame(); });
+
+async function startWithCamera(){
+  tone(440, 0.05, 'sine', 0.01);
+  G.state = 'loading'; showOverlay('loadingScreen');
+  const setStatus = t => $('loadingText').textContent = t;
+  try {
+    setStatus('Asking for the camera…');
+    if (!T.video.srcObject) await startCamera();
+    if (!T.ready) await loadHandModel(setStatus);
+    T.enabled = true; T.lastSeen = performance.now();
+    $('camWrap').classList.add('show');
+    startCalibration('new');
+  } catch(err){
+    console.error(err);
+    $('errorText').textContent = err.message || String(err);
+    G.state = 'error'; showOverlay('errorScreen');
+  }
+}
+
+let last = performance.now();
+function loop(now){
+  const dt = Math.min(0.05, (now - last) / 1000); last = now;
+  G.time += dt;
+  trackFrame(now);
+  updateAmbient(dt);
+  if (G.state === 'playing'){ G.time -= dt; update(dt, now); }  // update() advances G.time itself
+  render();
+  requestAnimationFrame(loop);
+}
+resize();
+updateVoiceBtn();
+requestAnimationFrame(loop);
+</script>
+</body>
+</html>

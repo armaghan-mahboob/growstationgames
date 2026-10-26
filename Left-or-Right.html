@@ -1,0 +1,1238 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Left or Right?</title>
+<link href="https://fonts.googleapis.com/css2?family=Fredoka:wght@500;700&display=swap" rel="stylesheet">
+<style>
+/* =====================================================================
+   UI STYLES
+   ===================================================================== */
+:root{
+  --left:#3B82F6;      /* LEFT is always blue  */
+  --right:#F97316;     /* RIGHT is always orange */
+  --ink:#1F2A44;
+  --ok:#22C55E;
+  --ar:1.333;          /* camera aspect ratio, set from JS */
+  --hud:clamp(64px,11vh,96px);
+}
+*{box-sizing:border-box}
+html,body{margin:0;height:100%;overflow:hidden;color:var(--ink);
+  font-family:"Fredoka","Baloo 2","Chalkboard SE","Comic Sans MS","Trebuchet MS",sans-serif;
+  user-select:none;-webkit-user-select:none}
+#app{position:fixed;inset:0;overflow:hidden}
+
+/* ---------- Background scenery ---------- */
+#bg{position:absolute;inset:0;background:linear-gradient(#BDEBFF 0%,#E9FAFF 70%)}
+.sun{position:absolute;top:6vh;right:9vw;width:14vmin;height:14vmin;border-radius:50%;
+  background:#FFE066;box-shadow:0 0 0 3vmin rgba(255,224,102,.35)}
+.cloud{position:absolute;font-size:12vmin;opacity:.9;animation:drift 60s linear infinite}
+.cloud.c1{top:9vh;left:-15vw}
+.cloud.c2{top:22vh;left:-30vw;font-size:8vmin;animation-duration:85s;animation-delay:-30s}
+@keyframes drift{to{transform:translateX(140vw)}}
+.hill{position:absolute;border-radius:50%}
+.hill.h1{left:-15vw;bottom:8vh;width:75vw;height:42vh;background:#A8E08A}
+.hill.h2{right:-20vw;bottom:6vh;width:85vw;height:38vh;background:#8ED36B}
+.ground{position:absolute;left:0;right:0;bottom:0;height:22vh;background:#6CC24A;
+  border-top:1.2vh solid #5DB13F}
+
+/* ---------- Screens ---------- */
+.screen{position:absolute;inset:0;display:none;flex-direction:column;align-items:center;
+  justify-content:center;text-align:center;padding:3vh 4vw;gap:2.5vh}
+.screen.show{display:flex}
+h1{margin:0;font-size:clamp(48px,11vmin,130px);line-height:1;font-weight:700}
+h1 .l{color:var(--left)} h1 .r{color:var(--right)}
+.big{font-size:clamp(28px,5.5vmin,60px);font-weight:700;margin:0}
+.mid{font-size:clamp(22px,3.6vmin,40px);margin:0;max-width:26em}
+.btn{font:inherit;font-weight:700;font-size:clamp(26px,5vmin,54px);padding:.45em 1.3em;border:0;
+  border-radius:999px;background:var(--ok);color:#fff;box-shadow:0 .16em 0 #15803D;cursor:pointer}
+.btn:active{transform:translateY(.1em);box-shadow:0 .06em 0 #15803D}
+.btn.alt{background:#fff;color:var(--ink);box-shadow:0 .16em 0 #CBD5E1}
+.row{display:flex;gap:3vw;flex-wrap:wrap;justify-content:center}
+.pipbox{width:clamp(120px,24vmin,260px)}
+.pipbox svg{width:100%;height:auto;display:block}
+.dance{animation:dance 1s ease-in-out infinite}
+@keyframes dance{0%,100%{transform:translateY(0) rotate(-6deg)}50%{transform:translateY(-8%) rotate(6deg)}}
+.spinner{width:12vmin;height:12vmin;border-radius:50%;border:1.6vmin solid #fff;
+  border-top-color:var(--left);animation:spin 1s linear infinite}
+@keyframes spin{to{transform:rotate(360deg)}}
+
+/* ---------- Calibration screen ---------- */
+#scr-calib{justify-content:space-between}
+#calibMsg{min-height:1.3em}
+.progress{width:min(50vw,520px);height:3.2vh;background:#fff;border-radius:999px;overflow:hidden;
+  box-shadow:inset 0 2px 4px rgba(0,0,0,.12)}
+.progress i{display:block;height:100%;width:0;background:var(--ok);border-radius:999px}
+
+/* ---------- Camera preview ---------- */
+.cam{position:fixed;z-index:20;border-radius:24px;overflow:hidden;border:6px solid #fff;
+  box-shadow:0 8px 24px rgba(31,42,68,.25);background:var(--ink);aspect-ratio:var(--ar);
+  transition:top .5s,left .5s,width .5s,transform .5s}
+.cam.big{top:50%;left:50%;transform:translate(-50%,-50%);width:min(64vw,calc(52vh * var(--ar)))}
+.cam.small{top:calc(var(--hud) + 10px);left:16px;transform:none;width:clamp(150px,17vw,250px)}
+.cam.hidden{display:none}
+/* The video is MIRRORED with CSS so it behaves like a mirror for the child. */
+.cam video{width:100%;height:100%;object-fit:cover;display:block;transform:scaleX(-1)}
+.cam canvas{position:absolute;inset:0;width:100%;height:100%}
+
+/* ---------- Game HUD ---------- */
+.hud{position:absolute;top:0;left:0;right:0;height:var(--hud);display:flex;align-items:center;
+  justify-content:space-between;padding:0 16px;gap:12px;z-index:5}
+.hud > div{display:flex;gap:12px;align-items:center}
+.pill{background:#fff;border-radius:999px;padding:.12em .7em;font-weight:700;white-space:nowrap;
+  font-size:clamp(22px,4.4vmin,46px);box-shadow:0 4px 0 rgba(31,42,68,.12)}
+.pill.pop{animation:pop .45s}
+@keyframes pop{40%{transform:scale(1.35)}}
+.hudbtn{font:inherit;font-size:clamp(22px,4.2vmin,44px);width:1.9em;height:1.9em;border:0;
+  border-radius:50%;background:#fff;box-shadow:0 4px 0 rgba(31,42,68,.15);cursor:pointer;line-height:1}
+.hudbtn:active{transform:translateY(3px);box-shadow:none}
+
+/* ---------- Command area (text + big arrow) ---------- */
+#cmdArea{position:absolute;top:calc(var(--hud) + 1vh);left:50%;transform:translateX(-50%);
+  width:66vw;display:flex;flex-direction:column;align-items:center;gap:1vh;z-index:4}
+#chips{display:flex;gap:1.2vw;min-height:7vh;align-items:center}
+.chip{width:6.5vh;height:6.5vh;border-radius:50%;display:grid;place-items:center;color:#fff;
+  font-size:4vh;font-weight:700;opacity:.55;transition:all .25s}
+.chip.L{background:var(--left)} .chip.R{background:var(--right)}
+.chip.now{opacity:1;transform:scale(1.3);box-shadow:0 0 0 .6vh #fff}
+.chip.done{opacity:1;background:var(--ok)}
+#cmd{font-weight:700;line-height:1;font-size:min(9vw,15vh);text-shadow:0 .05em 0 #fff, 0 -.03em 0 #fff}
+#cmd.small{font-size:min(6vw,10vh)}
+#cmd.L{color:var(--left)} #cmd.R{color:var(--right)}
+#arrow{height:20vh;visibility:hidden}
+#arrow.show{visibility:visible}
+#arrow.L{transform:scaleX(-1)}             /* flip the whole arrow for LEFT */
+#arrow svg{height:100%;width:auto;display:block;animation:nudge .7s ease-in-out infinite}
+#arrow.L path{fill:var(--left)} #arrow.R path{fill:var(--right)}
+#arrow.hint svg{animation-duration:.4s}
+@keyframes nudge{0%,100%{transform:translateX(-6%)}50%{transform:translateX(10%)}}
+
+/* ---------- Scene: signposts, glows, character, treat ---------- */
+.glow{position:absolute;top:0;bottom:0;width:30vw;opacity:0;transition:opacity .3s;pointer-events:none}
+#glowL{left:0;background:linear-gradient(90deg,rgba(59,130,246,.45),transparent)}
+#glowR{right:0;background:linear-gradient(270deg,rgba(249,115,22,.45),transparent)}
+.glow.on{opacity:1;animation:glow 1s ease-in-out infinite}
+@keyframes glow{50%{opacity:.5}}
+.sign{position:absolute;bottom:17vh;display:flex;flex-direction:column;align-items:center;z-index:2}
+.sign b{color:#fff;font-size:clamp(20px,3.6vmin,40px);padding:.25em .6em;border-radius:.4em;
+  border:.12em solid #fff;box-shadow:0 4px 0 rgba(31,42,68,.2)}
+.sign i{width:1.4vmin;height:9vh;background:#B07B4A;border-radius:0 0 4px 4px}
+#signL{left:1.5vw} #signL b{background:var(--left)}
+#signR{right:1.5vw} #signR b{background:var(--right)}
+.sign.on b{animation:pop .6s infinite}
+#char{position:absolute;bottom:13vh;left:50%;width:clamp(110px,17vmin,200px);
+  transform:translateX(-50%);z-index:3}
+#charIn svg{width:100%;height:auto;display:block}
+#charIn.hop{animation:hop .6s ease-out}
+#charIn.wobble{animation:wobble .6s ease-in-out}
+@keyframes hop{0%,100%{transform:translateY(0) scale(1)}35%{transform:translateY(-45%) scale(1.05,.95)}
+  70%{transform:translateY(0) scale(1.1,.9)}}
+@keyframes wobble{0%,100%{transform:rotate(0)}25%{transform:rotate(-10deg)}75%{transform:rotate(10deg)}}
+#treat{position:absolute;bottom:19vh;left:50%;font-size:clamp(50px,10vmin,110px);z-index:2;
+  transform:translateX(-50%) scale(0);transition:transform .3s}
+#treat.show{transform:translateX(-50%) scale(1);animation:bob 1s ease-in-out infinite}
+@keyframes bob{50%{margin-bottom:2vh}}
+#fx{position:absolute;inset:0;pointer-events:none;z-index:6}
+.star{position:absolute;bottom:26vh;font-size:5.5vmin;animation:fly .95s ease-out forwards}
+@keyframes fly{from{transform:translate(-50%,0) scale(.4);opacity:1}
+  to{transform:translate(calc(-50% + var(--dx)),var(--dy)) scale(1.4);opacity:0}}
+
+/* ---------- Body position bar (where am I?) ---------- */
+#bar{position:absolute;left:50%;bottom:2.2vh;transform:translateX(-50%);width:62vw;height:6vh;
+  background:rgba(255,255,255,.85);border-radius:999px;overflow:hidden;z-index:4;
+  box-shadow:0 4px 0 rgba(31,42,68,.15)}
+#zone{position:absolute;top:0;bottom:0;opacity:.75;display:none}
+#zone.L{background:var(--left);display:block} #zone.R{background:var(--right);display:block}
+#zone.C{background:var(--ok);display:block}
+#kid{position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);font-size:5vh;line-height:1}
+
+/* ---------- Overlays ---------- */
+.overlay{position:absolute;inset:0;z-index:30;display:none;flex-direction:column;gap:3vh;
+  align-items:center;justify-content:center;text-align:center;padding:4vw;
+  background:rgba(233,250,255,.92)}
+.overlay.show{display:flex}
+.emoji{font-size:clamp(70px,18vmin,200px);line-height:1}
+#confetti{position:absolute;inset:0;width:100%;height:100%;pointer-events:none;z-index:40}
+
+/* =====================================================================
+   MOBILE RESPONSIVE LAYOUT
+   Keeps the game logic unchanged while adapting the UI for phones.
+   ===================================================================== */
+@media (max-width: 700px) {
+  :root {
+    --hud: 58px;
+  }
+
+  html, body {
+    width: 100%;
+    min-width: 0;
+    overflow: hidden;
+    -webkit-text-size-adjust: 100%;
+  }
+
+  #app {
+    width: 100%;
+    min-height: 100dvh;
+  }
+
+  .screen {
+    min-height: 100dvh;
+    padding: 2.5vh 4vw;
+    gap: 2vh;
+  }
+
+  h1 {
+    font-size: clamp(38px, 12vw, 72px);
+  }
+
+  .big {
+    font-size: clamp(22px, 6vw, 34px);
+  }
+
+  .mid {
+    font-size: clamp(17px, 4.5vw, 25px);
+    max-width: 90vw;
+  }
+
+  .btn {
+    font-size: clamp(21px, 6vw, 34px);
+    padding: .42em 1em;
+  }
+
+  .row {
+    width: 100%;
+    gap: 12px;
+  }
+
+  .row .btn {
+    flex: 0 1 auto;
+  }
+
+  .pipbox {
+    width: clamp(110px, 38vw, 190px);
+  }
+
+  /* Calibration camera: fit the phone viewport without covering the text. */
+  .cam.big {
+    top: 53%;
+    width: min(88vw, calc(58vh * var(--ar)));
+    max-height: 58vh;
+    border-width: 4px;
+    border-radius: 18px;
+  }
+
+  .cam.small {
+    top: calc(var(--hud) + 8px);
+    left: 8px;
+    width: clamp(104px, 27vw, 150px);
+    border-width: 3px;
+    border-radius: 14px;
+  }
+
+  /* Compact game HUD. */
+  .hud {
+    height: var(--hud);
+    padding: 6px 8px;
+    gap: 5px;
+  }
+
+  .hud > div {
+    gap: 5px;
+    min-width: 0;
+  }
+
+  .pill {
+    font-size: clamp(15px, 4vw, 23px);
+    padding: .18em .52em;
+    box-shadow: 0 3px 0 rgba(31,42,68,.12);
+  }
+
+  .hudbtn {
+    font-size: clamp(17px, 4.8vw, 26px);
+    width: 1.75em;
+    height: 1.75em;
+    box-shadow: 0 3px 0 rgba(31,42,68,.15);
+  }
+
+  /* Leave room below the HUD and above the bottom position bar. */
+  #cmdArea {
+    top: calc(var(--hud) + 1.5vh);
+    width: 92vw;
+    gap: .5vh;
+  }
+
+  #chips {
+    min-height: 5vh;
+    gap: 2vw;
+  }
+
+  .chip {
+    width: 5.5vh;
+    height: 5.5vh;
+    font-size: 3.2vh;
+  }
+
+  #cmd {
+    max-width: 94vw;
+    font-size: min(10vw, 8vh);
+    white-space: nowrap;
+  }
+
+  #cmd.small {
+    font-size: min(7vw, 6vh);
+  }
+
+  #arrow {
+    height: 13vh;
+    max-height: 120px;
+  }
+
+  .glow {
+    width: 42vw;
+  }
+
+  .sign {
+    bottom: 15vh;
+  }
+
+  .sign b {
+    font-size: clamp(15px, 4vw, 25px);
+    padding: .22em .45em;
+  }
+
+  .sign i {
+    width: 5px;
+    height: 7vh;
+  }
+
+  #signL {
+    left: 1vw;
+  }
+
+  #signR {
+    right: 1vw;
+  }
+
+  #char {
+    bottom: 11vh;
+    width: clamp(82px, 23vw, 135px);
+  }
+
+  #treat {
+    bottom: 17vh;
+    font-size: clamp(42px, 12vw, 78px);
+  }
+
+  #bar {
+    width: 86vw;
+    height: 5vh;
+    bottom: 2vh;
+  }
+
+  #kid {
+    font-size: 4vh;
+  }
+
+  .overlay {
+    padding: 5vw;
+    gap: 2vh;
+  }
+
+  .emoji {
+    font-size: clamp(62px, 20vw, 120px);
+  }
+
+  .overlay .big {
+    max-width: 92vw;
+  }
+
+  /* On very narrow phones, prioritize the game area and prevent HUD collisions. */
+  #hudRound {
+    font-size: clamp(14px, 3.5vw, 20px);
+  }
+}
+
+@media (max-width: 420px) {
+  .hud {
+    padding-left: 5px;
+    padding-right: 5px;
+  }
+
+  .hud > div {
+    gap: 3px;
+  }
+
+  .pill {
+    font-size: clamp(13px, 3.5vw, 19px);
+  }
+
+  .hudbtn {
+    font-size: clamp(15px, 4.2vw, 22px);
+  }
+
+  #cmdArea {
+    width: 96vw;
+  }
+
+  #cmd {
+    font-size: min(9.5vw, 7vh);
+  }
+
+  #arrow {
+    height: 11vh;
+  }
+
+  .sign {
+    bottom: 14vh;
+  }
+
+  .sign b {
+    font-size: clamp(13px, 3.6vw, 20px);
+  }
+
+  #char {
+    bottom: 10vh;
+  }
+
+  #bar {
+    width: 90vw;
+  }
+}
+
+/* Phones in landscape: keep the gameplay readable without changing logic. */
+@media (max-width: 900px) and (orientation: landscape) {
+  .screen {
+    padding-top: 1.5vh;
+    padding-bottom: 1.5vh;
+    gap: 1vh;
+  }
+
+  .cam.small {
+    top: calc(var(--hud) + 5px);
+    width: clamp(105px, 20vw, 150px);
+  }
+
+  #cmdArea {
+    top: calc(var(--hud) + .5vh);
+  }
+
+  #arrow {
+    height: 18vh;
+  }
+
+  .sign {
+    bottom: 13vh;
+  }
+
+  #char {
+    bottom: 9vh;
+    width: clamp(75px, 16vh, 125px);
+  }
+
+  #treat {
+    bottom: 15vh;
+  }
+
+  #bar {
+    height: 6vh;
+    bottom: 1.5vh;
+  }
+}
+
+</style>
+</head>
+<body>
+<div id="app">
+
+  <!-- Background scenery (pure CSS + emoji) -->
+  <div id="bg">
+    <div class="sun"></div>
+    <div class="cloud c1">☁️</div><div class="cloud c2">☁️</div>
+    <div class="hill h1"></div><div class="hill h2"></div>
+    <div class="ground"></div>
+  </div>
+
+  <!-- SCREEN: welcome -->
+  <section id="scr-welcome" class="screen show">
+    <h1><span class="l">Left</span> or <span class="r">Right?</span></h1>
+    <div class="pipbox dance" data-pip></div>
+    <p class="big">Move your body to help Pip!</p>
+    <button class="btn" id="btnStart">▶ Start</button>
+  </section>
+
+  <!-- SCREEN: loading -->
+  <section id="scr-loading" class="screen">
+    <div class="spinner"></div>
+    <p class="big">Getting ready…</p>
+    <p class="mid">Please say yes to the camera.</p>
+  </section>
+
+  <!-- SCREEN: error (camera or model problems) -->
+  <section id="scr-error" class="screen">
+    <div class="emoji">📷</div>
+    <p class="big" id="errTitle">I need the camera to play</p>
+    <p class="mid" id="errText"></p>
+    <button class="btn" id="btnRetry">Try again</button>
+  </section>
+
+  <!-- SCREEN: calibration -->
+  <section id="scr-calib" class="screen">
+    <p class="big">Stand in the middle!</p>
+    <div style="display:flex;flex-direction:column;align-items:center;gap:1.5vh">
+      <p class="big" id="calibMsg">Looking for you…</p>
+      <div class="progress"><i id="calibBar"></i></div>
+    </div>
+  </section>
+
+  <!-- SCREEN: game -->
+  <section id="scr-game" class="screen">
+    <div class="glow" id="glowL"></div><div class="glow" id="glowR"></div>
+    <div class="hud">
+      <div><span class="pill" id="hudStars">⭐ 0</span><span class="pill" id="hudStreak">🔥 0</span></div>
+      <div><span class="pill" id="hudRound">Round 1 / 8</span></div>
+      <div>
+        <button class="hudbtn" id="btnSound" title="Sound">🔊</button>
+        <button class="hudbtn" id="btnPause" title="Pause">⏸</button>
+        <button class="hudbtn" id="btnRestart" title="Restart">🔄</button>
+      </div>
+    </div>
+    <div id="cmdArea">
+      <div id="chips"></div>
+      <div id="cmd"></div>
+      <div id="arrow"><svg viewBox="0 0 220 140"><path d="M10 50h110V12l90 58-90 58V90H10z"
+        stroke="#fff" stroke-width="10" stroke-linejoin="round"/></svg></div>
+    </div>
+    <div class="sign" id="signL"><b>⬅ LEFT</b><i></i></div>
+    <div class="sign" id="signR"><b>RIGHT ➡</b><i></i></div>
+    <div id="treat">🍎</div>
+    <div id="char"><div id="charIn" data-pip></div></div>
+    <div id="fx"></div>
+    <div id="bar"><div id="zone"></div><div id="kid">🧒</div></div>
+  </section>
+
+  <!-- SCREEN: final celebration -->
+  <section id="scr-final" class="screen">
+    <h1>You did it! 🎉</h1>
+    <div class="pipbox dance" data-pip></div>
+    <p class="big" id="finalStars">⭐ × 0</p>
+    <p class="mid" id="finalText"></p>
+    <button class="btn" id="btnAgain">🔄 Play again</button>
+  </section>
+
+  <!-- Camera preview: big on the calibration screen, small in the corner while playing -->
+  <div id="cam" class="cam hidden"><video id="video" playsinline muted></video><canvas id="camCanvas"></canvas></div>
+
+  <!-- OVERLAY: manual pause -->
+  <div id="ovPause" class="overlay">
+    <div class="emoji">⏸</div>
+    <p class="big">Paused</p>
+    <div class="row">
+      <button class="btn" id="btnResume">▶ Play</button>
+      <button class="btn alt" id="btnRestart2">🔄 Restart</button>
+    </div>
+  </div>
+
+  <!-- OVERLAY: tracking lost (the game resumes by itself) -->
+  <div id="ovLost" class="overlay">
+    <div class="emoji">👀</div>
+    <p class="big">I can’t see you.<br>Step back so I can see you!</p>
+  </div>
+
+  <canvas id="confetti"></canvas>
+</div>
+
+<script type="module">
+/* =====================================================================
+   SMALL HELPERS
+   ===================================================================== */
+const $ = s => document.querySelector(s);
+const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
+const pick = arr => arr[Math.floor(Math.random() * arr.length)];
+
+/* Pip the chick, drawn with SVG. Injected into every [data-pip] element. */
+const PIP_SVG = `
+<svg viewBox="0 0 200 200" xmlns="http://www.w3.org/2000/svg">
+  <ellipse cx="100" cy="190" rx="56" ry="8" fill="rgba(31,42,68,.18)"/>
+  <ellipse cx="78" cy="181" rx="17" ry="8" fill="#FB923C"/>
+  <ellipse cx="122" cy="181" rx="17" ry="8" fill="#FB923C"/>
+  <ellipse cx="33" cy="118" rx="14" ry="27" fill="#FFC107" transform="rotate(18 33 118)"/>
+  <ellipse cx="167" cy="118" rx="14" ry="27" fill="#FFC107" transform="rotate(-18 167 118)"/>
+  <ellipse cx="88" cy="40" rx="7" ry="14" fill="#FFC107" transform="rotate(-20 88 40)"/>
+  <ellipse cx="104" cy="36" rx="7" ry="15" fill="#FFC107"/>
+  <ellipse cx="119" cy="41" rx="7" ry="13" fill="#FFC107" transform="rotate(22 119 41)"/>
+  <circle cx="100" cy="112" r="70" fill="#FFD43B"/>
+  <ellipse cx="100" cy="136" rx="42" ry="34" fill="#FFEB99"/>
+  <circle cx="57" cy="120" r="10" fill="#FF9EB5" opacity=".7"/>
+  <circle cx="143" cy="120" r="10" fill="#FF9EB5" opacity=".7"/>
+  <circle cx="76" cy="92" r="17" fill="#fff"/><circle cx="124" cy="92" r="17" fill="#fff"/>
+  <g class="pupils" style="transition:transform .2s">
+    <circle cx="76" cy="93" r="9" fill="#1F2A44"/><circle cx="124" cy="93" r="9" fill="#1F2A44"/>
+    <circle cx="79" cy="89" r="3" fill="#fff"/><circle cx="127" cy="89" r="3" fill="#fff"/>
+  </g>
+  <path d="M87 108h26l-13 17z" fill="#FB923C" stroke="#EA7A1A" stroke-width="2" stroke-linejoin="round"/>
+</svg>`;
+document.querySelectorAll('[data-pip]').forEach(n => n.innerHTML = PIP_SVG);
+
+/* =====================================================================
+   AUDIO: sound effects (Web Audio) and voice (speech synthesis)
+   ===================================================================== */
+const Sfx = {
+  ctx: null, on: true,
+  init() {
+    try { this.ctx = this.ctx || new (window.AudioContext || window.webkitAudioContext)(); this.ctx.resume(); }
+    catch (e) { /* no audio, the game still works */ }
+  },
+  tone(freq, delay, dur, type = 'triangle', vol = 0.18) {
+    if (!this.ctx || !this.on) return;
+    const o = this.ctx.createOscillator(), g = this.ctx.createGain();
+    const t = this.ctx.currentTime + delay;
+    o.type = type; o.frequency.value = freq;
+    g.gain.setValueAtTime(0.0001, t);
+    g.gain.exponentialRampToValueAtTime(vol, t + 0.02);
+    g.gain.exponentialRampToValueAtTime(0.0001, t + dur);
+    o.connect(g); g.connect(this.ctx.destination);
+    o.start(t); o.stop(t + dur + 0.05);
+  },
+  success() { [523, 659, 784, 1047].forEach((f, i) => this.tone(f, i * 0.08, 0.22)); },
+  bonus()   { [784, 988, 1175, 1568].forEach((f, i) => this.tone(f, 0.3 + i * 0.07, 0.2, 'sine')); },
+  oops()    { this.tone(330, 0, 0.18, 'sine', 0.12); this.tone(262, 0.14, 0.25, 'sine', 0.12); }, // soft, not scary
+  ready()   { this.tone(659, 0, 0.15); this.tone(880, 0.12, 0.3); },
+  fanfare() { [523, 523, 659, 784, 659, 784, 1047].forEach((f, i) => this.tone(f, i * 0.14, 0.3)); }
+};
+
+let voice = null;
+function loadVoice() {
+  if (!('speechSynthesis' in window)) return;
+  const vs = speechSynthesis.getVoices().filter(v => v.lang && v.lang.toLowerCase().startsWith('en'));
+  voice = vs.find(v => /samantha|female|google us english|zira|aria/i.test(v.name)) || vs[0] || null;
+}
+if ('speechSynthesis' in window) { loadVoice(); speechSynthesis.onvoiceschanged = loadVoice; }
+
+function speak(text) {
+  if (!Sfx.on || !('speechSynthesis' in window)) return;
+  try {
+    speechSynthesis.cancel();                      // newest instruction always wins
+    const u = new SpeechSynthesisUtterance(text);
+    if (voice) u.voice = voice;
+    u.lang = 'en-US'; u.rate = 0.9; u.pitch = 1.25;
+    speechSynthesis.speak(u);
+  } catch (e) { /* ignore */ }
+}
+
+/* =====================================================================
+   TRACKING SYSTEM (webcam + MediaPipe Pose Landmarker)
+   ---------------------------------------------------------------------
+   COORDINATES: MediaPipe gives x from 0 (left edge of the RAW camera
+   image) to 1 (right edge). The camera faces the child, so in the raw
+   image the child's LEFT side is on the image's RIGHT. We show the video
+   mirrored, and we convert every x to "mirrored x":
+
+        mirroredX = 1 - rawX
+
+   In mirrored space: when the child steps to THEIR left, mirroredX gets
+   smaller and they move to the LEFT of the screen. So child-left equals
+   screen-left everywhere in this game. Only Tracker.x (mirrored) is used
+   by the game logic.
+   ===================================================================== */
+const MP_URL    = 'https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.14/vision_bundle.mjs';
+const WASM_URL  = 'https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.14/wasm';
+const MODEL_URL = 'https://storage.googleapis.com/mediapipe-models/pose_landmarker/pose_landmarker_lite/float16/1/pose_landmarker_lite.task';
+
+const Tracker = {
+  video: $('#video'),
+  stream: null,
+  landmarker: null,
+  lastVideoTime: -1,
+  lastDetect: 0,
+  lastSeen: -99999,   // time (ms) of the last valid pose
+  present: false,     // true when a pose was seen very recently
+  seenFor: 0,         // seconds continuously visible
+  lostFor: 0,         // seconds continuously not visible
+  x: 0.5,             // smoothed MIRRORED x of the body centre (0 = screen left)
+  shoulderW: 0.15,    // smoothed shoulder width, used as a "body size" unit
+  lm: null            // smoothed mirrored landmarks, for drawing
+};
+
+async function initCamera() {
+  if (Tracker.stream) return;
+  if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+    const e = new Error('nocam'); e.name = 'NoMediaDevices'; throw e;
+  }
+  const stream = await navigator.mediaDevices.getUserMedia({
+    video: { width: { ideal: 640 }, height: { ideal: 480 }, facingMode: 'user' }, audio: false
+  });
+  Tracker.stream = stream;
+  Tracker.video.srcObject = stream;
+  await new Promise(res => {
+    if (Tracker.video.readyState >= 1) res(); else Tracker.video.onloadedmetadata = () => res();
+  });
+  await Tracker.video.play();
+  const ar = (Tracker.video.videoWidth || 4) / (Tracker.video.videoHeight || 3);
+  document.documentElement.style.setProperty('--ar', ar.toFixed(4));
+}
+
+async function initModel() {
+  if (Tracker.landmarker) return;
+  const vision = await import(MP_URL);
+  const fileset = await vision.FilesetResolver.forVisionTasks(WASM_URL);
+  const opts = delegate => ({
+    baseOptions: { modelAssetPath: MODEL_URL, delegate },
+    runningMode: 'VIDEO', numPoses: 1,
+    minPoseDetectionConfidence: 0.4, minPosePresenceConfidence: 0.4, minTrackingConfidence: 0.4
+  });
+  try { Tracker.landmarker = await vision.PoseLandmarker.createFromOptions(fileset, opts('GPU')); }
+  catch (e) { Tracker.landmarker = await vision.PoseLandmarker.createFromOptions(fileset, opts('CPU')); }
+}
+
+/* Runs once per animation frame. Detects the pose and updates Tracker. */
+function trackFrame(now, dt) {
+  const v = Tracker.video;
+  if (Tracker.landmarker && v.readyState >= 2 && v.currentTime !== Tracker.lastVideoTime) {
+    Tracker.lastVideoTime = v.currentTime;
+    let res = null;
+    try { res = Tracker.landmarker.detectForVideo(v, now); } catch (e) { res = null; }
+    const pose = res && res.landmarks && res.landmarks[0];
+    if (pose) {
+      const ls = pose[11], rs = pose[12];               // shoulders
+      const vis = p => (p.visibility === undefined ? 1 : p.visibility);
+      if (vis(ls) > 0.45 && vis(rs) > 0.45) {
+        // --- MIRROR HERE: raw x -> mirrored x ---
+        const mx = 1 - (ls.x + rs.x) / 2;               // body centre = middle of the shoulders
+        const sw = Math.abs(ls.x - rs.x);
+        const gap = (now - Tracker.lastSeen) / 1000;
+        const step = Math.min(0.2, (now - Tracker.lastDetect) / 1000);
+        if (gap > 0.6) {                                // just came back: snap, do not glide
+          Tracker.x = mx; Tracker.shoulderW = sw; Tracker.lm = null;
+        } else {
+          // Time-based exponential smoothing to remove jitter
+          const a = 1 - Math.exp(-step / 0.11);
+          Tracker.x += (mx - Tracker.x) * a;
+          Tracker.shoulderW += (sw - Tracker.shoulderW) * (1 - Math.exp(-step / 0.4));
+        }
+        // Smoothed mirrored landmarks for the skeleton drawing
+        const fresh = pose.map(p => ({ x: 1 - p.x, y: p.y, v: vis(p) }));
+        if (!Tracker.lm) Tracker.lm = fresh;
+        else for (let i = 0; i < fresh.length; i++) {
+          Tracker.lm[i].x += (fresh[i].x - Tracker.lm[i].x) * 0.5;
+          Tracker.lm[i].y += (fresh[i].y - Tracker.lm[i].y) * 0.5;
+          Tracker.lm[i].v = fresh[i].v;
+        }
+        Tracker.lastSeen = now;
+      }
+    }
+    Tracker.lastDetect = now;
+  }
+  Tracker.present = (now - Tracker.lastSeen) < 500;
+  if (Tracker.present) { Tracker.seenFor += dt; Tracker.lostFor = 0; }
+  else { Tracker.lostFor += dt; Tracker.seenFor = 0; }
+}
+
+/* Draws the stick figure on top of the camera preview (in mirrored space). */
+const BONES = [[11,12],[11,13],[13,15],[12,14],[14,16],[11,23],[12,24],[23,24],[23,25],[25,27],[24,26],[26,28]];
+function drawPreview() {
+  const box = $('#cam'), c = $('#camCanvas');
+  if (box.classList.contains('hidden')) return;
+  const w = box.clientWidth, h = box.clientHeight, dpr = window.devicePixelRatio || 1;
+  if (c.width !== Math.round(w * dpr) || c.height !== Math.round(h * dpr)) {
+    c.width = Math.round(w * dpr); c.height = Math.round(h * dpr);
+  }
+  const g = c.getContext('2d');
+  g.setTransform(dpr, 0, 0, dpr, 0, 0);
+  g.clearRect(0, 0, w, h);
+
+  if (view === 'calib') {                               // "stand here" guide
+    g.setLineDash([14, 10]); g.lineWidth = 5; g.lineJoin = 'round';
+    g.strokeStyle = Calib.ok ? '#22C55E' : '#ffffff';
+    g.strokeRect(w * 0.3, h * 0.06, w * 0.4, h * 0.9);
+    g.setLineDash([]);
+  }
+  if (!Tracker.present || !Tracker.lm) return;
+  const lm = Tracker.lm, s = Math.max(2, w / 110);
+  g.lineCap = 'round'; g.strokeStyle = '#ffffff'; g.lineWidth = s * 1.6;
+  for (const [a, b] of BONES) {
+    if (lm[a].v < 0.4 || lm[b].v < 0.4) continue;
+    g.beginPath(); g.moveTo(lm[a].x * w, lm[a].y * h); g.lineTo(lm[b].x * w, lm[b].y * h); g.stroke();
+  }
+  if (lm[0].v > 0.4) {                                  // friendly round head
+    g.beginPath(); g.arc(lm[0].x * w, lm[0].y * h, Math.max(8, Tracker.shoulderW * w * 0.38), 0, 7);
+    g.fillStyle = 'rgba(255,212,59,.75)'; g.fill(); g.stroke();
+  }
+  // Body centre marker: this is the point the game follows
+  const cy = (lm[11].y + lm[12].y) / 2 * h;
+  g.beginPath(); g.arc(Tracker.x * w, cy, s * 3, 0, 7);
+  g.fillStyle = '#22C55E'; g.fill(); g.lineWidth = s; g.stroke();
+}
+
+/* =====================================================================
+   GAME LOGIC
+   ===================================================================== */
+const ROUND_STEPS = [1, 1, 1, 2, 2, 2, 3, 3];   // moves per round: single first, then combos
+const LANE_GAP = 26;                            // % of screen width between Pip's three spots
+const LEAN_PCT = 9;                             // how far Pip leans along with the child
+const TREATS = ['🍎', '🍓', '🍌', '🥕', '🍇', '🍉'];
+const PRAISE = ['Yes!', 'Great!', 'Super!', 'Wow!', 'You got it!', 'Yay!'];
+
+let view = 'welcome';         // which screen is showing
+let paused = false;           // manual pause
+let lostPaused = false;       // automatic pause when tracking is lost
+
+const Calib = { hold: 0, ok: false, lastKey: '', lastSpoke: 0 };
+
+const G = {
+  phase: 'idle', t: 0,
+  round: 0, steps: [], stepIdx: 0,
+  lane: 0,                    // Pip's spot: -1 left, 0 middle, 1 right
+  centerX: 0.5,               // calibrated middle (mirrored x)
+  anchorX: 0.5,               // where the child stood when the command was given
+  stars: 0, streak: 0, best: 0,
+  firstTry: true, oops: false, hint: 0, hold: 0, nag: 0, introDur: 1.5,
+  charX: 50
+};
+
+const dirName = d => (d === 'L' ? 'left' : 'right');
+const dirSign = d => (d === 'L' ? -1 : 1);       // mirrored space: left = smaller x
+
+/* How far the child must move. It scales with body size on camera, so it
+   works near or far, and it is small on purpose: one step or a big lean. */
+function moveThreshold() {
+  const base = clamp(Tracker.shoulderW * 0.6, 0.05, 0.12);
+  return G.hint >= 2 ? base * 0.55 : base;       // even easier after a long wait
+}
+
+/* ---------- Calibration ---------- */
+function goCalibration() {
+  paused = false; lostPaused = false;
+  Calib.hold = 0; Calib.ok = false; Calib.lastKey = ''; Calib.lastSpoke = 0;
+  Confetti.stop();
+  showView('calib');
+  speak('Stand in the middle so I can see you!');
+  Calib.lastSpoke = performance.now();
+}
+
+function updateCalib(dt, now) {
+  let key, msg, say;
+  if (!Tracker.present)              { key = 'none';  msg = 'I can’t see you. Step back!';   say = 'I can\'t see you. Step back so I can see you!'; }
+  else if (Tracker.shoulderW > 0.42) { key = 'close'; msg = 'Too close! Take a big step back.'; say = 'Take a big step back!'; }
+  else if (Tracker.shoulderW < 0.035){ key = 'far';   msg = 'Come a little closer.';            say = 'Come a little closer!'; }
+  // Mirrored view: child on the left of the screen must walk toward the right of the screen
+  else if (Tracker.x < 0.36)         { key = 'goR';   msg = 'Step this way ➡';                  say = 'Step this way!'; }
+  else if (Tracker.x > 0.64)         { key = 'goL';   msg = '⬅ Step this way';                  say = 'Step this way!'; }
+  else                               { key = 'ok';    msg = 'Perfect! Stay there…';             say = ''; }
+
+  Calib.ok = key === 'ok';
+  Calib.hold = Calib.ok ? Calib.hold + dt : Math.max(0, Calib.hold - dt * 2);
+  $('#calibMsg').textContent = msg;
+  $('#calibBar').style.width = clamp(Calib.hold / 1.5, 0, 1) * 100 + '%';
+
+  const since = now - Calib.lastSpoke;
+  if (say && ((key !== Calib.lastKey && since > 2500) || since > 7000)) { speak(say); Calib.lastSpoke = now; }
+  Calib.lastKey = key;
+
+  if (Calib.hold >= 1.5) {                       // visible and centred long enough
+    G.centerX = Tracker.x;
+    Sfx.ready();
+    startGame();
+  }
+}
+
+/* ---------- Game flow ---------- */
+function startGame() {
+  Object.assign(G, { stars: 0, streak: 0, best: 0, lane: 0, charX: 50, round: 0, steps: [], stepIdx: 0 });
+  showView('game');
+  updateHUD();
+  beginRound(0);
+}
+
+function beginRound(i) {
+  G.round = i; G.lane = 0;
+  if (i === 0) enterIntro(); else enterCenter();
+}
+
+/* Between rounds the child walks back to the middle, so every move stays short. */
+function enterCenter() {
+  G.phase = 'center'; G.t = 0; G.hold = 0; G.nag = 0; G.steps = [];
+  setBanner('Back to the middle!', true);
+  renderChips(); hideCommand();
+  speak('Come back to the middle!');
+}
+
+function makeSteps(n) {
+  // Pip has three spots (left, middle, right). A sequence never leaves them,
+  // so the child never has to travel far: e.g. LEFT, RIGHT, LEFT.
+  const out = []; let lane = 0;
+  for (let k = 0; k < n; k++) {
+    let d;
+    if (lane < 0) d = 'R';
+    else if (lane > 0) d = 'L';
+    else if (k === 0) {
+      d = G.round === 0 ? 'L' : G.round === 1 ? 'R' : pick(['L', 'R']);
+      if (Tracker.x < 0.38) d = 'R';             // keep the child inside the camera view
+      if (Tracker.x > 0.62) d = 'L';
+    } else d = pick(['L', 'R']);
+    out.push(d); lane += dirSign(d);
+  }
+  return out;
+}
+
+function enterIntro() {
+  G.steps = makeSteps(ROUND_STEPS[G.round]); G.stepIdx = 0;
+  G.phase = 'intro'; G.t = 0;
+  updateHUD(); renderChips(-1); hideCommand();
+  setBanner('Round ' + (G.round + 1), false);
+  if (G.round === 0) { speak('Round 1. Help Pip get the treats!'); G.introDur = 2.8; }
+  else if (G.steps.length === 1) { speak('Round ' + (G.round + 1) + '!'); G.introDur = 1.5; }
+  else {
+    const seq = G.steps.map(dirName).join(', then ');
+    speak('Round ' + (G.round + 1) + '. ' + seq.charAt(0).toUpperCase() + seq.slice(1) + '!');
+    G.introDur = 1.4 + 0.9 * G.steps.length;
+  }
+}
+
+function enterCommand() {
+  const d = G.steps[G.stepIdx];
+  G.phase = 'command'; G.t = 0;
+  G.anchorX = Tracker.x;                         // every move is measured from where the child is now
+  G.firstTry = true; G.oops = false; G.hint = 0;
+  showCommand(d);
+  renderChips(G.stepIdx);
+  speak(G.stepIdx === 0 ? 'Move ' + dirName(d) + '!' : 'Now ' + dirName(d) + '!');
+}
+
+function stepSuccess() {
+  const d = G.steps[G.stepIdx];
+  G.lane = clamp(G.lane + dirSign(d), -1, 1);    // Pip hops to the treat
+  G.stars++;
+  let bonus = false;
+  if (G.firstTry) {
+    G.streak++;
+    if (G.streak % 3 === 0) { G.stars++; bonus = true; }   // streak bonus star
+  }
+  G.best = Math.max(G.best, G.streak);
+  G.phase = 'success'; G.t = 0;
+
+  Sfx.success(); if (bonus) Sfx.bonus();
+  hideCommand(); eatTreat();
+  setBanner(bonus ? 'Bonus star! ⭐' : pick(['YES!', 'YAY!', 'SUPER!']), false);
+  burst(50 + G.lane * LANE_GAP, bonus ? 16 : 10);
+  animateChar('hop');
+  renderChips(G.stepIdx + 1);
+  updateHUD(true);
+  speak(bonus ? 'Bonus star!' : pick(PRAISE));
+}
+
+function stepSkip() {                            // waited a long time: move on kindly, no penalty
+  G.streak = 0;
+  G.phase = 'success'; G.t = 0;
+  hideCommand(); $('#treat').classList.remove('show');
+  setBanner('Let’s try another one!', true);
+  updateHUD();
+  speak('Let\'s try another one!');
+}
+
+function afterStep() {
+  if (G.stepIdx + 1 < G.steps.length) { G.stepIdx++; enterCommand(); return; }
+  G.phase = 'roundEnd'; G.t = 0;
+  if (G.steps.length > 1) { setBanner('Great job!', false); speak('Great job!'); }
+  else G.t = 1;                                  // single moves: go on quickly
+}
+
+function finishGame() {
+  G.phase = 'done';
+  showView('final');
+  $('#finalStars').textContent = '⭐ × ' + G.stars;
+  $('#finalText').textContent = 'Best streak: 🔥 ' + G.best + '.  You know left and right!';
+  Sfx.fanfare(); Confetti.start();
+  speak('You did it! You got ' + G.stars + ' stars! Great moving!');
+}
+
+/* Runs every frame while the game is not paused. */
+function updateGame(dt) {
+  G.t += dt;
+  const T = moveThreshold();
+
+  switch (G.phase) {
+    case 'center': {
+      G.nag += dt;
+      const near = Math.abs(Tracker.x - G.centerX) < T * 0.9;
+      G.hold = near ? G.hold + dt : 0;
+      const safe = Tracker.x > 0.27 && Tracker.x < 0.73;      // close enough is fine
+      if (G.hold > 0.35 || (G.t > 6 && safe)) enterIntro();
+      else if (G.nag > 6) { G.nag = 0; speak('Come back to the middle!'); }
+      break;
+    }
+    case 'intro':
+      if (G.t > G.introDur) enterCommand();
+      break;
+
+    case 'command': {
+      const d = G.steps[G.stepIdx], want = dirSign(d);
+      const moved = (Tracker.x - G.anchorX) * want;           // > 0 means the right way
+      if (moved >= T) { stepSuccess(); break; }
+
+      // After a wrong-way move, the start point follows the child, so
+      // simply coming back the right way is enough.
+      if (G.oops && moved < 0) G.anchorX = Tracker.x;
+
+      if (!G.oops && moved <= -T * 1.15) {                    // went the other way: gentle help
+        G.oops = true; G.firstTry = false; G.anchorX = Tracker.x;
+        Sfx.oops(); animateChar('wobble');
+        $('#arrow').classList.add('hint');
+        speak('Oops! Other way. ' + (d === 'L' ? 'Left' : 'Right') + ' is this way!');
+      }
+      if (G.hint === 0 && G.t > 7) {
+        G.hint = 1; $('#arrow').classList.add('hint');
+        speak('This way! Move ' + dirName(d) + '!');
+      } else if (G.hint === 1 && G.t > 14) {
+        G.hint = 2; speak('Take a step this way!');
+      } else if (G.t > 23) stepSkip();
+      break;
+    }
+    case 'success':
+      if (G.t > 1.25) afterStep();
+      break;
+
+    case 'roundEnd':
+      if (G.t > 1.6) {
+        if (G.round + 1 < ROUND_STEPS.length) beginRound(G.round + 1); else finishGame();
+      }
+      break;
+  }
+}
+
+/* ---------- Pause handling ---------- */
+function setPaused(p) {
+  if (view !== 'game' || G.phase === 'done') return;
+  paused = p;
+  $('#ovPause').classList.toggle('show', p);
+  if (p) { if ('speechSynthesis' in window) speechSynthesis.cancel(); }
+  else onResume();
+}
+
+function onResume() {
+  if (G.phase === 'command') {                   // start the move again from where the child is now
+    G.anchorX = Tracker.x; G.t = Math.min(G.t, 6);
+    speak('Move ' + dirName(G.steps[G.stepIdx]) + '!');
+  } else if (G.phase === 'center') speak('Come back to the middle!');
+}
+
+function handleTrackingLoss() {
+  if (paused) return;
+  if (!lostPaused && Tracker.lostFor > 1.3) {
+    lostPaused = true;
+    $('#ovLost').classList.add('show');
+    speak('I can\'t see you. Step back so I can see you!');
+  } else if (lostPaused && Tracker.seenFor > 0.6) {
+    lostPaused = false;
+    $('#ovLost').classList.remove('show');
+    onResume();
+  }
+}
+
+/* =====================================================================
+   UI: screens, HUD, arrow, character, effects
+   ===================================================================== */
+function showView(name) {
+  view = name;
+  document.querySelectorAll('.screen').forEach(s => s.classList.toggle('show', s.id === 'scr-' + name));
+  const cam = $('#cam');
+  cam.classList.toggle('hidden', !(name === 'calib' || name === 'game'));
+  cam.classList.toggle('big', name === 'calib');
+  cam.classList.toggle('small', name === 'game');
+  $('#ovPause').classList.remove('show');
+  $('#ovLost').classList.remove('show');
+}
+
+function updateHUD(pop) {
+  $('#hudStars').textContent = '⭐ ' + G.stars;
+  $('#hudStreak').textContent = '🔥 ' + G.streak;
+  $('#hudRound').textContent = 'Round ' + (G.round + 1) + ' / ' + ROUND_STEPS.length;
+  if (pop) { const e = $('#hudStars'); e.classList.remove('pop'); void e.offsetWidth; e.classList.add('pop'); }
+}
+
+function setBanner(text, small) {
+  const c = $('#cmd');
+  c.textContent = text; c.className = small ? 'small' : '';
+}
+
+function showCommand(d) {
+  const c = $('#cmd');
+  c.textContent = 'MOVE ' + dirName(d).toUpperCase() + '!';
+  c.className = d;
+  $('#arrow').className = 'show ' + d;
+  $('#glowL').classList.toggle('on', d === 'L'); $('#glowR').classList.toggle('on', d === 'R');
+  $('#signL').classList.toggle('on', d === 'L'); $('#signR').classList.toggle('on', d === 'R');
+  // The treat waits on the side the child must move to
+  const t = $('#treat');
+  t.textContent = pick(TREATS);
+  t.style.left = (50 + clamp(G.lane + dirSign(d), -1, 1) * LANE_GAP) + '%';
+  t.classList.add('show');
+  // Pip looks toward the treat
+  document.querySelectorAll('#charIn .pupils').forEach(p => p.style.transform = 'translateX(' + dirSign(d) * 6 + 'px)');
+}
+
+function hideCommand() {
+  $('#arrow').className = '';
+  ['#glowL', '#glowR', '#signL', '#signR'].forEach(s => $(s).classList.remove('on'));
+  document.querySelectorAll('#charIn .pupils').forEach(p => p.style.transform = '');
+}
+
+function eatTreat() { $('#treat').classList.remove('show'); }
+
+function renderChips(current) {
+  const box = $('#chips'); box.innerHTML = '';
+  if (!G.steps || G.steps.length < 2) return;    // only for combo rounds
+  G.steps.forEach((d, i) => {
+    const el = document.createElement('div');
+    el.className = 'chip ' + d + (i < current ? ' done' : i === current ? ' now' : '');
+    el.textContent = i < current ? '✓' : (d === 'L' ? '⬅' : '➡');
+    box.appendChild(el);
+  });
+}
+
+function animateChar(cls) {
+  const e = $('#charIn');
+  e.classList.remove('hop', 'wobble'); void e.offsetWidth; e.classList.add(cls);
+}
+
+function burst(xPct, n) {
+  const layer = $('#fx');
+  for (let i = 0; i < n; i++) {
+    const s = document.createElement('span');
+    s.className = 'star'; s.textContent = i % 3 === 2 ? '✨' : '⭐';
+    const ang = Math.PI * (0.1 + 0.8 * (i / (n - 1)));
+    const dist = 12 + Math.random() * 14;
+    s.style.left = xPct + '%';
+    s.style.setProperty('--dx', (Math.cos(ang) * dist) + 'vmin');
+    s.style.setProperty('--dy', (-Math.sin(ang) * dist - 8) + 'vmin');
+    s.addEventListener('animationend', () => s.remove());
+    layer.appendChild(s);
+  }
+}
+
+/* Per-frame drawing of the things that follow the child's body. */
+function renderGame(dt) {
+  const T = moveThreshold();
+
+  // Pip follows the child: he leans with small movements and hops on success
+  let lean = 0;
+  if (G.phase === 'command') lean = clamp((Tracker.x - G.anchorX) / T, -1, 1) * LEAN_PCT;
+  else if (G.phase === 'center') lean = clamp((Tracker.x - G.centerX) / T, -1.3, 1.3) * LANE_GAP * 0.8;
+  const target = 50 + G.lane * LANE_GAP + lean;
+  G.charX += (target - G.charX) * (1 - Math.exp(-dt / 0.1));    // interpolation, no jumps
+  $('#char').style.left = G.charX + '%';
+
+  // Position bar: child marker + coloured goal zone (all in mirrored space)
+  $('#kid').style.left = clamp(Tracker.x, 0.03, 0.97) * 100 + '%';
+  const z = $('#zone');
+  if (G.phase === 'command') {
+    const d = G.steps[G.stepIdx];
+    if (d === 'L') { z.style.left = '0%'; z.style.width = clamp(G.anchorX - T, 0, 1) * 100 + '%'; }
+    else { const l = clamp(G.anchorX + T, 0, 1) * 100; z.style.left = l + '%'; z.style.width = (100 - l) + '%'; }
+    z.className = d;
+  } else if (G.phase === 'center') {
+    z.style.left = clamp(G.centerX - T * 0.9, 0, 1) * 100 + '%';
+    z.style.width = T * 1.8 * 100 + '%';
+    z.className = 'C';
+  } else z.className = '';
+}
+
+/* ---------- Confetti for the final screen ---------- */
+const Confetti = {
+  parts: [], on: false, canvas: $('#confetti'),
+  resize() { this.canvas.width = innerWidth; this.canvas.height = innerHeight; },
+  start() {
+    this.resize(); this.on = true; this.parts = [];
+    const cols = ['#3B82F6', '#F97316', '#22C55E', '#FFD43B', '#FF9EB5'];
+    for (let i = 0; i < 140; i++) this.parts.push({
+      x: Math.random() * innerWidth, y: -Math.random() * innerHeight,
+      s: 8 + Math.random() * 10, vy: 90 + Math.random() * 130, vx: -30 + Math.random() * 60,
+      r: Math.random() * 6, vr: -3 + Math.random() * 6, c: pick(cols)
+    });
+  },
+  stop() { this.on = false; this.canvas.getContext('2d').clearRect(0, 0, this.canvas.width, this.canvas.height); },
+  update(dt) {
+    if (!this.on) return;
+    const g = this.canvas.getContext('2d');
+    g.clearRect(0, 0, this.canvas.width, this.canvas.height);
+    for (const p of this.parts) {
+      p.y += p.vy * dt; p.x += p.vx * dt; p.r += p.vr * dt;
+      if (p.y > innerHeight + 20) { p.y = -20; p.x = Math.random() * innerWidth; }
+      g.save(); g.translate(p.x, p.y); g.rotate(p.r);
+      g.fillStyle = p.c; g.fillRect(-p.s / 2, -p.s / 4, p.s, p.s / 2); g.restore();
+    }
+  }
+};
+addEventListener('resize', () => { if (Confetti.on) Confetti.resize(); });
+
+/* =====================================================================
+   MAIN LOOP
+   ===================================================================== */
+let lastFrame = 0, loopRunning = false;
+function loop(now) {
+  const dt = Math.min(0.1, (now - lastFrame) / 1000 || 0);
+  lastFrame = now;
+
+  trackFrame(now, dt);                           // tracking system
+  drawPreview();
+
+  if (view === 'calib') updateCalib(dt, now);    // game logic
+  else if (view === 'game') {
+    handleTrackingLoss();
+    if (!paused && !lostPaused) updateGame(dt);
+    if (view === 'game') renderGame(dt);         // UI
+  }
+  Confetti.update(dt);
+  requestAnimationFrame(loop);
+}
+
+/* =====================================================================
+   STARTUP, PERMISSIONS AND BUTTONS
+   ===================================================================== */
+async function boot() {
+  Sfx.init();
+  showView('loading');
+  try {
+    await initCamera();
+  } catch (e) {
+    const n = e && e.name;
+    let title = 'I need the camera to play', text = 'Something went wrong with the camera. Please try again.';
+    if (n === 'NotAllowedError' || n === 'SecurityError')
+      text = 'Please ask a grown-up to allow the camera for this page, then press Try again.';
+    else if (n === 'NotFoundError' || n === 'OverconstrainedError') { title = 'I can’t find a camera'; text = 'Please plug in a webcam, then press Try again.'; }
+    else if (n === 'NotReadableError') { title = 'The camera is busy'; text = 'Close other apps that use the camera, then press Try again.'; }
+    else if (n === 'NoMediaDevices') text = 'This browser cannot open the camera here. Open the page in Chrome or Edge, or serve it from http://localhost.';
+    $('#errTitle').textContent = title; $('#errText').textContent = text;
+    showView('error'); return;
+  }
+  try {
+    await initModel();
+  } catch (e) {
+    $('#errTitle').textContent = 'I could not load my eyes';
+    $('#errText').textContent = 'The body tracking could not be downloaded. Check the internet connection, then press Try again.';
+    showView('error'); return;
+  }
+  if (!loopRunning) { loopRunning = true; lastFrame = performance.now(); requestAnimationFrame(loop); }
+  goCalibration();
+}
+
+$('#btnStart').onclick = boot;
+$('#btnRetry').onclick = boot;
+$('#btnAgain').onclick = goCalibration;
+$('#btnRestart').onclick = goCalibration;
+$('#btnRestart2').onclick = goCalibration;
+$('#btnPause').onclick = () => setPaused(true);
+$('#btnResume').onclick = () => setPaused(false);
+$('#btnSound').onclick = () => {
+  Sfx.on = !Sfx.on;
+  $('#btnSound').textContent = Sfx.on ? '🔊' : '🔇';
+  if (!Sfx.on && 'speechSynthesis' in window) speechSynthesis.cancel();
+};
+addEventListener('keydown', e => {
+  if (view !== 'game') return;
+  if (e.code === 'Space' || e.key === 'p' || e.key === 'P') { e.preventDefault(); setPaused(!paused); }
+});
+document.addEventListener('visibilitychange', () => { if (document.hidden && view === 'game' && !paused) setPaused(true); });
+</script>
+</body>
+</html>

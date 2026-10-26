@@ -1,0 +1,1037 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no">
+<title>Growing Plant</title>
+<style>
+/* ===================================================================
+   UI STYLES
+   =================================================================== */
+:root{
+  --sat: env(safe-area-inset-top, 0px);
+  --sar: env(safe-area-inset-right, 0px);
+  --sab: env(safe-area-inset-bottom, 0px);
+  --sal: env(safe-area-inset-left, 0px);
+  --camAR: 1.3333;
+}
+*{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+html,body{
+  margin:0;height:100%;width:100%;overflow:hidden;background:#8fd3ff;
+  font-family:"Comic Sans MS","Chalkboard SE","Baloo 2","Trebuchet MS",system-ui,sans-serif;
+  touch-action:manipulation;user-select:none;-webkit-user-select:none;
+}
+#scene{position:fixed;inset:0;width:100%;height:100%;display:block;z-index:0}
+
+/* ---------- HUD ---------- */
+#hud{
+  position:fixed;left:0;right:0;top:0;z-index:5;display:none;
+  flex-direction:column;align-items:center;gap:clamp(.25rem,1.2vmin,.6rem);
+  padding:calc(var(--sat) + .5rem) calc(var(--sar) + .6rem) 0 calc(var(--sal) + .6rem);
+  pointer-events:none;
+}
+body.play #hud{display:flex}
+#hudRow{width:100%;display:flex;align-items:center;justify-content:space-between;gap:.4rem;flex-wrap:wrap}
+.pill{
+  background:rgba(255,255,255,.88);border-radius:999px;padding:.25em .7em;
+  font-size:clamp(1rem,4.2vmin,2.1rem);font-weight:900;color:#444;
+  box-shadow:0 .15em 0 rgba(0,0,0,.12);white-space:nowrap;
+}
+#stages{display:flex;gap:.15em}
+.stage{opacity:.3;filter:grayscale(1);transition:all .4s;display:inline-block}
+.stage.on{opacity:1;filter:none;transform:scale(1.15)}
+#btns{display:flex;gap:.4rem;pointer-events:auto}
+.round{
+  width:clamp(44px,11vmin,72px);height:clamp(44px,11vmin,72px);border-radius:50%;border:0;
+  font-size:clamp(1.2rem,5vmin,2.2rem);background:#fff;cursor:pointer;
+  box-shadow:0 .15em 0 rgba(0,0,0,.2);line-height:1;padding:0;
+}
+.round:active{transform:translateY(2px)}
+#banner{
+  font-size:clamp(1.3rem,6vmin,3.6rem);font-weight:900;line-height:1.12;text-align:center;
+  color:#2b6d2b;background:rgba(255,255,255,.9);border-radius:1em;padding:.25em .8em;
+  max-width:min(94vw,1100px);box-shadow:0 .12em 0 rgba(0,0,0,.12);
+}
+#banner small{display:block;font-size:.6em;color:#557;font-weight:700}
+#meter{display:flex;gap:.3em;align-items:center;justify-content:center;
+  font-size:clamp(1.5rem,7vmin,3.6rem);min-height:1.1em}
+.dropIcon{opacity:.3;filter:grayscale(1);transition:all .25s;display:inline-block}
+.dropIcon.on{opacity:1;filter:none;transform:scale(1.2)}
+.bar{width:min(64vw,520px);height:clamp(18px,4.5vmin,36px);background:rgba(255,255,255,.6);
+  border-radius:999px;overflow:hidden;border:3px solid #fff}
+.bar>i{display:block;height:100%;width:0;border-radius:999px;transition:width .12s;
+  background:linear-gradient(90deg,#ffd54f,#ff9800)}
+
+/* big counting number */
+#pop{
+  position:fixed;left:50%;top:50%;transform:translate(-50%,-50%) scale(0);z-index:6;
+  font-size:clamp(5rem,32vmin,17rem);font-weight:900;color:#fff;pointer-events:none;opacity:0;
+  text-shadow:0 .06em 0 #1e88e5,0 0 .3em rgba(30,136,229,.6);
+}
+#pop.go{animation:pop 1s ease-out}
+@keyframes pop{0%{transform:translate(-50%,-50%) scale(.2);opacity:0}
+  25%{transform:translate(-50%,-50%) scale(1.15);opacity:1}
+  70%{transform:translate(-50%,-50%) scale(1);opacity:1}
+  100%{transform:translate(-50%,-60%) scale(1);opacity:0}}
+
+/* tap fallback button */
+#tapBtn{
+  display:none;position:fixed;left:50%;transform:translateX(-50%);z-index:6;
+  bottom:calc(var(--sab) + .8rem);width:clamp(84px,24vmin,170px);height:clamp(84px,24vmin,170px);
+  border-radius:50%;border:6px solid #fff;background:#ffb300;font-size:clamp(2.4rem,12vmin,5.5rem);
+  box-shadow:0 .12em 0 #c77800;cursor:pointer;line-height:1;padding:0;
+}
+#tapBtn:active{transform:translateX(-50%) translateY(4px)}
+body.tap.play #tapBtn{display:block}
+
+/* ---------- Camera preview ---------- */
+#cam{
+  position:fixed;z-index:8;visibility:hidden;
+  right:calc(var(--sar) + .6rem);bottom:calc(var(--sab) + .6rem);
+  width:clamp(96px,24vmin,240px);aspect-ratio:var(--camAR);
+  border-radius:16px;overflow:hidden;border:4px solid #fff;background:#234;
+  box-shadow:0 4px 14px rgba(0,0,0,.25);
+}
+body.play #cam, body.calib #cam{visibility:visible}
+body.tap #cam{visibility:hidden !important}
+body.calib #cam{
+  right:50%;bottom:50%;transform:translate(50%,50%);
+  width:min(80vw, calc(50vh * var(--camAR)));border-width:6px;border-radius:24px;
+}
+#video{width:100%;height:100%;object-fit:cover;transform:scaleX(-1);display:block}
+#camCanvas{position:absolute;inset:0;width:100%;height:100%}
+
+/* ---------- Overlays ---------- */
+.overlay{
+  position:fixed;inset:0;display:none;flex-direction:column;align-items:center;justify-content:center;
+  gap:clamp(.5rem,3vmin,1.6rem);text-align:center;z-index:30;background:rgba(191,233,255,.96);
+  padding:calc(var(--sat) + 1rem) calc(var(--sar) + 1rem) calc(var(--sab) + 1rem) calc(var(--sal) + 1rem);
+}
+.overlay.show{display:flex}
+h1{font-size:clamp(2rem,10vmin,6rem);margin:0;color:#2e7d32;text-shadow:0 .06em 0 #fff;line-height:1.05}
+h2{font-size:clamp(1.4rem,7vmin,3.6rem);margin:0;color:#2e7d32;text-shadow:0 .06em 0 #fff;line-height:1.1}
+p.big{font-size:clamp(1.1rem,4.6vmin,2.4rem);margin:0;color:#345;font-weight:700;max-width:22em}
+.emoji{font-size:clamp(3rem,16vmin,8rem);line-height:1}
+.bigbtn{
+  font:inherit;font-weight:900;font-size:clamp(1.3rem,6vmin,3.2rem);padding:.4em 1.2em;border:0;
+  border-radius:999px;background:#ffb300;color:#fff;box-shadow:0 .2em 0 #c77800;cursor:pointer;
+}
+.bigbtn.alt{background:#4caf50;box-shadow:0 .2em 0 #2e7d32}
+.bigbtn.soft{background:#fff;color:#555;box-shadow:0 .2em 0 rgba(0,0,0,.2)}
+.bigbtn:active{transform:translateY(.12em);box-shadow:0 .08em 0 rgba(0,0,0,.3)}
+.rowbtns{display:flex;gap:clamp(.5rem,3vmin,1.4rem);flex-wrap:wrap;justify-content:center}
+.bounce{animation:bounce 1.6s ease-in-out infinite}
+@keyframes bounce{0%,100%{transform:translateY(0)}50%{transform:translateY(-8%)}}
+
+#calibScreen{z-index:7;justify-content:space-between}
+#calibBarWrap{width:min(70vw,520px)}
+#lostScreen{z-index:7;background:rgba(191,233,255,.9)}
+#pauseScreen{z-index:20}
+#finalScreen{z-index:9;background:transparent;justify-content:flex-start;pointer-events:none}
+#finalCard{
+  pointer-events:auto;background:rgba(255,255,255,.9);border-radius:clamp(16px,4vmin,36px);
+  padding:clamp(.5rem,2.5vmin,1.4rem) clamp(.8rem,4vmin,2.4rem);display:flex;flex-direction:column;
+  align-items:center;gap:clamp(.3rem,1.6vmin,1rem);box-shadow:0 .3em 0 rgba(0,0,0,.1);max-width:94vw;
+}
+#finalStars{font-size:clamp(1.4rem,6.5vmin,3.4rem);letter-spacing:.05em}
+
+/* short landscape phones: keep things compact */
+@media (max-height:480px) and (orientation:landscape){
+  #banner{font-size:clamp(1.1rem,6.5vh,2rem)}
+  #banner small{display:inline;margin-left:.5em}
+  #meter{font-size:clamp(1.2rem,7vh,2rem)}
+  #finalCard{flex-direction:row;flex-wrap:wrap;justify-content:center}
+  h1{font-size:clamp(1.6rem,11vh,3rem)}
+}
+/* narrow portrait phones */
+@media (max-width:420px){ .pill{padding:.2em .5em} #hudRow{gap:.25rem} }
+/* large desktops */
+@media (min-width:1400px){ #cam{width:260px} }
+</style>
+</head>
+<body class="start">
+
+<canvas id="scene"></canvas>
+
+<!-- ======================= HUD ======================= -->
+<div id="hud">
+  <div id="hudRow">
+    <div class="pill" id="stars">⭐ 0</div>
+    <div class="pill" id="stages" aria-label="Plant progress"></div>
+    <div id="btns">
+      <button class="round" id="btnPause" aria-label="Pause">⏸️</button>
+      <button class="round" id="btnRestart" aria-label="Restart">🔄</button>
+    </div>
+  </div>
+  <div id="banner"></div>
+  <div id="meter"></div>
+</div>
+<div id="pop"></div>
+<button id="tapBtn" aria-label="Do the action">💧</button>
+
+<!-- ======================= CAMERA PREVIEW ======================= -->
+<div id="cam">
+  <video id="video" playsinline muted autoplay></video>
+  <canvas id="camCanvas" width="320" height="240"></canvas>
+</div>
+
+<!-- ======================= SCREENS ======================= -->
+<div class="overlay show" id="startScreen">
+  <div class="emoji bounce">🌱</div>
+  <h1>Growing Plant</h1>
+  <p class="big">Help a little seed grow with rain, sun and wind!</p>
+  <button class="bigbtn" id="btnStart">▶ Start</button>
+  <p class="big" style="font-size:clamp(.9rem,3.2vmin,1.4rem);opacity:.75">Grown-ups: please allow the camera.</p>
+</div>
+
+<div class="overlay" id="loadScreen">
+  <div class="emoji bounce">🌻</div>
+  <h2>Getting ready…</h2>
+  <p class="big">Waking up the camera!</p>
+</div>
+
+<div class="overlay" id="calibScreen">
+  <h2>Let me see you! 👋</h2>
+  <div>
+    <p class="big" id="calibMsg">Stand back so I can see you!</p>
+    <div id="calibBarWrap" style="margin:.5rem auto 0"><div class="bar" style="width:100%"><i id="calibBar" style="background:linear-gradient(90deg,#9be28a,#2e7d32)"></i></div></div>
+  </div>
+</div>
+
+<div class="overlay" id="errorScreen">
+  <div class="emoji">🙈</div>
+  <h2>Oops!</h2>
+  <p class="big" id="errorMsg">I can't use the camera.</p>
+  <div class="rowbtns">
+    <button class="bigbtn" id="btnRetry">Try again</button>
+    <button class="bigbtn alt" id="btnTapMode">Play by tapping</button>
+  </div>
+</div>
+
+<div class="overlay" id="lostScreen">
+  <div class="emoji bounce">👀</div>
+  <h2>I can't see you.</h2>
+  <p class="big">Step back so I can see you!</p>
+</div>
+
+<div class="overlay" id="pauseScreen">
+  <div class="emoji">😴</div>
+  <h2>Paused</h2>
+  <div class="rowbtns">
+    <button class="bigbtn" id="btnResume">▶ Play</button>
+    <button class="bigbtn soft" id="btnRestart2">🔄 Restart</button>
+  </div>
+</div>
+
+<div class="overlay" id="finalScreen">
+  <div id="finalCard">
+    <h1>You did it! 🎉</h1>
+    <div id="finalStars"></div>
+    <p class="big">You grew a beautiful plant!</p>
+    <button class="bigbtn" id="btnAgain">🔄 Play again</button>
+  </div>
+</div>
+
+<script>
+(() => {
+'use strict';
+const $ = id => document.getElementById(id);
+const clamp = (v, a = 0, b = 1) => Math.max(a, Math.min(b, v));
+const rnd = (a, b) => a + Math.random() * (b - a);
+
+/* ===================================================================
+   CONFIG  (all forgiving thresholds live here, easy to tune)
+   =================================================================== */
+const CFG = {
+  SMOOTH_POSE: 0.5,     // 0..1, higher = snappier, lower = smoother
+  SMOOTH_HAND: 0.55,
+  RAIN_DROP: 0.5,       // hand must move down this many "shoulder widths"
+  RAIN_REARM: 0.28,     // and come back up this much before the next drop
+  RAIN_GAP: 450,        // ms between drops (two hands together = one drop)
+  SUN_BOTH: 0.9,        // seconds with both hands up
+  SUN_ONE: 1.6,         // seconds with only one hand up (still counts)
+  WIND_TRAVEL: 7,       // total sideways travel, in shoulder widths
+  LOST_MS: 1500,        // no body for this long = friendly pause
+  CALIB_HOLD: 1.3       // seconds of good position before play starts
+};
+const POSE_URL = 'https://storage.googleapis.com/mediapipe-models/pose_landmarker/pose_landmarker_lite/float16/1/pose_landmarker_lite.task';
+const HAND_URL = 'https://storage.googleapis.com/mediapipe-models/hand_landmarker/hand_landmarker/float16/1/hand_landmarker.task';
+const MP_CDN = 'https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.14';
+
+const STEPS = [
+  { type: 'rain', need: 3, banner: '💧 Give the plant 3 drops of rain!', hint: 'Move your hands down ⬇️',
+    say: 'Give the plant 3 drops of rain. Move your hands down!', fact: 'Plants need water.', factBanner: '💧 Plants need water.' },
+  { type: 'sun', need: 1, banner: '☀️ Give the plant SUN!', hint: 'Reach up high 🙌',
+    say: 'Give the plant sun! Reach up high!', fact: 'Plants need sunlight.', factBanner: '☀️ Plants need sunlight.' },
+  { type: 'wind', need: 1, banner: '🍃 Make WIND!', hint: 'Wave your arms 👋',
+    say: 'Make wind! Wave your arms!', fact: 'Wind helps plants grow strong.', factBanner: '🍃 Wind helps plants grow strong.' },
+  { type: 'rain', need: 2, banner: '💧 Give the plant 2 more drops of rain!', hint: 'Move your hands down ⬇️',
+    say: 'Give the plant 2 more drops of rain.', fact: 'Water helps the plant grow big.', factBanner: '🌻 Water helps the plant grow big!' }
+];
+const STAGE_ICONS = ['🌰', '🌱', '🌿', '🌷', '🌻']; // seed, sprout, leaves, flower, full plant
+const STEP_EMOJI = { rain: '💧', sun: '☀️', wind: '🍃' };
+const EMOJI_FONT = '"Apple Color Emoji","Segoe UI Emoji","Noto Color Emoji",sans-serif';
+
+/* ===================================================================
+   AUDIO + VOICE
+   =================================================================== */
+const Snd = {
+  ctx: null,
+  init() {
+    try {
+      if (!this.ctx) { const A = window.AudioContext || window.webkitAudioContext; if (A) this.ctx = new A(); }
+      if (this.ctx && this.ctx.state === 'suspended') this.ctx.resume();
+    } catch (e) {}
+  },
+  tone(f, d, o = {}) {
+    if (!this.ctx) return;
+    try {
+      const t = this.ctx.currentTime + (o.at || 0);
+      const osc = this.ctx.createOscillator(), g = this.ctx.createGain();
+      osc.type = o.type || 'sine';
+      osc.frequency.setValueAtTime(f, t);
+      if (o.to) osc.frequency.exponentialRampToValueAtTime(o.to, t + d);
+      g.gain.setValueAtTime(0.0001, t);
+      g.gain.exponentialRampToValueAtTime(o.vol || 0.2, t + 0.02);
+      g.gain.exponentialRampToValueAtTime(0.0001, t + d);
+      osc.connect(g); g.connect(this.ctx.destination);
+      osc.start(t); osc.stop(t + d + 0.05);
+    } catch (e) {}
+  },
+  drop() { this.tone(1100, 0.2, { to: 480, vol: 0.25 }); },
+  tick(m) { this.tone(500 + m * 400, 0.1, { vol: 0.1, type: 'triangle' }); },
+  grow() { [523, 659, 784, 1047].forEach((f, i) => this.tone(f, 0.3, { at: i * 0.11, type: 'triangle', vol: 0.2 })); },
+  party() { [523, 659, 784, 1047, 784, 1047, 1319].forEach((f, i) => this.tone(f, 0.32, { at: i * 0.14, type: 'triangle', vol: 0.2 })); },
+  whoosh() {
+    if (!this.ctx) return;
+    try {
+      const c = this.ctx, len = Math.floor(c.sampleRate * 0.5), buf = c.createBuffer(1, len, c.sampleRate);
+      const d = buf.getChannelData(0);
+      for (let i = 0; i < len; i++) d[i] = (Math.random() * 2 - 1) * Math.sin(Math.PI * i / len);
+      const src = c.createBufferSource(), f = c.createBiquadFilter(), g = c.createGain();
+      src.buffer = buf; f.type = 'bandpass'; f.frequency.value = 700; f.Q.value = 0.8; g.gain.value = 0.12;
+      src.connect(f); f.connect(g); g.connect(c.destination); src.start();
+    } catch (e) {}
+  }
+};
+function say(text) {
+  try {
+    if (!('speechSynthesis' in window)) return;
+    speechSynthesis.cancel();
+    const u = new SpeechSynthesisUtterance(text);
+    u.lang = 'en-US'; u.rate = 0.9; u.pitch = 1.2;
+    speechSynthesis.speak(u);
+  } catch (e) {}
+}
+function hush() { try { speechSynthesis.cancel(); } catch (e) {} }
+
+/* ===================================================================
+   TRACKING SYSTEM  (webcam + MediaPipe Pose Landmarker + Hand Landmarker)
+   All coordinates are mirrored (x = 1 - x) so movement feels natural.
+   =================================================================== */
+const video = $('video'), camCanvas = $('camCanvas'), camCtx = camCanvas.getContext('2d');
+let poseLM = null, handLM = null, stream = null, lastVideoTime = -1, frameNo = 0;
+const mkHand = () => ({ ok: false, x: 0, y: 0, dx: 0, dy: 0, seenAt: 0, fresh: false });
+const T = {
+  pose: null, poseAt: 0,            // smoothed pose landmarks {x,y,v}
+  palms: [], palmsAt: 0,            // latest hands from the Hand Landmarker
+  hands: [mkHand(), mkHand()],      // two smoothed, tracked hand points
+  bodyOk: false, cx: 0.5, shoulderY: 0.4, sw: 0.2, scale: 0.26, bodyDx: 0,
+  lastSeen: 0, seenSince: 0, lastTrackAt: 0, dt: 0.033
+};
+const BONES = [[11, 12], [11, 13], [13, 15], [12, 14], [14, 16], [11, 23], [12, 24], [23, 24]];
+
+async function startCamera() {
+  if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+    const e = new Error('no camera api'); e.name = 'NotSupportedError'; throw e;
+  }
+  stopCamera();
+  stream = await navigator.mediaDevices.getUserMedia({
+    video: { facingMode: 'user', width: { ideal: 640 }, height: { ideal: 480 } }, audio: false
+  });
+  video.srcObject = stream;
+  await video.play();
+  const ar = (video.videoWidth || 640) / (video.videoHeight || 480);
+  document.documentElement.style.setProperty('--camAR', ar.toFixed(4));
+  camCanvas.width = 320; camCanvas.height = Math.round(320 / ar);
+}
+function stopCamera() {
+  if (stream) { stream.getTracks().forEach(t => t.stop()); stream = null; }
+}
+async function loadModels() {
+  if (poseLM && handLM) return;
+  const mp = await import(MP_CDN + '/vision_bundle.mjs');
+  const files = await mp.FilesetResolver.forVisionTasks(MP_CDN + '/wasm');
+  const make = async delegate => {
+    const p = await mp.PoseLandmarker.createFromOptions(files, {
+      baseOptions: { modelAssetPath: POSE_URL, delegate }, runningMode: 'VIDEO', numPoses: 1
+    });
+    const h = await mp.HandLandmarker.createFromOptions(files, {
+      baseOptions: { modelAssetPath: HAND_URL, delegate }, runningMode: 'VIDEO', numHands: 2
+    });
+    return [p, h];
+  };
+  try { [poseLM, handLM] = await make('GPU'); }
+  catch (e) { [poseLM, handLM] = await make('CPU'); }
+}
+
+/* Runs once per new video frame: detect, smooth, combine pose + hands */
+function trackFrame(now) {
+  if (!poseLM || !handLM || !stream || video.readyState < 2) return;
+  if (video.currentTime === lastVideoTime) return;
+  lastVideoTime = video.currentTime; frameNo++;
+  T.dt = clamp((now - T.lastTrackAt) / 1000, 0.001, 0.1); T.lastTrackAt = now;
+
+  let raw = null;
+  try {
+    const pr = poseLM.detectForVideo(video, now);
+    raw = pr && pr.landmarks && pr.landmarks[0];
+    if (frameNo % 2 === 0) { // hands every other frame keeps phones fast
+      const hr = handLM.detectForVideo(video, now);
+      T.palms = (hr.landmarks || []).map(l => ({
+        x: 1 - l[0].x, y: l[0].y, // wrist point, same anchor as the pose wrist
+        tips: [4, 8, 12, 16, 20].map(i => ({ x: 1 - l[i].x, y: l[i].y }))
+      }));
+      T.palmsAt = now;
+    }
+  } catch (e) { return; }
+
+  // --- smooth pose landmarks (exponential smoothing against jitter) ---
+  if (raw) {
+    if (!T.pose || now - T.poseAt > 500) {
+      T.pose = raw.map(p => ({ x: 1 - p.x, y: p.y, v: p.visibility == null ? 1 : p.visibility }));
+    } else {
+      for (let i = 0; i < raw.length; i++) {
+        const s = T.pose[i], p = raw[i];
+        s.x += (1 - p.x - s.x) * CFG.SMOOTH_POSE;
+        s.y += (p.y - s.y) * CFG.SMOOTH_POSE;
+        s.v = p.visibility == null ? 1 : p.visibility;
+      }
+    }
+    T.poseAt = now;
+  } else if (now - T.poseAt > 400) T.pose = null;
+
+  // --- body metrics from shoulders ---
+  const P = T.pose, wasOk = T.bodyOk;
+  T.bodyOk = false; T.bodyDx = 0;
+  if (P && P[11].v > 0.4 && P[12].v > 0.4) {
+    const cx = (P[11].x + P[12].x) / 2;
+    T.bodyDx = wasOk ? cx - T.cx : 0;
+    T.cx = cx;
+    T.shoulderY = (P[11].y + P[12].y) / 2;
+    T.sw = clamp(Math.abs(P[11].x - P[12].x), 0.06, 0.6);
+    const ar = (video.videoWidth || 4) / (video.videoHeight || 3);
+    T.scale = clamp(T.sw * ar, 0.1, 0.6); // shoulder width in vertical units
+    T.bodyOk = true;
+  }
+
+  // --- combine: pose wrists give identity, Hand Landmarker refines them ---
+  const cand = [null, null];
+  if (P) [15, 16].forEach((idx, i) => { if (P[idx].v > 0.35) cand[i] = { x: P[idx].x, y: P[idx].y }; });
+  const palms = (now - T.palmsAt < 350) ? T.palms.map(p => ({ x: p.x, y: p.y })) : [];
+  for (const pm of palms) {
+    let best = -1, bd = 0.22;
+    for (let i = 0; i < 2; i++) {
+      if (cand[i] && !cand[i].fine) {
+        const d = Math.hypot(cand[i].x - pm.x, cand[i].y - pm.y);
+        if (d < bd) { bd = d; best = i; }
+      }
+    }
+    if (best >= 0) { cand[best] = { x: pm.x, y: pm.y, fine: true }; pm.used = true; }
+  }
+  for (const pm of palms) { // hands seen without a matching pose wrist
+    if (pm.used) continue;
+    let best = -1, bd = 9;
+    for (let i = 0; i < 2; i++) {
+      if (!cand[i]) {
+        const h = T.hands[i], d = h.ok ? Math.hypot(h.x - pm.x, h.y - pm.y) : 1;
+        if (d < bd) { bd = d; best = i; }
+      }
+    }
+    if (best >= 0) cand[best] = { x: pm.x, y: pm.y, fine: true };
+  }
+  for (let i = 0; i < 2; i++) {
+    const h = T.hands[i], c = cand[i];
+    if (c) {
+      if (!h.ok || now - h.seenAt > 400) { h.x = c.x; h.y = c.y; h.dx = h.dy = 0; h.fresh = true; }
+      else {
+        const nx = h.x + (c.x - h.x) * CFG.SMOOTH_HAND, ny = h.y + (c.y - h.y) * CFG.SMOOTH_HAND;
+        h.dx = nx - h.x; h.dy = ny - h.y; h.x = nx; h.y = ny; h.fresh = false;
+      }
+      h.ok = true; h.seenAt = now;
+    } else {
+      h.dx = h.dy = 0;
+      if (now - h.seenAt > 400) h.ok = false;
+    }
+  }
+
+  // --- "is anybody there?" bookkeeping ---
+  if (T.bodyOk || palms.length || cand[0] || cand[1]) {
+    if (now - T.lastSeen > 300) T.seenSince = now;
+    T.lastSeen = now;
+  }
+
+  drawPreview();
+  onTrack(now); // hand the fresh data to the game logic
+}
+
+/* Skeleton + hand dots on top of the small camera preview */
+function drawPreview() {
+  const c = camCtx, w = camCanvas.width, h = camCanvas.height, P = T.pose;
+  c.clearRect(0, 0, w, h);
+  if (P) {
+    c.lineWidth = 5; c.lineCap = 'round'; c.strokeStyle = 'rgba(120,255,160,.9)';
+    for (const [a, b] of BONES) {
+      if (P[a].v > 0.35 && P[b].v > 0.35) {
+        c.beginPath(); c.moveTo(P[a].x * w, P[a].y * h); c.lineTo(P[b].x * w, P[b].y * h); c.stroke();
+      }
+    }
+    if (P[0].v > 0.35) {
+      c.strokeStyle = 'rgba(255,235,80,.95)'; c.lineWidth = 4;
+      c.beginPath(); c.arc(P[0].x * w, P[0].y * h, Math.max(10, T.sw * w * 0.35), 0, Math.PI * 2); c.stroke();
+    }
+  }
+  if (performance.now() - T.palmsAt < 350) {
+    c.fillStyle = 'rgba(255,255,255,.9)';
+    for (const pm of T.palms) for (const tp of pm.tips) { c.beginPath(); c.arc(tp.x * w, tp.y * h, 4, 0, Math.PI * 2); c.fill(); }
+  }
+  c.fillStyle = 'rgba(255,200,40,.95)';
+  for (const hd of T.hands) if (hd.ok) { c.beginPath(); c.arc(hd.x * w, hd.y * h, 11, 0, Math.PI * 2); c.fill(); }
+}
+
+/* ===================================================================
+   GAME LOGIC
+   =================================================================== */
+const S = {
+  screen: 'start', paused: false, lost: false, tap: false,
+  step: 0, phase: 'idle', count: 0, meter: 0, stars: 0,
+  growth: 0, target: 0, time: 0, activeAt: 0, timers: [],
+  wet: 0, finalT: 0, lastTick: 0
+};
+const C = { hold: 0, done: false, lastSay: 0, lastMsg: '' };              // calibration
+const G = { init: [false, false], armed: [true, true], peak: [0, 0], low: [0, 0], lastDrop: 0 }; // gestures
+
+function after(ms, fn) { S.timers.push({ t: S.time + ms, fn }); }
+function curType() { return STEPS[S.step].type; }
+
+/* ---- calibration: is the child visible and roughly centered? ---- */
+function enterCalib() {
+  C.hold = 0; C.done = false; C.lastSay = 0; C.lastMsg = '';
+  setScreen('calib');
+  say('Stand back so I can see you!');
+  C.lastSay = performance.now();
+}
+function calibCheck(now) {
+  if (C.done) return;
+  const P = T.pose; let msg, ok = false;
+  if (!P || !T.bodyOk || P[0].v < 0.4) msg = "I can't see you yet. Step back!";
+  else if (T.sw > 0.5) msg = 'Step back a little!';
+  else if (T.sw < 0.07) msg = 'Come a little closer!';
+  else if (T.cx < 0.25 || T.cx > 0.75) msg = 'Move to the middle!';
+  else { ok = true; msg = 'Perfect! Stay there! 🌟'; }
+  C.hold = ok ? C.hold + T.dt : Math.max(0, C.hold - T.dt * 0.5);
+  $('calibMsg').textContent = msg;
+  $('calibBar').style.width = (clamp(C.hold / CFG.CALIB_HOLD) * 100) + '%';
+  if (!ok && msg !== C.lastMsg && now - C.lastSay > 3500) { say(msg); C.lastSay = now; }
+  C.lastMsg = msg;
+  if (C.hold >= CFG.CALIB_HOLD) {
+    C.done = true; Snd.grow();
+    $('calibMsg').textContent = 'Great! I can see you! 🎉';
+    say("Great! I can see you! Let's grow a plant!");
+    setTimeout(() => { if (S.screen === 'calib') startGame(); }, 2200);
+  }
+}
+
+/* ---- game flow ---- */
+function startGame() {
+  S.paused = false; S.lost = false; S.timers = []; S.time = 0;
+  S.step = 0; S.count = 0; S.meter = 0; S.stars = 0; S.growth = 0; S.target = 0; S.wet = 0;
+  FX.p.length = 0;
+  T.lastSeen = performance.now();
+  setScreen('play');
+  beginStep(0);
+}
+function beginStep(i) {
+  const st = STEPS[i];
+  S.step = i; S.phase = 'active'; S.count = 0; S.meter = 0; S.lastTick = 0;
+  S.activeAt = S.time + 700;                 // tiny grace period so old motion does not count
+  G.init = [false, false]; G.armed = [true, true];
+  setBanner(st.banner, st.hint);
+  $('tapBtn').textContent = STEP_EMOJI[st.type];
+  say(st.say);
+  updateHud();
+}
+function drop(h) {
+  S.count++; S.stars++;
+  Snd.drop(); popNumber(S.count); say(String(S.count));
+  FX.rain(h);
+  updateHud();
+  if (S.count >= STEPS[S.step].need) completeStep();
+}
+function checkMeter() {
+  const q = Math.floor(S.meter * 4);
+  if (q > S.lastTick && S.meter < 1) { S.lastTick = q; Snd.tick(S.meter); }
+  if (S.meter >= 1 && S.phase === 'active') { S.meter = 1; S.stars++; completeStep(); }
+}
+function completeStep() {
+  const st = STEPS[S.step];
+  S.phase = 'reward';
+  S.target = S.step + 1;                     // plant grows one stage
+  updateHud();
+  after(500, () => { Snd.grow(); FX.sparkle(); });
+  after(900, () => { setBanner(st.factBanner, ''); say(st.fact); updateHud(); });
+  after(4400, () => { if (S.step + 1 < STEPS.length) beginStep(S.step + 1); else finish(); });
+}
+function finish() {
+  S.finalT = 0; S.growth = 4; S.target = 4;
+  $('finalStars').textContent = '⭐'.repeat(S.stars);
+  setScreen('final');
+  Snd.party();
+  say('Hooray! You grew a big, beautiful plant! Plants need water, sunlight, and air.');
+}
+
+/* ---- gesture detection, called once per tracking frame ---- */
+function onTrack(now) {
+  if (S.screen === 'calib') { calibCheck(now); return; }
+  if (S.screen !== 'play' || S.paused || S.lost || S.tap) return;
+  if (S.phase !== 'active' || S.time < S.activeAt) return;
+  const type = curType(), dt = T.dt;
+
+  if (type === 'rain') {
+    // RAIN: any hand moving clearly downward = one drop. Hand must come back up to re-arm.
+    for (let i = 0; i < 2; i++) {
+      if (S.phase !== 'active') break;
+      const h = T.hands[i];
+      if (!h.ok) { G.init[i] = false; continue; }
+      if (h.fresh || !G.init[i]) { G.init[i] = true; G.armed[i] = true; G.peak[i] = h.y; G.low[i] = h.y; continue; }
+      if (G.armed[i]) {
+        if (h.y < G.peak[i]) G.peak[i] = h.y;
+        if (h.y - G.peak[i] > CFG.RAIN_DROP * T.scale) {
+          G.armed[i] = false; G.low[i] = h.y;
+          if (now - G.lastDrop > CFG.RAIN_GAP) { G.lastDrop = now; drop(h); }
+        }
+      } else {
+        if (h.y > G.low[i]) G.low[i] = h.y;
+        if (G.low[i] - h.y > CFG.RAIN_REARM * T.scale) { G.armed[i] = true; G.peak[i] = h.y; }
+      }
+    }
+  } else if (type === 'sun') {
+    // SUN: hands above the shoulders. Two hands fill fast, one hand still works.
+    const line = T.bodyOk ? T.shoulderY - 0.1 * T.scale : 0.38;
+    let up = 0;
+    for (const h of T.hands) if (h.ok && h.y < line) up++;
+    if (up === 2) S.meter += dt / CFG.SUN_BOTH;
+    else if (up === 1) S.meter += dt / CFG.SUN_ONE;
+    else S.meter = Math.max(0, S.meter - dt / 5);
+    checkMeter();
+  } else if (type === 'wind') {
+    // WIND: any side-to-side arm waving or body swaying adds up.
+    let travel = 0;
+    for (const h of T.hands) if (h.ok && !h.fresh) { const d = Math.abs(h.dx); if (d > 0.004) travel += d; }
+    if (T.bodyOk) { const d = Math.abs(T.bodyDx); if (d > 0.003) travel += d * 1.5; }
+    if (travel > 0) {
+      S.meter += travel / (CFG.WIND_TRAVEL * T.sw);
+      R.windE = Math.min(1, R.windE + travel * 6);
+      if (Math.random() < 0.35) FX.wind();
+      if (now - R.lastWhoosh > 600) { R.lastWhoosh = now; Snd.whoosh(); }
+    } else S.meter = Math.max(0, S.meter - dt / 10);
+    checkMeter();
+  }
+}
+
+/* Tap / Space helper: tap mode, or a grown-up giving a little help */
+function assist() {
+  if (S.screen !== 'play' || S.paused || S.lost || S.phase !== 'active') return;
+  const type = curType();
+  if (type === 'rain') drop(null);
+  else if (type === 'sun') { S.meter += 0.34; checkMeter(); }
+  else { S.meter += 0.25; R.windE = 1; Snd.whoosh(); for (let i = 0; i < 4; i++) FX.wind(); checkMeter(); }
+}
+
+/* ---- per-frame game tick: timers, pause on lost tracking, growth ---- */
+function tick(now, dt) {
+  if (S.screen === 'play' && !S.tap && !S.paused) {
+    if (!S.lost && now - T.lastSeen > CFG.LOST_MS) {
+      S.lost = true; $('lostScreen').classList.add('show');
+      say("I can't see you. Step back so I can see you!");
+    } else if (S.lost && now - T.lastSeen < 300 && now - T.seenSince > 500) {
+      S.lost = false; $('lostScreen').classList.remove('show');
+      say('There you are!');
+      G.init = [false, false];
+    }
+  }
+  if (S.screen === 'play' && !S.paused && !S.lost) {
+    S.time += dt * 1000;
+    for (let i = S.timers.length - 1; i >= 0; i--) {
+      if (S.timers[i].t <= S.time) { const f = S.timers[i].fn; S.timers.splice(i, 1); f(); }
+    }
+    const d = S.target - S.growth, stepAmt = dt * 0.6;
+    S.growth = Math.abs(d) <= stepAmt ? S.target : S.growth + Math.sign(d) * stepAmt;
+    S.wet = Math.max(0, S.wet - dt * 0.15);
+    const fill = $('meterFill');
+    if (fill) fill.style.width = (clamp(S.meter) * 100) + '%';
+  }
+  if (S.screen === 'final') S.finalT += dt;
+}
+
+/* ===================================================================
+   UI  (screens, HUD, buttons)
+   =================================================================== */
+let topLimit = 80;
+function setScreen(name) {
+  S.screen = name;
+  document.body.className = name + (S.tap ? ' tap' : '');
+  for (const n of ['start', 'load', 'calib', 'error', 'final']) $(n + 'Screen').classList.toggle('show', n === name);
+  $('pauseScreen').classList.remove('show'); $('lostScreen').classList.remove('show');
+  requestAnimationFrame(measure);
+}
+function measure() {
+  const el = S.screen === 'play' ? $('hud') : S.screen === 'final' ? $('finalCard') : null;
+  topLimit = el ? el.getBoundingClientRect().bottom : H * 0.12;
+  topLimit = clamp(topLimit, 0, H * 0.55);
+}
+function setBanner(text, hint) {
+  $('banner').innerHTML = '';
+  $('banner').appendChild(document.createTextNode(text));
+  if (hint) { const s = document.createElement('small'); s.textContent = hint; $('banner').appendChild(s); }
+  requestAnimationFrame(measure);
+}
+function updateHud() {
+  $('stars').textContent = '⭐ ' + S.stars;
+  $('stages').innerHTML = STAGE_ICONS.map((e, i) => `<span class="stage${i <= S.target ? ' on' : ''}">${e}</span>`).join('');
+  const st = STEPS[S.step], m = $('meter');
+  if (st.type === 'rain') {
+    let html = '';
+    for (let i = 0; i < st.need; i++) html += `<span class="dropIcon${i < S.count ? ' on' : ''}">💧</span>`;
+    m.innerHTML = html;
+  } else {
+    m.innerHTML = `<span>${STEP_EMOJI[st.type]}</span><div class="bar"><i id="meterFill" style="width:${clamp(S.meter) * 100}%"></i></div>`;
+  }
+  requestAnimationFrame(measure);
+}
+function popNumber(n) {
+  const el = $('pop'); el.textContent = n;
+  el.classList.remove('go'); void el.offsetWidth; el.classList.add('go');
+}
+function setPaused(p) {
+  if (S.screen !== 'play') return;
+  S.paused = p;
+  $('pauseScreen').classList.toggle('show', p);
+  if (p) hush(); else T.lastSeen = performance.now();
+}
+function showError(msg) { $('errorMsg').textContent = msg; setScreen('error'); say(msg); }
+function camMessage(e) {
+  const n = e && e.name;
+  if (n === 'NotAllowedError' || n === 'SecurityError') return 'I need the camera to see you. Please ask a grown-up to allow the camera.';
+  if (n === 'NotFoundError' || n === 'OverconstrainedError') return "I can't find a camera on this device.";
+  if (n === 'NotReadableError' || n === 'AbortError') return 'The camera is busy in another app. Please close it and try again.';
+  if (n === 'NotSupportedError') return 'The camera does not work on this page. Please open it with https or on localhost.';
+  return "I can't use the camera right now.";
+}
+async function boot() {
+  setScreen('load');
+  try { await startCamera(); }
+  catch (e) { showError(camMessage(e)); return; }
+  try { await loadModels(); }
+  catch (e) { showError('I could not load my magic eyes. Please check the internet and try again.'); return; }
+  enterCalib();
+}
+
+$('btnStart').addEventListener('click', () => { Snd.init(); S.tap = false; boot(); });
+$('btnRetry').addEventListener('click', () => { Snd.init(); S.tap = false; boot(); });
+$('btnTapMode').addEventListener('click', () => { Snd.init(); hush(); S.tap = true; stopCamera(); startGame(); });
+$('btnPause').addEventListener('click', () => setPaused(true));
+$('btnResume').addEventListener('click', () => { Snd.init(); setPaused(false); });
+$('btnRestart').addEventListener('click', () => { Snd.init(); startGame(); });
+$('btnRestart2').addEventListener('click', () => { Snd.init(); startGame(); });
+$('btnAgain').addEventListener('click', () => { Snd.init(); startGame(); });
+$('tapBtn').addEventListener('click', assist);
+window.addEventListener('keydown', e => {
+  if (e.code === 'Space') { e.preventDefault(); assist(); }
+  if (e.code === 'KeyP' || e.code === 'Escape') setPaused(!S.paused);
+});
+document.addEventListener('visibilitychange', () => { if (document.hidden && S.screen === 'play') setPaused(true); });
+
+/* ===================================================================
+   RENDERING  (cartoon scene on canvas)
+   =================================================================== */
+const cv = $('scene'), ctx = cv.getContext('2d');
+let W = 0, H = 0;
+const R = { sunGlow: 0, rainCloud: 0, windE: 0, lastWhoosh: 0 };
+function resize() {
+  const dpr = Math.min(2, window.devicePixelRatio || 1);
+  W = window.innerWidth; H = window.innerHeight;
+  cv.width = Math.round(W * dpr); cv.height = Math.round(H * dpr);
+  ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+  measure();
+}
+window.addEventListener('resize', resize);
+window.addEventListener('orientationchange', () => setTimeout(resize, 250));
+const groundY = () => H * (W > H ? 0.8 : 0.76);
+
+/* ---- particles: rain drops, splashes, wind streaks, stars, petals ---- */
+const FX = {
+  p: [],
+  rain(h) {
+    const gy = groundY(), unit = Math.max(H * 0.25, gy - topLimit);
+    this.p.push({ k: 'drop', x: W / 2 + rnd(-0.1, 0.1) * unit, y: gy - unit * 0.86, vy: 0, s: clamp(unit * 0.05, 9, 24) });
+    if (h) for (let i = 0; i < 4; i++) this.p.push({ k: 'mini', x: h.x * W + rnd(-20, 20), y: h.y * H, vx: rnd(-40, 40), vy: rnd(60, 200), life: 0.7 });
+    if (this.p.length < 150) this.p.push({ k: 'star', x: W / 2 + rnd(-60, 60), y: gy - unit * 0.3, vy: -70, life: 1.2, s: clamp(unit * 0.07, 16, 36) });
+  },
+  sparkle() {
+    const gy = groundY(), unit = Math.max(H * 0.25, gy - topLimit);
+    for (let i = 0; i < 9; i++) this.p.push({ k: 'star', x: W / 2 + rnd(-0.3, 0.3) * unit, y: gy - rnd(0.05, 0.6) * unit, vy: rnd(-70, -30), life: rnd(1, 1.6), s: clamp(unit * 0.07, 16, 38) });
+  },
+  wind() {
+    if (this.p.length > 150) return;
+    const gy = groundY();
+    this.p.push({ k: 'wind', x: -40, y: rnd(topLimit + 10, gy - 10), vx: W * rnd(0.6, 1.1), life: 2, len: rnd(0.06, 0.14) * W });
+  },
+  petal() {
+    if (this.p.length > 90) return;
+    this.p.push({ k: 'petal', x: rnd(0, W), y: -10, vy: rnd(30, 70), ph: rnd(0, 6), s: rnd(5, 10), c: ['#ff80ab', '#ffd54f', '#81d4fa', '#ce93d8', '#a5d6a7'][Math.floor(rnd(0, 5))] });
+  }
+};
+function circle(x, y, r) { ctx.beginPath(); ctx.arc(x, y, r, 0, Math.PI * 2); ctx.fill(); }
+function drawDropShape(x, y, s) {
+  ctx.fillStyle = '#4fc3f7';
+  ctx.beginPath(); ctx.moveTo(x, y - s * 1.6);
+  ctx.quadraticCurveTo(x + s * 1.1, y - s * 0.1, x + s * 0.8, y + s * 0.3);
+  ctx.arc(x, y + s * 0.3, s * 0.8, 0, Math.PI);
+  ctx.quadraticCurveTo(x - s * 1.1, y - s * 0.1, x, y - s * 1.6); ctx.fill();
+  ctx.fillStyle = 'rgba(255,255,255,.7)'; circle(x - s * 0.25, y + s * 0.1, s * 0.2);
+}
+function cloud(x, y, s, col) {
+  ctx.fillStyle = col;
+  circle(x - s * 0.7, y, s * 0.5); circle(x, y - s * 0.25, s * 0.7); circle(x + s * 0.75, y, s * 0.55);
+  ctx.fillRect(x - s * 0.7, y - s * 0.05, s * 1.45, s * 0.55);
+  circle(x - s * 0.7, y + s * 0.2, s * 0.3); circle(x + s * 0.75, y + s * 0.2, s * 0.3);
+}
+function leaf(x, y, ang, len) {
+  if (len < 1) return;
+  ctx.save(); ctx.translate(x, y); ctx.rotate(ang);
+  ctx.beginPath(); ctx.moveTo(0, 0);
+  ctx.quadraticCurveTo(len * 0.5, -len * 0.4, len, 0);
+  ctx.quadraticCurveTo(len * 0.5, len * 0.4, 0, 0);
+  ctx.fillStyle = '#5ecb4f'; ctx.fill();
+  ctx.strokeStyle = '#2e8b3a'; ctx.lineWidth = Math.max(1, len * 0.05);
+  ctx.beginPath(); ctx.moveTo(0, 0); ctx.lineTo(len * 0.85, 0); ctx.stroke();
+  ctx.restore();
+}
+function flower(x, y, Rr, open, col, face) {
+  if (Rr < 1) return;
+  if (open > 0.02) {
+    ctx.fillStyle = col;
+    for (let i = 0; i < 8; i++) {
+      const a = i * Math.PI / 4;
+      ctx.save(); ctx.translate(x + Math.cos(a) * Rr * 0.85 * open, y + Math.sin(a) * Rr * 0.85 * open); ctx.rotate(a);
+      ctx.beginPath(); ctx.ellipse(0, 0, Rr * 0.55 * (0.4 + 0.6 * open), Rr * 0.34, 0, 0, Math.PI * 2); ctx.fill();
+      ctx.restore();
+    }
+  }
+  ctx.fillStyle = open > 0.3 ? '#ffca28' : col; circle(x, y, Rr * 0.52);
+  if (face && open > 0.8 && Rr > 14) {
+    ctx.fillStyle = '#5d4037'; circle(x - Rr * 0.18, y - Rr * 0.08, Rr * 0.06); circle(x + Rr * 0.18, y - Rr * 0.08, Rr * 0.06);
+    ctx.strokeStyle = '#5d4037'; ctx.lineWidth = Math.max(1.5, Rr * 0.05); ctx.lineCap = 'round';
+    ctx.beginPath(); ctx.arc(x, y + Rr * 0.02, Rr * 0.22, 0.15 * Math.PI, 0.85 * Math.PI); ctx.stroke();
+  }
+}
+/* Plant grows smoothly with g: 0 seed, 1 sprout, 2 leaves, 3 flower, 4 full plant */
+function drawPlant(cx, gy, g, unit, col, phase, amp) {
+  if (g <= 0.02) return;
+  const hs = [0, 0.16, 0.38, 0.58, 0.72];
+  const gi = Math.min(3, Math.floor(g)), f = g - gi;
+  const h = unit * (hs[gi] + (hs[gi + 1] - hs[gi]) * f);
+  const sway = Math.sin(phase) * amp * h;
+  const tx = cx + sway, ty = gy - h, qx = cx - sway * 0.3, qy = gy - h * 0.55;
+  const pt = t => { const u = 1 - t; return { x: u * u * cx + 2 * u * t * qx + t * t * tx, y: u * u * gy + 2 * u * t * qy + t * t * ty }; };
+  // stem
+  ctx.strokeStyle = '#3fa34d'; ctx.lineCap = 'round';
+  ctx.lineWidth = Math.max(3, unit * (0.018 + 0.014 * Math.min(1, g / 4)));
+  ctx.beginPath(); ctx.moveTo(cx, gy); ctx.quadraticCurveTo(qx, qy, tx, ty); ctx.stroke();
+  // side blossoms (full plant only)
+  const sb = clamp((g - 3.4) / 0.6);
+  if (sb > 0) {
+    const b = pt(0.55);
+    for (const dir of [-1, 1]) {
+      const ex = b.x + dir * unit * 0.17 * sb, ey = b.y - unit * 0.11 * sb;
+      ctx.lineWidth = Math.max(2, unit * 0.014);
+      ctx.beginPath(); ctx.moveTo(b.x, b.y); ctx.quadraticCurveTo(b.x + dir * unit * 0.12 * sb, b.y, ex, ey); ctx.stroke();
+      flower(ex, ey, unit * 0.05 * sb, 1, col, false);
+    }
+  }
+  // leaves
+  const tipA = clamp(g / 0.8) * (1 - clamp((g - 2.2) / 0.4));
+  leaf(tx, ty, -0.9, unit * 0.09 * tipA); leaf(tx, ty, Math.PI + 0.9, unit * 0.09 * tipA);
+  const pairs = [[0.35, clamp((g - 1.2) / 0.6), 0.16 * (0.8 + 0.2 * clamp(g - 3))], [0.62, clamp((g - 1.5) / 0.5), 0.13], [0.82, clamp((g - 3.3) / 0.5), 0.1]];
+  for (const [t, a, len] of pairs) {
+    if (a <= 0) continue;
+    const p = pt(t), wob = Math.sin(phase + t * 3) * amp * 2;
+    leaf(p.x, p.y, -0.5 + wob, unit * len * a); leaf(p.x, p.y, Math.PI + 0.5 + wob, unit * len * a);
+  }
+  // flower head
+  const bud = clamp((g - 2.3) / 0.4), open = clamp((g - 2.6) / 0.4);
+  flower(tx, ty, unit * 0.1 * (0.75 + 0.25 * clamp(g - 3)) * bud, open, col, true);
+}
+
+function draw(now, dt) {
+  const t = now / 1000, gy = groundY(), px = W / 2, m = Math.min(W, H);
+  const unit = Math.max(H * 0.25, gy - topLimit);
+  const playing = S.screen === 'play', final = S.screen === 'final';
+  const type = playing ? curType() : '';
+  R.sunGlow += (((playing && type === 'sun') ? clamp(S.meter) : final ? 0.5 : 0) - R.sunGlow) * Math.min(1, dt * 4);
+  R.rainCloud += (((playing && type === 'rain') ? 1 : 0) - R.rainCloud) * Math.min(1, dt * 3);
+  R.windE = Math.max(0, R.windE - dt * 0.5);
+
+  // sky
+  const sky = ctx.createLinearGradient(0, 0, 0, gy);
+  sky.addColorStop(0, '#5bbcf5'); sky.addColorStop(1, '#dff6ff');
+  ctx.fillStyle = sky; ctx.fillRect(0, 0, W, H);
+
+  // rainbow for the celebration
+  if (final) {
+    const a = clamp(S.finalT / 1.5) * 0.55, bw = Math.max(5, unit * 0.035);
+    ['#ef5350', '#ffa726', '#ffee58', '#66bb6a', '#42a5f5', '#ab47bc'].forEach((c, i) => {
+      ctx.strokeStyle = c; ctx.globalAlpha = a; ctx.lineWidth = bw;
+      ctx.beginPath(); ctx.arc(W / 2, gy, Math.max(20, Math.min(W * 0.46, unit * 1.1) - i * bw), Math.PI, 0); ctx.stroke();
+    });
+    ctx.globalAlpha = 1;
+  }
+
+  // sun (smiling, glows while the child reaches up)
+  const sr = clamp(m * 0.08, 24, 78) * (1 + R.sunGlow * 0.35);
+  const sx = Math.max(sr * 1.7, W * 0.14), sy = Math.min(topLimit + sr * 1.7, gy - sr * 2);
+  if (R.sunGlow > 0.02 && playing) {
+    ctx.fillStyle = `rgba(255,240,150,${R.sunGlow * 0.4})`;
+    ctx.beginPath(); ctx.moveTo(sx, sy); ctx.lineTo(px - unit * 0.28, gy); ctx.lineTo(px + unit * 0.28, gy); ctx.fill();
+  }
+  ctx.fillStyle = `rgba(255,236,130,${0.3 + R.sunGlow * 0.35})`; circle(sx, sy, sr * 1.75);
+  ctx.save(); ctx.translate(sx, sy); ctx.rotate(t * 0.3);
+  ctx.strokeStyle = '#ffd54f'; ctx.lineWidth = sr * 0.15; ctx.lineCap = 'round';
+  for (let i = 0; i < 10; i++) { ctx.rotate(Math.PI / 5); ctx.beginPath(); ctx.moveTo(sr * 1.2, 0); ctx.lineTo(sr * 1.55, 0); ctx.stroke(); }
+  ctx.restore();
+  ctx.fillStyle = '#ffdd33'; circle(sx, sy, sr);
+  ctx.fillStyle = '#a66a00'; circle(sx - sr * 0.3, sy - sr * 0.12, sr * 0.09); circle(sx + sr * 0.3, sy - sr * 0.12, sr * 0.09);
+  ctx.strokeStyle = '#a66a00'; ctx.lineWidth = Math.max(2, sr * 0.08); ctx.lineCap = 'round';
+  ctx.beginPath(); ctx.arc(sx, sy + sr * 0.05, sr * 0.4, 0.15 * Math.PI, 0.85 * Math.PI); ctx.stroke();
+
+  // drifting clouds + friendly rain cloud above the plant
+  const cs = clamp(m * 0.07, 22, 60);
+  cloud(((t * 10) % (W + cs * 6)) - cs * 3, topLimit + cs * 1.2, cs, 'rgba(255,255,255,.85)');
+  cloud(((t * 6 + W * 0.6) % (W + cs * 6)) - cs * 3, topLimit + cs * 2.6, cs * 0.7, 'rgba(255,255,255,.7)');
+  if (R.rainCloud > 0.02) {
+    ctx.globalAlpha = R.rainCloud;
+    cloud(px, gy - unit * 0.9, clamp(unit * 0.13, 20, 70), '#eef3f8');
+    ctx.globalAlpha = 1;
+  }
+
+  // hills, grass, soil
+  ctx.fillStyle = '#a5e695'; ctx.beginPath(); ctx.ellipse(W * 0.22, gy, W * 0.5, unit * 0.22, 0, Math.PI, 0); ctx.fill();
+  ctx.fillStyle = '#8fdc7f'; ctx.beginPath(); ctx.ellipse(W * 0.82, gy, W * 0.45, unit * 0.17, 0, Math.PI, 0); ctx.fill();
+  const soilH = H - gy, grassH = Math.max(8, soilH * 0.14);
+  ctx.fillStyle = '#8d5a3b'; ctx.fillRect(0, gy, W, soilH);
+  ctx.fillStyle = `rgba(60,30,10,${S.wet * 0.35})`; ctx.fillRect(0, gy, W, soilH);
+  ctx.fillStyle = '#6ccf5b'; ctx.fillRect(0, gy, W, grassH);
+
+  // seed, roots and the underground stem
+  const seedY = gy + soilH * 0.55, ss = clamp(soilH * 0.13, 8, 26), g = S.growth;
+  if (g > 0.4) {
+    ctx.strokeStyle = '#e8d5b5'; ctx.lineWidth = Math.max(2, ss * 0.14); ctx.lineCap = 'round';
+    const rl = clamp((g - 0.4) / 2) * soilH * 0.35;
+    for (const dir of [-1, 0, 1]) {
+      ctx.beginPath(); ctx.moveTo(px, seedY);
+      ctx.quadraticCurveTo(px + dir * rl * 0.6, seedY + rl * 0.5, px + dir * rl, seedY + rl * (dir ? 0.7 : 1)); ctx.stroke();
+    }
+  }
+  if (g > 0.02) {
+    ctx.strokeStyle = '#3fa34d'; ctx.lineWidth = Math.max(3, unit * 0.02); ctx.lineCap = 'round';
+    ctx.beginPath(); ctx.moveTo(px, seedY); ctx.lineTo(px, seedY - (seedY - gy) * clamp(g * 3)); ctx.stroke();
+  }
+  ctx.fillStyle = '#d9a86c'; ctx.beginPath(); ctx.ellipse(px, seedY, ss * 1.2, ss * 0.85, 0, 0, Math.PI * 2); ctx.fill();
+  ctx.fillStyle = '#5d4037'; circle(px - ss * 0.35, seedY - ss * 0.1, ss * 0.1); circle(px + ss * 0.35, seedY - ss * 0.1, ss * 0.1);
+  ctx.strokeStyle = '#5d4037'; ctx.lineWidth = Math.max(1.5, ss * 0.08);
+  ctx.beginPath(); ctx.arc(px, seedY + ss * 0.05, ss * 0.3, 0.15 * Math.PI, 0.85 * Math.PI); ctx.stroke();
+
+  // plants
+  const amp = 0.025 + 0.13 * R.windE;
+  if (final) {
+    const offs = [-0.38, -0.19, 0.19, 0.38], cols = ['#ba68c8', '#ffb74d', '#4fc3f7', '#ff8a80'], sc = [0.6, 0.78, 0.72, 0.62];
+    offs.forEach((o, i) => drawPlant(px + o * W, gy, clamp((S.finalT - 0.3 - i * 0.35) / 2) * 4, unit * sc[i], cols[i], t * 2 + i, 0.04));
+    drawPlant(px, gy, 4, unit, '#ff80ab', t * 2, 0.04);
+    if (Math.random() < 0.15) FX.petal();
+  } else {
+    drawPlant(px, gy, g, unit, '#ff80ab', t * (2 + R.windE * 3), amp);
+  }
+
+  // particles
+  for (let i = FX.p.length - 1; i >= 0; i--) {
+    const p = FX.p[i]; let dead = false;
+    if (p.k === 'drop') {
+      p.vy += 1800 * dt; p.y += p.vy * dt; drawDropShape(p.x, p.y, p.s);
+      if (p.y >= gy) {
+        dead = true; S.wet = 1;
+        for (let j = 0; j < 7; j++) FX.p.push({ k: 'mini', x: p.x, y: gy, vx: rnd(-140, 140), vy: rnd(-320, -120), life: 0.6 });
+      }
+    } else if (p.k === 'mini') {
+      p.x += p.vx * dt; p.y += p.vy * dt; p.vy += 900 * dt; p.life -= dt;
+      ctx.fillStyle = `rgba(79,195,247,${clamp(p.life * 2)})`; circle(p.x, p.y, 5); dead = p.life <= 0;
+    } else if (p.k === 'star') {
+      p.y += p.vy * dt; p.life -= dt; ctx.globalAlpha = clamp(p.life * 1.5);
+      ctx.font = `${p.s}px ${EMOJI_FONT}`; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+      ctx.fillText('⭐', p.x, p.y); ctx.globalAlpha = 1; dead = p.life <= 0;
+    } else if (p.k === 'wind') {
+      p.x += p.vx * dt; p.life -= dt;
+      ctx.strokeStyle = `rgba(255,255,255,${clamp(p.life) * 0.8})`; ctx.lineWidth = 4; ctx.lineCap = 'round';
+      ctx.beginPath(); ctx.moveTo(p.x - p.len, p.y);
+      ctx.quadraticCurveTo(p.x - p.len * 0.5, p.y - 14, p.x, p.y); ctx.stroke();
+      dead = p.life <= 0 || p.x - p.len > W;
+    } else if (p.k === 'petal') {
+      p.y += p.vy * dt; p.x += Math.sin(t * 2 + p.ph) * 30 * dt;
+      ctx.fillStyle = p.c; ctx.beginPath(); ctx.ellipse(p.x, p.y, p.s, p.s * 0.6, t + p.ph, 0, Math.PI * 2); ctx.fill();
+      dead = p.y > H + 20 || !final;
+    }
+    if (dead) FX.p.splice(i, 1);
+  }
+
+  // hand markers: show the child where their hands are in the scene
+  if (playing && !S.tap && !S.paused) {
+    const hr = clamp(m * 0.05, 18, 46);
+    ctx.font = `${hr * 1.2}px ${EMOJI_FONT}`; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+    for (const h of T.hands) {
+      if (!h.ok) continue;
+      const x = h.x * W, y = h.y * H;
+      ctx.fillStyle = 'rgba(255,255,255,.55)'; circle(x, y, hr * 1.15);
+      ctx.strokeStyle = 'rgba(255,255,255,.95)'; ctx.lineWidth = 4;
+      ctx.beginPath(); ctx.arc(x, y, hr * 1.15, 0, Math.PI * 2); ctx.stroke();
+      ctx.fillStyle = '#000'; ctx.fillText(STEP_EMOJI[type] || '✋', x, y + hr * 0.08);
+    }
+  }
+
+  // garden visitors on the celebration screen
+  if (final) {
+    const es = clamp(m * 0.06, 22, 54);
+    ctx.font = `${es}px ${EMOJI_FONT}`; ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.fillStyle = '#000';
+    ['🦋', '🐝', '🐞', '🦋'].forEach((e, i) => {
+      ctx.fillText(e, W * (0.5 + 0.42 * Math.sin(t * 0.5 + i * 1.7)), gy - unit * (0.3 + 0.22 * Math.sin(t * 0.9 + i * 2.1)));
+    });
+  }
+}
+
+/* ===================================================================
+   MAIN LOOP
+   =================================================================== */
+let last = performance.now();
+function loop(now) {
+  const dt = Math.min(0.05, (now - last) / 1000); last = now;
+  trackFrame(now);   // tracking system
+  tick(now, dt);     // game logic
+  draw(now, dt);     // UI / rendering
+  requestAnimationFrame(loop);
+}
+resize();
+updateHud();
+requestAnimationFrame(loop);
+})();
+</script>
+</body>
+</html>

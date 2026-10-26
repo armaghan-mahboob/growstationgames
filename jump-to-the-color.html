@@ -1,0 +1,1048 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#8fd3ff">
+<title>Jump to the Color</title>
+<style>
+/* =====================================================================
+   UI STYLES
+   ===================================================================== */
+:root{
+  --vh:1vh;              /* real viewport height unit, kept in sync by JS (fixes mobile address-bar jumps) */
+  --ink:#3b2f4a;
+  --btn:clamp(56px,calc(var(--vh)*8),76px);
+  --font:"Baloo 2","Fredoka","Chalkboard SE","Comic Sans MS","Trebuchet MS",system-ui,sans-serif;
+}
+*{box-sizing:border-box;margin:0;padding:0}
+html,body{height:100%;overflow:hidden;font-family:var(--font);color:var(--ink);background:#8fd3ff;user-select:none;-webkit-user-select:none;touch-action:manipulation;overscroll-behavior:none;-webkit-tap-highlight-color:transparent;-webkit-touch-callout:none}
+.hidden{display:none !important}
+#scene{position:fixed;inset:0;width:100%;height:100%;display:block}
+#video{position:fixed;left:0;top:0;width:2px;height:2px;opacity:0;pointer-events:none}
+
+/* ---------- HUD ---------- */
+#hud{position:fixed;top:max(calc(var(--vh)*1.6),env(safe-area-inset-top));left:max(1.2vw,env(safe-area-inset-left));right:max(1.2vw,env(safe-area-inset-right));display:flex;justify-content:space-between;align-items:flex-start;z-index:20;pointer-events:none}
+.stats{display:flex;flex-direction:column;gap:calc(var(--vh)*1);pointer-events:auto}
+.pill{background:#fff;border-radius:999px;padding:.15em .8em;font-size:clamp(22px,calc(var(--vh)*4),42px);font-weight:900;box-shadow:0 5px 0 rgba(59,47,74,.18);white-space:nowrap;min-width:4.2em}
+.pill.bump{animation:pop .45s}
+.btns{display:flex;gap:.7vw;pointer-events:auto}
+.iconBtn{width:var(--btn);height:var(--btn);border:none;border-radius:22px;background:#fff;font-size:calc(var(--btn)*.5);cursor:pointer;box-shadow:0 5px 0 rgba(59,47,74,.22);transition:transform .1s}
+.iconBtn:active{transform:translateY(4px);box-shadow:0 1px 0 rgba(59,47,74,.22)}
+
+/* ---------- Teacher + speech bubble ---------- */
+#teacher{position:fixed;top:calc(var(--vh)*1.6);left:clamp(150px,15vw,230px);right:clamp(210px,21vw,290px);display:flex;align-items:center;justify-content:center;gap:1vw;z-index:15;pointer-events:none}
+.owl{font-size:clamp(48px,calc(var(--vh)*11),110px);animation:bob 2s ease-in-out infinite;filter:drop-shadow(0 6px 0 rgba(59,47,74,.15))}
+.bubble{position:relative;background:#fff;border-radius:36px;padding:calc(var(--vh)*1.6) 1.8vw;font-size:clamp(24px,calc(var(--vh)*5.4),62px);font-weight:900;text-align:center;line-height:1.2;box-shadow:0 8px 0 rgba(59,47,74,.18);min-width:40%}
+.bubble::before{content:"";position:absolute;left:-18px;top:50%;margin-top:-14px;border:14px solid transparent;border-right:20px solid #fff;border-left:0}
+.bubble.pop{animation:pop .45s}
+.chip{display:inline-block;padding:0 .35em;border-radius:.35em;color:#fff;text-shadow:0 2px 0 rgba(0,0,0,.22)}
+.chip.plain{background:#f0eaf7;color:var(--ink);text-shadow:none}
+.clue{white-space:nowrap;text-decoration:underline wavy rgba(59,47,74,.25);text-underline-offset:.18em}
+
+/* ---------- Camera preview (big during setup, small while playing) ---------- */
+#camBox{position:fixed;z-index:40;aspect-ratio:var(--camAR,1.3333);border-radius:22px;overflow:hidden;border:6px solid #fff;background:#2a2433;box-shadow:0 8px 24px rgba(0,0,0,.25);transition:all .5s cubic-bezier(.3,1.2,.5,1)}
+#camBox.small{right:max(1.2vw,env(safe-area-inset-right));top:calc(calc(var(--vh)*3) + var(--btn));width:clamp(150px,17vw,230px);transform:none}
+#camBox.big{right:50%;top:calc(var(--vh)*16);width:min(86vw,calc(var(--vh)*49.5*var(--camAR,1.3333)));transform:translateX(50%)}
+#cam{display:block;width:100%;height:100%}
+
+/* ---------- Full-screen overlays ---------- */
+.screen{position:fixed;inset:0;z-index:50;display:flex;flex-direction:column;align-items:center;justify-content:flex-start;gap:calc(var(--vh)*2.6);text-align:center;padding:calc(var(--vh)*4) 4vw;overflow-y:auto;-webkit-overflow-scrolling:touch}
+.screen:not(#calibScreen)>:first-child{margin-top:auto}
+.screen:not(#calibScreen)>:last-child{margin-bottom:auto}
+#startScreen,#loadingScreen,#errorScreen{background:rgba(214,241,255,.86)}
+#doneScreen{background:rgba(255,251,235,.6)}
+#pauseScreen{background:rgba(59,47,74,.55);color:#fff}
+#lostScreen{z-index:30;background:rgba(255,255,255,.82)}
+#calibScreen{z-index:30;background:rgba(232,246,255,.93);justify-content:flex-start;padding:0}
+h1{font-size:clamp(40px,calc(var(--vh)*10),120px);line-height:1.05;font-weight:900;text-shadow:0 5px 0 rgba(255,255,255,.7)}
+#pauseScreen h1{text-shadow:none}
+.title span{display:inline-block;animation:bob 1.8s ease-in-out infinite}
+.title span:nth-child(2){animation-delay:.2s}.title span:nth-child(3){animation-delay:.4s}.title span:nth-child(4){animation-delay:.6s}
+.big{font-size:clamp(26px,calc(var(--vh)*5.5),60px);font-weight:900}
+.note{font-size:clamp(15px,calc(var(--vh)*2.3),22px);max-width:46em;opacity:.8;font-weight:600}
+.emoji{font-size:clamp(70px,calc(var(--vh)*18),190px);line-height:1;animation:bob 1.6s ease-in-out infinite}
+.btn{font-family:inherit;font-weight:900;font-size:clamp(28px,calc(var(--vh)*5.5),60px);color:#fff;background:#3ecf5e;border:none;border-radius:999px;padding:.35em 1.3em;cursor:pointer;box-shadow:0 9px 0 #209a3d;transition:transform .1s}
+.btn:hover{transform:translateY(-2px)}
+.btn:active{transform:translateY(7px);box-shadow:0 2px 0 #209a3d}
+.btn.blue{background:#3d9bff;box-shadow:0 9px 0 #1f6fd1}
+.btn.orange{background:#ff9f43;box-shadow:0 9px 0 #cf7417}
+.btn.small{font-size:clamp(16px,calc(var(--vh)*2.6),26px);background:#b9b0c6;box-shadow:0 5px 0 #8d829c}
+.row{display:flex;gap:2vw;flex-wrap:wrap;justify-content:center}
+.dots{display:flex;gap:2vw}
+.dots i{width:clamp(40px,calc(var(--vh)*9),90px);height:clamp(40px,calc(var(--vh)*9),90px);border-radius:28%;box-shadow:0 6px 0 rgba(0,0,0,.15);animation:bob 1.4s ease-in-out infinite}
+.dots i:nth-child(2){animation-delay:.15s}.dots i:nth-child(3){animation-delay:.3s}.dots i:nth-child(4){animation-delay:.45s}
+.spinner{width:calc(var(--vh)*12);height:calc(var(--vh)*12);border-radius:50%;border:calc(var(--vh)*1.6) solid #fff;border-top-color:#3d9bff;animation:spin 1s linear infinite}
+
+/* calibration layout: title on top, camera in the middle, status below */
+.calTop{position:absolute;top:calc(var(--vh)*3);left:0;right:0}
+.calTop h1{font-size:clamp(34px,calc(var(--vh)*8),90px)}
+.calBottom{position:absolute;top:calc(var(--vh)*68);left:0;right:0;display:flex;flex-direction:column;align-items:center;gap:calc(var(--vh)*1.4)}
+#calMsg{font-size:clamp(28px,calc(var(--vh)*6),68px);font-weight:900}
+.bar{width:min(60vw,640px);height:calc(var(--vh)*3.4);background:#fff;border-radius:999px;overflow:hidden;box-shadow:inset 0 3px 0 rgba(0,0,0,.08)}
+#calBar{height:100%;width:0;background:linear-gradient(90deg,#ffd633,#3ecf5e);border-radius:999px;transition:width .12s linear}
+.checks{display:flex;gap:1.2vw}
+.check{background:#fff;border-radius:999px;padding:.2em .9em;font-size:clamp(15px,calc(var(--vh)*2.6),26px);font-weight:800;opacity:.55;transition:all .2s}
+.check.ok{background:#3ecf5e;color:#fff;opacity:1}
+
+@keyframes bob{0%,100%{transform:translateY(0)}50%{transform:translateY(-8%)}}
+@keyframes pop{0%{transform:scale(.85)}55%{transform:scale(1.08)}100%{transform:scale(1)}}
+@keyframes spin{to{transform:rotate(360deg)}}
+
+/* =====================================================================
+   RESPONSIVE LAYOUTS (phones / tablets). Desktop layout above is untouched.
+   ===================================================================== */
+/* --- Phones & tablets held upright --- */
+@media (max-aspect-ratio:1/1){
+  :root{--btn:clamp(40px,11vw,64px)}
+  .stats{flex-direction:row;align-items:center;gap:1.4vw}
+  .pill{font-size:clamp(14px,4.4vw,30px);min-width:0;padding:.12em .55em;box-shadow:0 3px 0 rgba(59,47,74,.18)}
+  .btns{gap:1.6vw}
+  .iconBtn{border-radius:16px;box-shadow:0 4px 0 rgba(59,47,74,.22)}
+  #teacher{top:calc(var(--btn) + var(--vh)*3.2);left:3vw;right:3vw;gap:2vw}
+  .owl{font-size:clamp(34px,12vw,80px)}
+  .bubble{flex:1;min-width:0;font-size:clamp(17px,5.6vw,40px);padding:calc(var(--vh)*1.2) 3vw;border-radius:24px;box-shadow:0 5px 0 rgba(59,47,74,.18)}
+  .bubble::before{left:-14px;margin-top:-11px;border-width:11px;border-right-width:16px;border-left-width:0}
+  #camBox{border-width:4px;border-radius:16px}
+  #camBox.small{top:calc(var(--btn) + var(--vh)*17);width:clamp(96px,26vw,170px)}
+  #camBox.big{top:calc(var(--vh)*12);width:min(86vw,calc(var(--vh)*46*var(--camAR,1.3333)))}
+  h1{font-size:clamp(32px,11vw,84px)}
+  .emoji{font-size:clamp(64px,24vw,170px)}
+  .big{font-size:clamp(22px,6.4vw,48px)}
+  .btn{font-size:clamp(24px,7.6vw,48px)}
+  .btn.small{font-size:clamp(15px,4.2vw,24px)}
+  .note{font-size:clamp(13px,3.6vw,20px)}
+  .dots i{width:clamp(36px,12vw,80px);height:clamp(36px,12vw,80px)}
+  .spinner{width:20vw;height:20vw;border-width:3vw}
+  .calTop{top:calc(var(--vh)*2.5)}
+  .calTop h1{font-size:clamp(26px,8vw,56px)}
+  .calBottom{top:calc(var(--vh)*66);padding:0 4vw}
+  #calMsg{font-size:clamp(20px,6.2vw,40px)}
+  .bar{width:min(80vw,640px);height:calc(var(--vh)*2.4)}
+  .checks{flex-wrap:wrap;justify-content:center;gap:1.6vw}
+  .check{font-size:clamp(12px,3.4vw,22px)}
+}
+/* --- Phones held sideways (short screens) --- */
+@media (max-height:520px) and (min-aspect-ratio:1/1){
+  :root{--btn:clamp(36px,calc(var(--vh)*12),48px)}
+  .stats{gap:4px}
+  .pill{font-size:clamp(14px,calc(var(--vh)*5.2),22px);min-width:3.4em;padding:.08em .6em;box-shadow:0 3px 0 rgba(59,47,74,.18)}
+  .iconBtn{border-radius:14px;box-shadow:0 3px 0 rgba(59,47,74,.22)}
+  #teacher{left:clamp(110px,16vw,160px);right:clamp(150px,22vw,200px)}
+  .owl{font-size:clamp(34px,calc(var(--vh)*13),56px)}
+  .bubble{font-size:clamp(16px,calc(var(--vh)*6),30px);padding:calc(var(--vh)*1.4) 1.4vw;border-radius:22px;box-shadow:0 5px 0 rgba(59,47,74,.18)}
+  .bubble::before{left:-14px;margin-top:-11px;border-width:11px;border-right-width:16px;border-left-width:0}
+  #camBox{border-width:4px;border-radius:16px}
+  #camBox.small{top:calc(var(--vh)*2.4 + var(--btn));width:clamp(96px,15vw,140px)}
+  #camBox.big{right:auto;left:max(3vw,env(safe-area-inset-left));top:calc(var(--vh)*13);transform:none;width:min(46vw,calc(var(--vh)*74*var(--camAR,1.3333)))}
+  .screen{gap:calc(var(--vh)*1.8);padding:calc(var(--vh)*2.5) 4vw}
+  h1{font-size:clamp(28px,calc(var(--vh)*10),60px)}
+  .emoji{font-size:clamp(48px,calc(var(--vh)*16),100px)}
+  .big{font-size:clamp(18px,calc(var(--vh)*6),34px)}
+  .btn{font-size:clamp(20px,calc(var(--vh)*6.5),34px);padding:.3em 1.2em}
+  .btn.small{font-size:clamp(14px,calc(var(--vh)*4.4),20px)}
+  .note{font-size:12px}
+  .dots i{width:clamp(28px,calc(var(--vh)*8),60px);height:clamp(28px,calc(var(--vh)*8),60px)}
+  .calTop{left:50%;top:calc(var(--vh)*5)}
+  .calTop h1{font-size:clamp(24px,calc(var(--vh)*9),40px)}
+  .calBottom{left:50%;top:calc(var(--vh)*28);padding:0 2vw}
+  #calMsg{font-size:clamp(18px,calc(var(--vh)*7),30px)}
+  .bar{width:min(40vw,360px);height:12px}
+  .checks{flex-wrap:wrap;justify-content:center;gap:6px}
+  .check{font-size:13px}
+}
+</style>
+</head>
+<body>
+
+<!-- Game world (drawn on canvas) -->
+<canvas id="scene"></canvas>
+<video id="video" playsinline muted autoplay></video>
+
+<!-- HUD -->
+<div id="hud" class="hidden">
+  <div class="stats">
+    <div class="pill" id="scorePill">⭐ <span id="score">0</span></div>
+    <div class="pill">🚩 <span id="round">1</span>/<span id="roundMax">10</span></div>
+    <div class="pill" id="streakPill">🔥 <span id="streak">0</span></div>
+  </div>
+  <div class="btns">
+    <button class="iconBtn" id="btnPause" title="Pause">⏸️</button>
+    <button class="iconBtn" id="btnRestart" title="Restart">🔄</button>
+    <button class="iconBtn" id="btnSound" title="Sound">🔊</button>
+  </div>
+</div>
+
+<!-- Teacher -->
+<div id="teacher" class="hidden">
+  <div class="owl">🦉</div>
+  <div class="bubble" id="bubble"></div>
+</div>
+
+<!-- Camera preview -->
+<div id="camBox" class="hidden small"><canvas id="cam" width="640" height="480"></canvas></div>
+
+<!-- Start -->
+<div id="startScreen" class="screen">
+  <h1 class="title"><span style="color:#ff5252">Jump</span> <span style="color:#3d9bff">to</span> <span style="color:#e0a800">the</span> <span style="color:#2fb84f">Color</span></h1>
+  <div class="emoji">🐰</div>
+  <div class="dots"><i style="background:#ff5252"></i><i style="background:#3d9bff"></i><i style="background:#ffd633"></i><i style="background:#3ecf5e"></i></div>
+  <button class="btn" id="btnStart">▶ PLAY</button>
+  <p class="note">Grown-ups: allow the camera when asked. Clear some floor space and let the child stand about 2 to 3 metres back so the whole body is in view.</p>
+</div>
+
+<!-- Loading -->
+<div id="loadingScreen" class="screen hidden">
+  <div class="spinner"></div>
+  <p class="big" id="loadingText">Getting ready…</p>
+</div>
+
+<!-- Error -->
+<div id="errorScreen" class="screen hidden">
+  <div class="emoji">🙈</div>
+  <p class="big" id="errTitle">Oops!</p>
+  <p class="note" id="errDetail"></p>
+  <button class="btn blue" id="btnRetry">Try Again</button>
+</div>
+
+<!-- Calibration -->
+<div id="calibScreen" class="screen hidden">
+  <div class="calTop"><h1>Let's get ready!</h1></div>
+  <div class="calBottom">
+    <div id="calMsg">Stand where I can see you!</div>
+    <div class="bar"><div id="calBar"></div></div>
+    <div class="checks">
+      <div class="check" id="chkSeen">👀 I see you</div>
+      <div class="check" id="chkBody">🧍 Good distance</div>
+      <div class="check" id="chkMid">🎯 In the middle</div>
+    </div>
+    <button class="btn small" id="btnSkip">Start anyway</button>
+  </div>
+</div>
+
+<!-- Pause -->
+<div id="pauseScreen" class="screen hidden">
+  <h1>⏸️ Paused</h1>
+  <div class="row">
+    <button class="btn" id="btnResume">▶ Keep Playing</button>
+    <button class="btn orange" id="btnRestart2">🔄 Start Over</button>
+  </div>
+  <button class="btn small" id="btnRecal">📷 Camera check</button>
+</div>
+
+<!-- Tracking lost -->
+<div id="lostScreen" class="screen hidden">
+  <div class="emoji">🙈</div>
+  <p class="big">I can't see you!<br>Stand in front of the camera.</p>
+</div>
+
+<!-- Celebration -->
+<div id="doneScreen" class="screen hidden">
+  <div class="emoji">🏆</div>
+  <h1 id="doneTitle">You did it!</h1>
+  <p class="big">⭐ <span id="doneScore">0</span> stars!</p>
+  <p class="big" id="doneStreak"></p>
+  <button class="btn" id="btnAgain">🔄 Play Again</button>
+</div>
+
+<script type="module">
+/* =====================================================================
+   CONFIG  (tune these if the game feels too strict or too loose)
+   ===================================================================== */
+const CFG = {
+  VISION: "https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.14",
+  MODEL: "https://storage.googleapis.com/mediapipe-models/pose_landmarker/pose_landmarker_lite/float16/1/pose_landmarker_lite.task",
+  HALF_RANGE: 0.26,     // how far left/right of center (fraction of camera width) covers all zones
+  JUMP_RISE: 0.17,      // body must rise this fraction of torso length to count as a jump
+  JUMP_COOLDOWN: 750,   // ms between jumps
+  LAND_DELAY: 0.45,     // s after take-off before we look at which zone the child landed on
+  NEAR_MISS: 0.30,      // landing this far (in zone widths) outside the target still counts
+  ZONE_HYST: 0.12,      // hysteresis so the highlighted zone does not flicker at borders
+  LOST_MS: 2500,        // no body for this long = pause with friendly message
+  CALIB_HOLD: 1.0,      // s the child must stay in a good spot
+  CALIB_AUTO: 7,        // s the child has been seen (even if not perfect) before calibration just accepts them
+  CENTER_MIN: 0.2,      // calibration: body centre must be between these (fraction of camera width)
+  CENTER_MAX: 0.8,
+  TOO_CLOSE: 0.5,       // calibration: torso longer than this (fraction of camera height) = really too close
+  TOO_FAR: 0.05,        // calibration: torso shorter than this = really too far
+  DWELL_NUDGE: 3.5,     // s standing on the right color before "Now jump!"
+  DWELL_ACCEPT: 7,      // s standing on the right color before we accept it anyway
+  IDLE_REPEAT: 10       // s without a jump before repeating the question with a hint
+};
+
+const COLORS = {
+  red:    {name:"RED",    hex:"#ff5252", dark:"#c93030", text:"#fff",
+           clues:[{t:"a strawberry",v:"is",e:"🍓"},{t:"an apple",v:"is",e:"🍎"},{t:"a fire truck",v:"is",e:"🚒"}]},
+  blue:   {name:"BLUE",   hex:"#3d9bff", dark:"#1f6fd1", text:"#fff",
+           clues:[{t:"the sky",v:"is",e:"☁️"},{t:"the ocean",v:"is",e:"🌊"},{t:"a whale",v:"is",e:"🐳"}]},
+  yellow: {name:"YELLOW", hex:"#ffd633", dark:"#d9a900", text:"#6b4a00",
+           clues:[{t:"the sun",v:"is",e:"☀️"},{t:"a banana",v:"is",e:"🍌"},{t:"a baby chick",v:"is",e:"🐥"}]},
+  green:  {name:"GREEN",  hex:"#3ecf5e", dark:"#209a3d", text:"#fff",
+           clues:[{t:"grass",v:"is",e:"🌱"},{t:"a frog",v:"is",e:"🐸"},{t:"a leaf",v:"is",e:"🍃"}]},
+  purple: {name:"PURPLE", hex:"#a35cf0", dark:"#7436c4", text:"#fff",
+           clues:[{t:"grapes",v:"are",e:"🍇"},{t:"an eggplant",v:"is",e:"🍆"}]}
+};
+const ZONE_ORDER = ["red","blue","yellow","green","purple"];
+// n = number of colors on the floor, ctx = contextual question ("color of the sky")
+const ROUNDS = [
+  {n:3,ctx:false},{n:3,ctx:false},{n:3,ctx:false},{n:3,ctx:true},
+  {n:4,ctx:false},{n:4,ctx:true},{n:4,ctx:true},
+  {n:5,ctx:false},{n:5,ctx:true},{n:5,ctx:true}
+];
+const LOST_MSG = "I can't see you! Stand in front of the camera.";
+
+const $ = id => document.getElementById(id);
+const clamp = (v,a,b) => Math.max(a,Math.min(b,v));
+const ease = (dt,tau) => 1 - Math.exp(-dt/tau);
+const cap = s => s[0].toUpperCase() + s.slice(1);
+const pick = a => a[Math.floor(Math.random()*a.length)];
+
+/* =====================================================================
+   AUDIO + VOICE
+   ===================================================================== */
+let actx = null, soundOn = true, voice = null;
+
+function initAudio(){
+  if(!actx){ const AC = window.AudioContext || window.webkitAudioContext; if(AC) actx = new AC(); }
+  if(actx && actx.state === "suspended") actx.resume();
+}
+function tone(freq, delay, dur, type="triangle", vol=0.16, slideTo=null){
+  if(!actx || !soundOn) return;
+  const t0 = actx.currentTime + delay, o = actx.createOscillator(), g = actx.createGain();
+  o.type = type; o.frequency.setValueAtTime(freq, t0);
+  if(slideTo) o.frequency.exponentialRampToValueAtTime(slideTo, t0 + dur);
+  g.gain.setValueAtTime(0.0001, t0);
+  g.gain.exponentialRampToValueAtTime(vol, t0 + 0.02);
+  g.gain.exponentialRampToValueAtTime(0.0001, t0 + dur);
+  o.connect(g); g.connect(actx.destination); o.start(t0); o.stop(t0 + dur + 0.05);
+}
+const sfx = {
+  yay(){ [523,659,784,1047].forEach((f,i)=>tone(f,i*0.09,0.25)); tone(1319,0.38,0.45,"triangle",0.13); },
+  oops(){ tone(392,0,0.18,"sine",0.10); tone(330,0.16,0.28,"sine",0.10); },   // soft, not scary
+  hop(){ tone(300,0,0.2,"sine",0.08,640); },
+  fanfare(){ [523,523,659,784,659,784,1047].forEach((f,i)=>tone(f,i*0.14,0.3,"triangle",0.15)); }
+};
+function pickVoice(){
+  if(!("speechSynthesis" in window)) return;
+  const vs = speechSynthesis.getVoices().filter(v => /^en/i.test(v.lang));
+  voice = vs.find(v => /Samantha|Google US English|Jenny|Aria|Zira/i.test(v.name)) || vs[0] || null;
+}
+if("speechSynthesis" in window){ pickVoice(); speechSynthesis.onvoiceschanged = pickVoice; }
+function say(text){
+  if(!soundOn || !("speechSynthesis" in window)) return;
+  try{
+    speechSynthesis.cancel();
+    const u = new SpeechSynthesisUtterance(text);
+    u.lang = "en-US"; u.rate = 0.9; u.pitch = 1.25; if(voice) u.voice = voice;
+    speechSynthesis.speak(u);
+  }catch(e){}
+}
+function hush(){ try{ speechSynthesis.cancel(); }catch(e){} }
+
+/* =====================================================================
+   TRACKING SYSTEM  (webcam + MediaPipe Pose Landmarker)
+   Output: track.x (mirrored, smoothed horizontal body position 0..1),
+           track.jumpEvent (true once per detected jump),
+           track.q (quality flags used by calibration)
+   ===================================================================== */
+const video = $("video");
+let stream = null, landmarker = null, lastVideoTime = -1;
+
+const track = {
+  good:false, snap:true, lastGood:0, goodSince:0, lastT:0,
+  x:0.5, y:0.5, torso:0.2, baseY:0.5,
+  inAir:false, airAt:0, lastJump:0, jumpEvent:false,
+  lm:null,
+  q:{seen:false, centered:false, legs:false, tooClose:false, tooFar:false}
+};
+const calib = { cx:0.5, hold:0, seenT:0, lastMsg:"", lastSpoke:0 };
+
+async function startCamera(){
+  if(!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia){
+    throw Object.assign(new Error("no mediaDevices"), {name:"NoMediaDevices"});
+  }
+  stream = await navigator.mediaDevices.getUserMedia({
+    video:{ width:{ideal:640}, height:{ideal:480}, facingMode:"user" }, audio:false
+  });
+  video.srcObject = stream;
+  await video.play();
+  stream.getVideoTracks()[0].addEventListener("ended", () => {
+    stream = null; showError({name:"CameraEnded"});
+  });
+}
+
+async function createLandmarker(){
+  const vision = await import(CFG.VISION + "/vision_bundle.mjs");
+  const files = await vision.FilesetResolver.forVisionTasks(CFG.VISION + "/wasm");
+  const opts = delegate => ({
+    baseOptions:{ modelAssetPath: CFG.MODEL, delegate },
+    runningMode:"VIDEO", numPoses:1,
+    minPoseDetectionConfidence:0.5, minPosePresenceConfidence:0.5, minTrackingConfidence:0.5
+  });
+  try{ return await vision.PoseLandmarker.createFromOptions(files, opts("GPU")); }
+  catch(e){ return await vision.PoseLandmarker.createFromOptions(files, opts("CPU")); }
+}
+
+function markBad(){ track.good = false; track.snap = true; track.q.seen = false; }
+
+function trackingStep(now){
+  if(!landmarker || !stream || video.readyState < 2) return;
+  if(video.currentTime === lastVideoTime) return;         // no new camera frame yet
+  lastVideoTime = video.currentTime;
+
+  let res = null;
+  try{ res = landmarker.detectForVideo(video, now); }catch(e){ return; }
+  const dt = clamp((now - track.lastT)/1000, 0.001, 0.1); track.lastT = now;
+
+  const lm = res && res.landmarks && res.landmarks[0];
+  if(!lm){ track.lm = null; markBad(); return; }
+  const vis = i => lm[i].visibility === undefined ? 1 : lm[i].visibility;
+
+  // Smoothed copy of all landmarks, used only for drawing the skeleton
+  if(!track.lm) track.lm = lm.map((p,i) => ({x:p.x, y:p.y, v:vis(i)}));
+  else lm.forEach((p,i) => { const s = track.lm[i]; s.x += (p.x-s.x)*0.5; s.y += (p.y-s.y)*0.5; s.v = vis(i); });
+
+  // We need shoulders and hips to know where the body is
+  const seen = vis(11) > 0.4 && vis(12) > 0.4 && vis(23) > 0.2 && vis(24) > 0.2;
+  if(!seen){ markBad(); return; }
+
+  const sx = (lm[11].x + lm[12].x)/2, sy = (lm[11].y + lm[12].y)/2;
+  const hx = (lm[23].x + lm[24].x)/2, hy = (lm[23].y + lm[24].y)/2;
+  const aspect = (video.videoWidth / video.videoHeight) || 1.33;
+  const rawX = 1 - (sx + hx)/2;                            // mirrored
+  const rawY = (sy + hy)/2;                                // torso center height
+  const rawTorso = Math.max(0.03, Math.hypot((sx-hx)*aspect, sy-hy));
+
+  if(track.snap){                                          // first frame after losing the child
+    track.x = rawX; track.y = rawY; track.torso = rawTorso; track.baseY = rawY;
+    track.inAir = false; track.snap = false; track.goodSince = now;
+  }else{                                                   // smoothing against jitter
+    track.x += (rawX - track.x) * ease(dt, 0.14);
+    track.y += (rawY - track.y) * ease(dt, 0.05);
+    track.torso += (rawTorso - track.torso) * ease(dt, 0.5);
+  }
+  track.good = true; track.lastGood = now;
+
+  // Quality flags for calibration
+  const q = track.q;
+  q.seen = true;
+  q.centered = track.x > CFG.CENTER_MIN && track.x < CFG.CENTER_MAX;
+  q.legs = vis(25) > 0.3 || vis(26) > 0.3;                 // informational only, no longer required
+  q.tooClose = track.torso > CFG.TOO_CLOSE;
+  q.tooFar = track.torso < CFG.TOO_FAR;
+
+  // Jump detection: torso center rises clearly above its slow-moving standing baseline
+  const rise = (track.baseY - track.y) / track.torso;
+  if(!track.inAir){
+    if(rise > CFG.JUMP_RISE && now - track.lastJump > CFG.JUMP_COOLDOWN){
+      track.inAir = true; track.airAt = now; track.lastJump = now; track.jumpEvent = true;
+    }
+  }else if(rise < CFG.JUMP_RISE*0.4){
+    track.inAir = false;
+  }else if(now - track.airAt > 1200){                      // child simply moved closer or stood taller
+    track.inAir = false; track.baseY = track.y;
+  }
+  const rate = track.y > track.baseY ? 2.5 : (track.inAir ? 0.1 : 1.0);
+  track.baseY += (track.y - track.baseY) * (1 - Math.exp(-dt*rate));
+}
+
+/* ---------- Calibration: is the child visible, far enough back and centered? ---------- */
+function updateCalib(dt, now){
+  const q = track.q, fresh = track.good && now - track.lastGood < 600;
+  let msg, ok = false;
+  if(!fresh) msg = "Stand where I can see you!";
+  else if(q.tooClose) msg = "Take a small step back!";
+  else if(q.tooFar) msg = "Come a little closer!";
+  else if(!q.centered) msg = "Move to the middle!";
+  else { msg = "Perfect! Stay there…"; ok = true; }
+
+  calib.hold = clamp(calib.hold + (ok ? dt : -dt*0.3), 0, CFG.CALIB_HOLD);
+  if(fresh) calib.seenT += dt;                               // forgiving fallback: seen long enough = good enough
+  $("calBar").style.width = (100*calib.hold/CFG.CALIB_HOLD) + "%";
+  $("chkSeen").classList.toggle("ok", fresh);
+  $("chkBody").classList.toggle("ok", fresh && !q.tooClose && !q.tooFar);
+  $("chkMid").classList.toggle("ok", fresh && q.centered);
+
+  if(msg !== calib.lastMsg){ $("calMsg").textContent = msg; }
+  const changed = msg !== calib.lastMsg;
+  if((changed && now - calib.lastSpoke > 3000) || (!ok && now - calib.lastSpoke > 8000)){
+    say(msg.replace("…","")); calib.lastSpoke = now;
+  }
+  calib.lastMsg = msg;
+
+  if(calib.hold >= CFG.CALIB_HOLD || calib.seenT >= CFG.CALIB_AUTO) finishCalib(true);
+}
+
+function startCalibration(){
+  calib.hold = 0; calib.seenT = 0; calib.lastMsg = ""; calib.lastSpoke = 0;
+  $("calBar").style.width = "0%";
+  $("btnSkip").classList.remove("hidden");
+  setScreen("calib");
+}
+
+function finishCalib(auto){
+  // The center is captured once and then kept fixed, so the zones stay stable
+  calib.cx = auto ? clamp(track.x, 0.38, 0.62) : 0.5;
+  setScreen("ready");
+  $("calMsg").textContent = "Great! Let's play! 🎉";
+  $("calBar").style.width = "100%";
+  $("btnSkip").classList.add("hidden");
+  sfx.yay(); say("Great! Let's play!");
+  setTimeout(() => {
+    if(app.screen !== "ready") return;
+    if(app.recal){ app.recal = false; setScreen("play"); track.lastGood = performance.now(); sayPrompt(); }
+    else startGame();
+  }, 1600);
+}
+
+/* =====================================================================
+   GAME LOGIC
+   ===================================================================== */
+const app = { screen:"start", paused:false, lost:false, lostSaid:0, recal:false };
+const game = {
+  round:0, score:0, streak:0, bestStreak:0,
+  zones:ZONE_ORDER.slice(0,3), target:null, prevTarget:null, clue:null, isNew:false,
+  state:"idle", t:0, attempts:0, hint:0,
+  pos:0.5, zoneIdx:1,
+  pendingEval:null, cooldown:0, dwell:0, dwellSaid:false, idle:0, msgT:0, successDur:2.6
+};
+const bunny = { pos:0.5, jumpT:-1 };
+const padFx = {};          // per color: bounce / wobble timers
+let particles = [], floats = [];
+
+function startGame(){
+  Object.assign(game, {round:0, score:0, streak:0, bestStreak:0, zones:[], prevTarget:null});
+  particles = []; floats = [];
+  setScreen("play");
+  track.lastGood = performance.now();
+  startRound(0);
+}
+
+function startRound(i){
+  const plan = ROUNDS[i], g = game;
+  const grew = g.zones.length > 0 && plan.n > g.zones.length;
+  g.round = i;
+  g.zones = ZONE_ORDER.slice(0, plan.n);
+  g.zoneIdx = clamp(Math.floor(g.pos*plan.n), 0, plan.n-1);
+
+  // A brand new color is always asked right away; otherwise never the same color twice in a row
+  g.target = grew ? g.zones[g.zones.length-1] : pick(g.zones.filter(k => k !== g.prevTarget));
+  g.prevTarget = g.target;
+  g.isNew = grew;
+  g.clue = (plan.ctx && !grew) ? pick(COLORS[g.target].clues) : null;
+
+  g.attempts = 0;
+  g.hint = (i === 0 || grew) ? 1 : 0;       // first round and new colors show the color as a helper
+  g.state = "prompt"; g.t = 0;
+  g.pendingEval = null; g.cooldown = 0; g.dwell = 0; g.dwellSaid = false; g.idle = 0; g.msgT = 0;
+
+  setBubble(promptHTML());
+  sayPrompt(i === 0 ? "Stand on a color, then jump! " : (grew ? "A new color! " : ""));
+  updateHUD();
+}
+
+function chip(key, colored){
+  const c = COLORS[key];
+  return colored ? `<span class="chip" style="background:${c.hex};color:${c.text}">${c.name}</span>`
+                 : `<span class="chip plain">${c.name}</span>`;
+}
+function promptHTML(){
+  const g = game;
+  if(g.clue){
+    return g.hint >= 1
+      ? `${cap(g.clue.t)} ${g.clue.e} ${g.clue.v} ${chip(g.target,true)}!`
+      : `Jump to the color of <span class="clue">${g.clue.t} ${g.clue.e}</span>`;
+  }
+  return (g.isNew ? "New color! " : "") + `JUMP TO ${chip(g.target, g.hint >= 1)}!`;
+}
+function sayPrompt(prefix=""){
+  const g = game, name = COLORS[g.target].name.toLowerCase();
+  if(g.clue){
+    say(prefix + (g.hint >= 1 ? `${cap(g.clue.t)} ${g.clue.v} ${name}. Jump to ${name}!`
+                              : `Jump to the color of ${g.clue.t}!`));
+  }else say(prefix + `Jump to ${name}!`);
+}
+
+// Forgiving check: the target zone is widened on both sides
+function isOnTarget(){
+  const n = game.zones.length, zw = 1/n, ti = game.zones.indexOf(game.target);
+  return game.pos >= ti*zw - zw*CFG.NEAR_MISS && game.pos <= (ti+1)*zw + zw*CFG.NEAR_MISS;
+}
+
+function updateGame(dt){
+  const g = game;
+
+  // Horizontal position of the child mapped to 0..1 across the floor, then smoothed
+  if(track.good){
+    const want = clamp(0.5 + (track.x - calib.cx)/(2*CFG.HALF_RANGE), 0, 1);
+    g.pos += (want - g.pos) * ease(dt, 0.1);
+  }
+  const n = g.zones.length, zw = 1/n, center = (g.zoneIdx + 0.5)*zw;
+  if(Math.abs(g.pos - center) > zw*(0.5 + CFG.ZONE_HYST)) g.zoneIdx = clamp(Math.floor(g.pos*n), 0, n-1);
+
+  // The bunny copies every jump, right or wrong
+  const jumped = track.jumpEvent; track.jumpEvent = false;
+  if(jumped){ hop(); }
+
+  g.t += dt;
+  if(g.msgT > 0){ g.msgT -= dt; if(g.msgT <= 0 && g.state === "waiting") setBubble(promptHTML()); }
+
+  if(g.state === "prompt"){
+    if(g.t > 0.8){ g.state = "waiting"; g.t = 0; }
+  }
+  else if(g.state === "waiting"){
+    g.cooldown -= dt;
+    if(jumped && g.cooldown <= 0 && g.pendingEval === null) g.pendingEval = CFG.LAND_DELAY;
+    if(g.pendingEval !== null){
+      g.pendingEval -= dt;
+      if(g.pendingEval <= 0){ g.pendingEval = null; isOnTarget() ? correct() : wrong(g.zones[g.zoneIdx]); return; }
+    }
+    // Helper for very small children: standing on the right color long enough also works
+    if(g.zones[g.zoneIdx] === g.target){
+      g.dwell += dt;
+      if(g.dwell > CFG.DWELL_NUDGE && !g.dwellSaid){ g.dwellSaid = true; say("Now jump!"); setBubble("Now JUMP! 🐰"); g.msgT = 2.5; }
+      if(g.dwell > CFG.DWELL_ACCEPT){ hop(); correct(); return; }
+    }else{ g.dwell = 0; g.dwellSaid = false; }
+    // Nobody jumped for a while: repeat the question with a stronger hint
+    g.idle += dt;
+    if(g.idle > CFG.IDLE_REPEAT){ g.idle = 0; g.hint = Math.min(2, g.hint+1); setBubble(promptHTML()); sayPrompt(); }
+  }
+  else if(g.state === "success"){
+    if(g.t > g.successDur){
+      if(g.round + 1 < ROUNDS.length) startRound(g.round + 1); else finishGame();
+    }
+  }
+}
+
+function hop(){ if(bunny.jumpT < 0){ bunny.jumpT = 0; sfx.hop(); } }
+
+function correct(){
+  const g = game, c = COLORS[g.target], name = c.name.toLowerCase();
+  const stars = g.attempts === 0 ? 3 : g.attempts === 1 ? 2 : 1;
+  g.score += stars;
+  g.streak = g.attempts === 0 ? g.streak + 1 : 0;
+  g.bestStreak = Math.max(g.bestStreak, g.streak);
+  g.state = "success"; g.t = 0; g.successDur = g.clue ? 3.4 : 2.6;
+
+  (padFx[g.target] || (padFx[g.target] = {bounce:0,wobble:0})).bounce = 2.2;
+  const p = padCenter(g.zones.indexOf(g.target));
+  burst(p.x, p.y, 46);
+  floats.push({x:p.x, y:p.y - H*0.2, text:"+" + stars + " ⭐", life:1.6});
+
+  sfx.yay();
+  const cheer = pick(["Yes!","Great jumping!","Super!","Wow!","You got it!"]);
+  if(g.clue){ setBubble(`⭐ ${cap(g.clue.t)} ${g.clue.e} ${g.clue.v} ${chip(g.target,true)}! ⭐`); say(`${cheer} ${cap(g.clue.t)} ${g.clue.v} ${name}!`); }
+  else { setBubble(`⭐ YES! ${chip(g.target,true)}! ⭐` + (g.streak >= 3 ? `<br>🔥 ${g.streak} in a row!` : "")); say(`${cheer} ${cap(name)}!`); }
+  updateHUD(true);
+}
+
+function wrong(key){
+  const g = game, name = COLORS[g.target].name.toLowerCase(), other = COLORS[key].name.toLowerCase();
+  g.attempts++; g.hint = Math.min(2, g.hint + 1);           // no points lost, just more help
+  g.cooldown = 1.2; g.idle = 0; g.dwell = 0;
+  (padFx[key] || (padFx[key] = {bounce:0,wobble:0})).wobble = 0.6;
+  sfx.oops();
+  setBubble(`Good try! Find ${chip(g.target,true)}`); g.msgT = 2.6;
+  say(g.clue ? `Good try! That's ${other}. ${cap(g.clue.t)} ${g.clue.v} ${name}. Jump to ${name}!`
+             : `Good try! That's ${other}. Find ${name}!`);
+}
+
+function finishGame(){
+  setScreen("done");
+  const max = ROUNDS.length*3, s = game.score;
+  $("doneTitle").textContent = s >= max*0.8 ? "Color Champion!" : s >= max*0.5 ? "Super Jumper!" : "Great Jumping!";
+  $("doneScore").textContent = s;
+  $("doneStreak").textContent = game.bestStreak >= 2 ? `🔥 ${game.bestStreak} in a row!` : "";
+  sfx.fanfare();
+  say(`You did it! You got ${s} stars! ${$("doneTitle").textContent}`);
+}
+
+/* ---------- Pause and tracking-lost handling ---------- */
+function setPaused(p){
+  if(app.screen !== "play") return;
+  app.paused = p;
+  $("pauseScreen").classList.toggle("hidden", !p);
+  if(p) hush(); else { track.lastGood = performance.now(); sayPrompt(); }
+}
+function checkLost(now){
+  if(app.paused) return;
+  const gone = now - track.lastGood > CFG.LOST_MS;
+  if(!app.lost && gone){
+    app.lost = true; app.lostSaid = now;
+    $("lostScreen").classList.remove("hidden"); say(LOST_MSG);
+  }else if(app.lost){
+    if(track.good && now - track.goodSince > 600){
+      app.lost = false; $("lostScreen").classList.add("hidden");
+      if(game.state !== "success") sayPrompt();
+    }else if(now - app.lostSaid > 8000){ say(LOST_MSG); app.lostSaid = now; }
+  }
+}
+
+/* =====================================================================
+   UI  (screens, HUD, canvas drawing)
+   ===================================================================== */
+const camBox = $("camBox");
+function setScreen(name){
+  app.screen = name;
+  for(const id of ["start","loading","error","calib","done"]){
+    $(id + "Screen").classList.toggle("hidden", !(id === name || (id === "calib" && name === "ready")));
+  }
+  const play = name === "play", setup = name === "calib" || name === "ready";
+  $("hud").classList.toggle("hidden", !play);
+  $("teacher").classList.toggle("hidden", !play);
+  camBox.classList.toggle("hidden", !(play || setup));
+  camBox.classList.toggle("big", setup);
+  camBox.classList.toggle("small", !setup);
+  $("pauseScreen").classList.add("hidden");
+  $("lostScreen").classList.add("hidden");
+  app.paused = false; app.lost = false;
+}
+function setBubble(html){
+  const b = $("bubble"); b.innerHTML = html;
+  b.classList.remove("pop"); void b.offsetWidth; b.classList.add("pop");
+}
+function updateHUD(bump){
+  $("score").textContent = game.score;
+  $("round").textContent = game.round + 1;
+  $("roundMax").textContent = ROUNDS.length;
+  $("streak").textContent = game.streak;
+  if(bump){ const p = $("scorePill"); p.classList.remove("bump"); void p.offsetWidth; p.classList.add("bump"); }
+}
+function showError(err){
+  const n = err && err.name;
+  let title = "Oops! Something went wrong.", detail = "Please try again.";
+  if(n === "NotAllowedError" || n === "SecurityError" || n === "PermissionDeniedError"){
+    title = "I need the camera to see you jump!";
+    detail = "Grown-ups: click the camera icon in the address bar, choose Allow, then press Try Again.";
+  }else if(n === "NotFoundError" || n === "OverconstrainedError" || n === "DevicesNotFoundError"){
+    title = "I can't find a camera."; detail = "Plug in or switch on a webcam, then press Try Again.";
+  }else if(n === "NotReadableError" || n === "TrackStartError" || n === "AbortError"){
+    title = "The camera is busy."; detail = "Close other apps that use the camera (Zoom, Teams, …), then press Try Again.";
+  }else if(n === "CameraEnded"){
+    title = "The camera stopped."; detail = "Check that the webcam is still connected, then press Try Again.";
+  }else if(n === "NoMediaDevices"){
+    title = "This browser can't open the camera.";
+    detail = "Open this file in a recent Chrome or Edge. If it still fails, serve it from http://localhost or https.";
+  }else if(n === "ModelError"){
+    title = "I couldn't load my eyes!";
+    detail = "The motion tracking files are downloaded from the internet. Check the connection and press Try Again.";
+  }
+  hush();
+  $("errTitle").textContent = title; $("errDetail").textContent = detail;
+  setScreen("error");
+}
+
+async function boot(){
+  initAudio();
+  setScreen("loading");
+  try{
+    if(!stream){ $("loadingText").textContent = "Opening the camera…"; await startCamera(); }
+  }catch(e){ console.error(e); stream = null; showError(e); return; }
+  try{
+    if(!landmarker){ $("loadingText").textContent = "Getting ready…"; landmarker = await createLandmarker(); }
+  }catch(e){ console.error(e); showError({name:"ModelError"}); return; }
+  startCalibration();
+}
+
+/* ---------- Buttons and keys ---------- */
+$("btnStart").onclick = boot;
+$("btnRetry").onclick = boot;
+$("btnSkip").onclick = () => finishCalib(false);
+$("btnPause").onclick = () => setPaused(true);
+$("btnResume").onclick = () => setPaused(false);
+$("btnRestart").onclick = startGame;
+$("btnRestart2").onclick = startGame;
+$("btnAgain").onclick = startGame;
+$("btnRecal").onclick = () => { app.recal = true; startCalibration(); };
+$("btnSound").onclick = () => {
+  soundOn = !soundOn; $("btnSound").textContent = soundOn ? "🔊" : "🔇"; if(!soundOn) hush();
+};
+addEventListener("keydown", e => {
+  if((e.code === "Space" || e.code === "KeyP") && app.screen === "play"){ e.preventDefault(); setPaused(!app.paused); }
+});
+
+/* ---------- Scene canvas ---------- */
+const scene = $("scene"), ctx = scene.getContext("2d");
+let W = 0, H = 0;
+function resize(){
+  const dpr = Math.min(2, window.devicePixelRatio || 1);
+  W = innerWidth; H = innerHeight;
+  document.documentElement.style.setProperty("--vh", (H*0.01) + "px");
+  scene.width = W*dpr; scene.height = H*dpr;
+  ctx.setTransform(dpr,0,0,dpr,0,0);
+}
+addEventListener("resize", resize); addEventListener("orientationchange", () => setTimeout(resize, 150)); resize();
+
+const clouds = [{x:0.2,y:0.33,s:1,v:0.008},{x:0.62,y:0.4,s:0.75,v:0.012},{x:0.9,y:0.31,s:0.9,v:0.006}];
+
+function rr(c, x, y, w, h, r){
+  r = Math.min(r, w/2, h/2);
+  c.beginPath(); c.moveTo(x+r,y);
+  c.arcTo(x+w,y,x+w,y+h,r); c.arcTo(x+w,y+h,x,y+h,r); c.arcTo(x,y+h,x,y,r); c.arcTo(x,y,x+w,y,r);
+  c.closePath();
+}
+function padGeom(){ const x0 = W*0.03, x1 = W*0.97, h = Math.min(H*0.24, W*0.55); return {x0, x1, top:H*0.95 - h, h, zw:(x1-x0)/Math.max(1,game.zones.length)}; }
+function padCenter(i){ const g = padGeom(); return {x:g.x0 + (i+0.5)*g.zw, y:g.top + g.h*0.4}; }
+
+function burst(x, y, n){
+  const cols = ["#ff5252","#3d9bff","#ffd633","#3ecf5e","#a35cf0","#ffffff"];
+  for(let i=0;i<n;i++){
+    const a = Math.random()*Math.PI*2, sp = 200 + Math.random()*500;
+    particles.push({x, y, vx:Math.cos(a)*sp, vy:Math.sin(a)*sp - 350, rot:Math.random()*6, vr:(Math.random()-0.5)*10,
+      size:8 + Math.random()*14, color:pick(cols), life:1.4 + Math.random()*0.8, star:Math.random() < 0.45});
+  }
+}
+function starPath(c, r){
+  c.beginPath();
+  for(let i=0;i<10;i++){ const a = -Math.PI/2 + i*Math.PI/5, rad = i%2 ? r*0.45 : r; c.lineTo(Math.cos(a)*rad, Math.sin(a)*rad); }
+  c.closePath();
+}
+
+function updateFx(dt){
+  if(bunny.jumpT >= 0){ bunny.jumpT += dt/0.6; if(bunny.jumpT >= 1) bunny.jumpT = -1; }
+  // On success the bunny slides onto the right color, so near-misses look right too
+  let want = game.pos;
+  if(game.state === "success" && app.screen === "play") want = (game.zones.indexOf(game.target) + 0.5)/game.zones.length;
+  bunny.pos += (want - bunny.pos) * ease(dt, 0.08);
+
+  for(const k in padFx){ padFx[k].bounce = Math.max(0, padFx[k].bounce - dt); padFx[k].wobble = Math.max(0, padFx[k].wobble - dt); }
+  for(const p of particles){ p.vy += 900*dt; p.x += p.vx*dt; p.y += p.vy*dt; p.rot += p.vr*dt; p.life -= dt; }
+  particles = particles.filter(p => p.life > 0 && p.y < H + 40);
+  for(const f of floats){ f.y -= 60*dt; f.life -= dt; }
+  floats = floats.filter(f => f.life > 0);
+  for(const c of clouds){ c.x += c.v*dt; if(c.x > 1.2) c.x = -0.2; }
+
+  if(app.screen === "done" && Math.random() < 0.5){        // confetti rain on the result screen
+    particles.push({x:Math.random()*W, y:-20, vx:(Math.random()-0.5)*120, vy:80 + Math.random()*120, rot:0, vr:(Math.random()-0.5)*8,
+      size:10 + Math.random()*12, color:pick(["#ff5252","#3d9bff","#ffd633","#3ecf5e","#a35cf0"]), life:5, star:Math.random() < 0.4});
+  }
+}
+
+function drawScene(t){
+  // sky
+  const sky = ctx.createLinearGradient(0,0,0,H*0.7);
+  sky.addColorStop(0,"#7cc8ff"); sky.addColorStop(1,"#e3f6ff");
+  ctx.fillStyle = sky; ctx.fillRect(0,0,W,H);
+
+  // sun with a friendly face
+  const sr = H*0.065, sunX = Math.max(W*0.1, sr*1.9), sunY = H*0.44;
+  ctx.save(); ctx.translate(sunX, sunY); ctx.rotate(t*0.2);
+  ctx.strokeStyle = "#ffd633"; ctx.lineWidth = sr*0.22; ctx.lineCap = "round";
+  for(let i=0;i<10;i++){ ctx.rotate(Math.PI/5); ctx.beginPath(); ctx.moveTo(sr*1.3,0); ctx.lineTo(sr*1.7,0); ctx.stroke(); }
+  ctx.restore();
+  ctx.fillStyle = "#ffd633"; ctx.beginPath(); ctx.arc(sunX,sunY,sr,0,7); ctx.fill();
+  ctx.fillStyle = "#7a5200";
+  ctx.beginPath(); ctx.arc(sunX-sr*0.35,sunY-sr*0.15,sr*0.1,0,7); ctx.arc(sunX+sr*0.35,sunY-sr*0.15,sr*0.1,0,7); ctx.fill();
+  ctx.strokeStyle = "#7a5200"; ctx.lineWidth = sr*0.09; ctx.beginPath(); ctx.arc(sunX,sunY+sr*0.05,sr*0.4,0.2*Math.PI,0.8*Math.PI); ctx.stroke();
+
+  // clouds
+  ctx.fillStyle = "rgba(255,255,255,.95)";
+  for(const c of clouds){
+    const x = c.x*W, y = c.y*H, s = c.s*H*0.05;
+    ctx.beginPath(); ctx.arc(x,y,s,0,7); ctx.arc(x+s*1.1,y-s*0.5,s*1.2,0,7); ctx.arc(x+s*2.3,y,s,0,7); ctx.fill();
+    ctx.fillRect(x,y,s*2.3,s);
+  }
+
+  // hills and ground
+  ctx.fillStyle = "#9bdc7c";
+  ctx.beginPath(); ctx.ellipse(W*0.22,H*0.7,W*0.34,H*0.13,0,0,7); ctx.fill();
+  ctx.beginPath(); ctx.ellipse(W*0.78,H*0.7,W*0.38,H*0.16,0,0,7); ctx.fill();
+  ctx.fillStyle = "#c4eda6"; ctx.fillRect(0,H*0.64,W,H*0.36);
+
+  drawPads(t);
+
+  const g = padGeom();
+  const bx = g.x0 + bunny.pos*(g.x1 - g.x0), footY = g.top + g.h*0.45;
+  drawBunny(bx, footY, Math.min(H*0.3, W*0.5), t);
+
+  // bouncing arrow as the strongest hint
+  if(app.screen === "play" && game.hint >= 2 && game.state !== "success"){
+    const p = padCenter(game.zones.indexOf(game.target));
+    drawArrow(p.x, g.top - H*0.1 + Math.sin(t*6)*H*0.015, H*0.05);
+  }
+
+  // particles and floating "+3 ⭐"
+  for(const p of particles){
+    ctx.save(); ctx.translate(p.x,p.y); ctx.rotate(p.rot); ctx.globalAlpha = clamp(p.life,0,1); ctx.fillStyle = p.color;
+    if(p.star){ starPath(ctx, p.size*0.8); ctx.fill(); } else ctx.fillRect(-p.size/2,-p.size/3,p.size,p.size*0.66);
+    ctx.restore();
+  }
+  ctx.textAlign = "center"; ctx.font = `900 ${Math.round(Math.min(H*0.08, W*0.12))}px ${getComputedStyle(document.body).fontFamily}`;
+  for(const f of floats){
+    ctx.globalAlpha = clamp(f.life,0,1);
+    ctx.lineWidth = 8; ctx.strokeStyle = "#fff"; ctx.strokeText(f.text,f.x,f.y);
+    ctx.fillStyle = "#3b2f4a"; ctx.fillText(f.text,f.x,f.y);
+  }
+  ctx.globalAlpha = 1;
+}
+
+function drawPads(t){
+  const g = padGeom(), n = game.zones.length, gap = Math.max(4, Math.min(14, W*0.008)), r = Math.min(40, g.h*0.22);
+  const playing = app.screen === "play";
+  game.zones.forEach((key, i) => {
+    const c = COLORS[key], fx = padFx[key] || (padFx[key] = {bounce:0, wobble:0});
+    const px = g.x0 + i*g.zw + gap + (fx.wobble > 0 ? Math.sin(fx.wobble*30)*8*fx.wobble : 0);
+    const pw = g.zw - gap*2;
+    const isCur = playing && i === game.zoneIdx, isTarget = playing && key === game.target;
+    let dy = 0;
+    if(fx.bounce > 0) dy = -Math.abs(Math.sin(fx.bounce*9))*H*0.035;
+    else if(isCur) dy = 6;                                   // pad sinks a little under the bunny
+
+    ctx.fillStyle = c.dark; rr(ctx, px, g.top + 14, pw, g.h, r); ctx.fill();
+    ctx.fillStyle = c.hex;  rr(ctx, px, g.top + dy, pw, g.h, r); ctx.fill();
+    ctx.fillStyle = "rgba(255,255,255,.25)"; rr(ctx, px + pw*0.06, g.top + dy + g.h*0.07, pw*0.88, g.h*0.14, r*0.5); ctx.fill();
+
+    if(isCur){ ctx.strokeStyle = "#fff"; ctx.lineWidth = Math.min(8, Math.max(4, pw*0.07)); rr(ctx, px+4, g.top+dy+4, pw-8, g.h-8, r); ctx.stroke(); }
+    if(isTarget && game.hint >= 1 && game.state !== "success"){   // gentle glowing hint
+      ctx.strokeStyle = `rgba(255,255,255,${0.45 + 0.45*Math.sin(t*6)})`; ctx.lineWidth = Math.min(14, Math.max(6, pw*0.1));
+      rr(ctx, px-4, g.top+dy-4, pw+8, g.h+8, r+4); ctx.stroke();
+    }
+    // little face on every pad
+    const cx = px + pw/2, cy = g.top + dy + g.h*0.68, e = Math.min(pw, g.h)*0.055;
+    const happy = fx.bounce > 0;
+    ctx.fillStyle = c.dark; ctx.strokeStyle = c.dark; ctx.lineWidth = e*0.7; ctx.lineCap = "round";
+    if(happy){
+      for(const d of [-1,1]){ ctx.beginPath(); ctx.arc(cx + d*e*2.4, cy, e, Math.PI, 0); ctx.stroke(); }
+      ctx.beginPath(); ctx.arc(cx, cy + e*0.8, e*1.8, 0, Math.PI); ctx.fill();
+    }else{
+      ctx.beginPath(); ctx.arc(cx - e*2.4, cy, e, 0, 7); ctx.arc(cx + e*2.4, cy, e, 0, 7); ctx.fill();
+      ctx.beginPath(); ctx.arc(cx, cy + e*0.6, e*1.5, 0.15*Math.PI, 0.85*Math.PI); ctx.stroke();
+    }
+  });
+}
+
+function drawArrow(x, y, a){
+  ctx.beginPath();
+  ctx.moveTo(x - a*0.4, y - a); ctx.lineTo(x + a*0.4, y - a); ctx.lineTo(x + a*0.4, y);
+  ctx.lineTo(x + a*0.9, y); ctx.lineTo(x, y + a); ctx.lineTo(x - a*0.9, y); ctx.lineTo(x - a*0.4, y);
+  ctx.closePath();
+  ctx.fillStyle = "#fff"; ctx.strokeStyle = "#3b2f4a"; ctx.lineWidth = 5; ctx.lineJoin = "round";
+  ctx.fill(); ctx.stroke();
+}
+
+function drawBunny(x, footY, s, t){
+  const j = bunny.jumpT, happy = game.state === "success" && app.screen === "play";
+  let lift = 0, sx = 1, sy = 1, arm = 0;
+  if(j >= 0){ const a = Math.sin(Math.PI*j); lift = a*s*0.5; sy = 1 + 0.1*a; sx = 1 - 0.07*a; arm = a; }
+  else { const b = Math.sin(t*3)*0.015; sy = 1 + b; sx = 1 - b; if(happy) arm = 0.8 + 0.2*Math.sin(t*12); }
+
+  const sh = 1 - (lift/s)*0.6;
+  ctx.fillStyle = "rgba(40,30,60,.2)";
+  ctx.beginPath(); ctx.ellipse(x, footY + s*0.02, s*0.26*sh, s*0.05*sh, 0, 0, 7); ctx.fill();
+
+  ctx.save(); ctx.translate(x, footY - lift); ctx.scale(sx, sy);
+  ctx.lineWidth = s*0.02; ctx.strokeStyle = "#5b4a66"; ctx.lineJoin = "round"; ctx.lineCap = "round";
+  const part = fill => { ctx.fillStyle = fill; ctx.fill(); ctx.stroke(); };
+
+  for(const d of [-1,1]){                                   // ears
+    ctx.save(); ctx.translate(d*s*0.085, -s*0.72); ctx.rotate(d*(0.12 + 0.18*arm));
+    ctx.beginPath(); ctx.ellipse(0, -s*0.15, s*0.055, s*0.17, 0, 0, 7); part("#fff");
+    ctx.beginPath(); ctx.ellipse(0, -s*0.15, s*0.025, s*0.11, 0, 0, 7); ctx.fillStyle = "#ffb3c7"; ctx.fill();
+    ctx.restore();
+  }
+  for(const d of [-1,1]){ ctx.beginPath(); ctx.ellipse(d*s*0.11, -s*0.03, s*0.1, s*0.045, 0, 0, 7); part("#fff"); }   // feet
+  ctx.beginPath(); ctx.ellipse(0, -s*0.25, s*0.19, s*0.23, 0, 0, 7); part("#fff");                                    // body
+  ctx.beginPath(); ctx.ellipse(0, -s*0.22, s*0.11, s*0.14, 0, 0, 7); ctx.fillStyle = "#ffe9f0"; ctx.fill();
+  for(const d of [-1,1]){                                   // arms go up when jumping
+    ctx.save(); ctx.translate(d*s*0.17, -s*0.36); ctx.rotate(-d*(0.4 + 2.0*arm));
+    ctx.beginPath(); ctx.ellipse(0, s*0.08, s*0.045, s*0.1, 0, 0, 7); part("#fff"); ctx.restore();
+  }
+  ctx.beginPath(); ctx.arc(0, -s*0.58, s*0.19, 0, 7); part("#fff");                                                   // head
+  ctx.fillStyle = "#ffc2d1";
+  ctx.beginPath(); ctx.arc(-s*0.12, -s*0.53, s*0.035, 0, 7); ctx.arc(s*0.12, -s*0.53, s*0.035, 0, 7); ctx.fill();
+  ctx.fillStyle = "#3b2f4a"; ctx.strokeStyle = "#3b2f4a"; ctx.lineWidth = s*0.016;
+  const blink = (t % 4) < 0.12;
+  for(const d of [-1,1]){
+    ctx.beginPath();
+    if(happy || j >= 0){ ctx.arc(d*s*0.07, -s*0.59, s*0.028, Math.PI, 0); ctx.stroke(); }
+    else if(blink){ ctx.moveTo(d*s*0.07 - s*0.025, -s*0.6); ctx.lineTo(d*s*0.07 + s*0.025, -s*0.6); ctx.stroke(); }
+    else { ctx.arc(d*s*0.07, -s*0.6, s*0.024, 0, 7); ctx.fill(); }
+  }
+  ctx.fillStyle = "#ff8fab"; ctx.beginPath(); ctx.ellipse(0, -s*0.545, s*0.02, s*0.014, 0, 0, 7); ctx.fill();
+  ctx.beginPath(); ctx.arc(0, -s*0.53, s*0.05, 0.15*Math.PI, 0.85*Math.PI); ctx.stroke();
+  ctx.restore();
+}
+
+/* ---------- Camera preview: mirrored video + skeleton + zone guide ---------- */
+const cam = $("cam"), cctx = cam.getContext("2d");
+let camAR = 4/3;
+const BONES = [[11,12],[11,13],[13,15],[12,14],[14,16],[11,23],[12,24],[23,24],[23,25],[25,27],[24,26],[26,28]];
+
+function drawPreview(){
+  const vw = video.videoWidth, vh = video.videoHeight;
+  if(!vw || camBox.classList.contains("hidden")) return;
+  const ar = vw/vh;                                        // match the real camera (portrait on phones) so nothing is cropped
+  if(Math.abs(ar - camAR) > 0.01){
+    camAR = ar; cam.width = ar >= 1 ? 640 : 480; cam.height = Math.round(cam.width/ar);
+    camBox.style.setProperty("--camAR", ar.toFixed(4));
+  }
+  const cw = cam.width, ch = cam.height;
+  const s = Math.max(cw/vw, ch/vh), dw = vw*s, dh = vh*s, ox = (cw-dw)/2, oy = (ch-dh)/2;
+  const X = mx => ox + mx*dw, Y = y => oy + y*dh;          // mx is already mirrored
+
+  cctx.save(); cctx.translate(cw,0); cctx.scale(-1,1); cctx.drawImage(video, ox, oy, dw, dh); cctx.restore();
+
+  if(app.screen === "calib" || app.screen === "ready"){
+    // "stand here" guide
+    const ok = track.good && track.q.centered && !track.q.tooClose && !track.q.tooFar;
+    cctx.strokeStyle = ok ? "#3ecf5e" : "rgba(255,255,255,.9)"; cctx.lineWidth = 6; cctx.setLineDash([18,12]);
+    rr(cctx, X(0.25), ch*0.04, X(0.75)-X(0.25), ch*0.92, 30); cctx.stroke(); cctx.setLineDash([]);
+  }else if(app.screen === "play"){
+    // colored strip showing where each floor zone is in the camera picture
+    const n = game.zones.length;
+    game.zones.forEach((key,i) => {
+      const a = X(calib.cx + (i/n - 0.5)*2*CFG.HALF_RANGE), b = X(calib.cx + ((i+1)/n - 0.5)*2*CFG.HALF_RANGE);
+      cctx.fillStyle = COLORS[key].hex; cctx.globalAlpha = i === game.zoneIdx ? 0.95 : 0.6;
+      cctx.fillRect(a, ch*0.88, b-a, ch*0.12);
+    });
+    cctx.globalAlpha = 1;
+    if(track.good){
+      cctx.fillStyle = "#fff"; cctx.strokeStyle = "#3b2f4a"; cctx.lineWidth = 4;
+      cctx.beginPath(); cctx.arc(X(track.x), ch*0.94, 13, 0, 7); cctx.fill(); cctx.stroke();
+    }
+  }
+
+  // skeleton
+  const lm = track.lm;
+  if(lm){
+    cctx.lineWidth = 7; cctx.lineCap = "round"; cctx.strokeStyle = track.good ? "#7dffb0" : "#ffd633";
+    for(const [a,b] of BONES){
+      if(lm[a].v < 0.3 || lm[b].v < 0.3) continue;
+      cctx.beginPath(); cctx.moveTo(X(1-lm[a].x), Y(lm[a].y)); cctx.lineTo(X(1-lm[b].x), Y(lm[b].y)); cctx.stroke();
+    }
+    cctx.fillStyle = "#fff";
+    for(const i of [11,12,13,14,15,16,23,24,25,26,27,28]){
+      if(lm[i].v < 0.3) continue;
+      cctx.beginPath(); cctx.arc(X(1-lm[i].x), Y(lm[i].y), 6, 0, 7); cctx.fill();
+    }
+    if(lm[0].v > 0.3){
+      const hr = Math.abs(lm[11].x - lm[12].x)*dw*0.45 + 8;
+      cctx.strokeStyle = "#fff"; cctx.lineWidth = 5; cctx.beginPath(); cctx.arc(X(1-lm[0].x), Y(lm[0].y), hr, 0, 7); cctx.stroke();
+    }
+  }
+}
+
+/* =====================================================================
+   MAIN LOOP
+   ===================================================================== */
+let lastFrame = performance.now();
+function loop(now){
+  const dt = Math.min(0.05, Math.max(0, (now - lastFrame)/1000)); lastFrame = now;
+
+  trackingStep(now);                                        // tracking system
+
+  if(app.screen === "calib") updateCalib(dt, now);          // game logic
+  else if(app.screen === "play"){
+    checkLost(now);
+    if(!app.paused && !app.lost) updateGame(dt); else track.jumpEvent = false;
+  }else track.jumpEvent = false;
+
+  updateFx(dt);                                             // UI
+  drawScene(now/1000);
+  drawPreview();
+  requestAnimationFrame(loop);
+}
+requestAnimationFrame(loop);
+</script>
+</body>
+</html>

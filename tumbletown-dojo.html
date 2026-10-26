@@ -1,0 +1,1592 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="theme-color" content="#FFB36B">
+<title>TumbleTown Dojo</title>
+<style>
+/* ==================================================================
+   UI STYLES
+   Everything is sized with clamp() + vmin so it stays large and
+   fits phones, tablets and desktops in both orientations.
+   ================================================================== */
+:root{
+  --sat:env(safe-area-inset-top,0px);   --sar:env(safe-area-inset-right,0px);
+  --sab:env(safe-area-inset-bottom,0px); --sal:env(safe-area-inset-left,0px);
+  --btn:clamp(56px,min(17.5vw,17vh),108px);   /* touch pad buttons */
+  --hb:clamp(44px,10vmin,68px);               /* HUD buttons */
+  --cue:clamp(56px,14vmin,116px);             /* picture cue cards */
+  --fs:clamp(17px,3.6vmin,28px);
+  --fs-big:clamp(21px,5.2vmin,44px);
+  --blue:#2F9BFF; --orange:#FF9A3C; --purple:#A77BFF; --ink:#3B2A20; --belt:#FFD23F;
+  --font:ui-rounded,"Arial Rounded MT Bold","Nunito","Baloo 2","Comic Sans MS","Trebuchet MS",system-ui,sans-serif;
+}
+*{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+[hidden]{display:none!important}
+html,body{margin:0;height:100%;overflow:hidden;background:#FFE2B8;font-family:var(--font);color:var(--ink);overscroll-behavior:none}
+#app{position:fixed;inset:0;overflow:hidden;user-select:none;-webkit-user-select:none;touch-action:manipulation}
+#stage{position:absolute;inset:0;width:100%;height:100%;display:block}
+h1,h2,p{margin:0}
+button{font-family:var(--font);touch-action:manipulation}
+button:active{transform:translateY(3px)}
+button:focus-visible{outline:4px solid #fff;outline-offset:2px}
+
+/* ---- in-game layer: HUD, cue cards, free play area, touch pad ---- */
+#ui{position:absolute;inset:0;z-index:10;display:flex;flex-direction:column;gap:4px;pointer-events:none;
+  padding:calc(var(--sat) + 6px) calc(var(--sar) + 8px) calc(var(--sab) + 6px) calc(var(--sal) + 8px)}
+#ui > *{pointer-events:auto}
+#playArea{flex:1 1 auto;min-height:0;pointer-events:none}
+#hud{display:flex;align-items:center;gap:6px;min-height:var(--hb)}
+.chip{display:flex;align-items:center;gap:.3em;height:var(--hb);padding:0 .7em;border-radius:999px;background:rgba(255,253,245,.94);
+  font-size:var(--fs);font-weight:900;white-space:nowrap;box-shadow:0 3px 0 rgba(0,0,0,.14)}
+.beltDot{display:inline-block;width:1.5em;height:.62em;border-radius:.2em;background:var(--belt);box-shadow:inset 0 -2px 0 rgba(0,0,0,.2)}
+.grow{flex:1}
+.rbtn{width:var(--hb);height:var(--hb);border:0;border-radius:50%;padding:0;display:grid;place-items:center;cursor:pointer;
+  background:#FFFDF5;font-size:calc(var(--hb)*.46);box-shadow:0 4px 0 rgba(0,0,0,.2)}
+#cueBar{display:flex;flex-wrap:wrap;align-items:center;justify-content:center;gap:4px 14px}
+#cueCards{display:flex;align-items:center;gap:clamp(6px,1.6vmin,14px);min-height:var(--cue)}
+.cue{--c:#999;position:relative;width:var(--cue);height:var(--cue);border-radius:24%;background:#fff;border:4px solid #fff;
+  box-shadow:0 4px 0 rgba(0,0,0,.14);opacity:.6;transform:scale(.84);transition:transform .25s,opacity .25s}
+.cue canvas{display:block;width:100%;height:100%;border-radius:20%}
+.cue.now{opacity:1;transform:scale(1);border-color:var(--c);box-shadow:0 6px 0 var(--c);animation:bob .9s ease-in-out infinite}
+.cue.done{opacity:1}
+.cue.done::after{content:"⭐";position:absolute;right:-12%;top:-16%;font-size:calc(var(--cue)*.42);animation:pop .4s}
+#promptText{max-width:100%;padding:.12em .7em;border-radius:999px;background:rgba(255,253,245,.95);text-align:center;
+  font-size:var(--fs-big);font-weight:900;line-height:1.2;box-shadow:0 4px 0 rgba(0,0,0,.14)}
+.tb{color:#1B7FE0}.to{color:#E87400}.tp{color:#7C4DFF}
+#pad{display:flex;justify-content:center;align-items:flex-end;gap:clamp(4px,1.4vmin,14px)}
+.pbtn{width:var(--btn);height:var(--btn);border:0;border-radius:26%;padding:0;cursor:pointer;color:#fff;
+  display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px;box-shadow:0 5px 0 rgba(0,0,0,.25)}
+.pbtn .ic{font-size:calc(var(--btn)*.4);line-height:1}
+.pbtn .lb{font-size:calc(var(--btn)*.2);font-weight:900;line-height:1;text-shadow:0 1px 0 rgba(0,0,0,.3)}
+.pbtn.l,.pbtn.sl{background:var(--blue)} .pbtn.r,.pbtn.sr{background:var(--orange)} .pbtn.b{background:var(--purple)}
+.pbtn.hit{animation:press .25s}
+
+/* ---- mirrored camera preview with landmark overlay ---- */
+#camWrap{position:absolute;left:8px;top:8px;width:120px;height:90px;z-index:20;border-radius:16px;overflow:hidden;background:#27455C;
+  box-shadow:0 0 0 4px #fff,0 6px 0 4px rgba(0,0,0,.2);transition:left .35s,top .35s,width .35s,height .35s}
+#camWrap.big{z-index:60;border-radius:22px}
+#cam{display:block;width:100%;height:100%;object-fit:cover;transform:scaleX(-1)}   /* mirror */
+#skel{position:absolute;inset:0;width:100%;height:100%}
+
+/* ---- banner + toast ---- */
+#banner,#toast{position:absolute;left:50%;z-index:30;pointer-events:none;opacity:0;text-align:center;font-weight:900;
+  background:#FFFDF5;max-width:92%;box-shadow:0 8px 0 rgba(0,0,0,.18)}
+#banner{top:42%;transform:translate(-50%,-50%) scale(0);font-size:var(--fs-big);border-radius:28px;padding:.45em 1.1em;border:6px solid var(--belt)}
+#banner small{display:block;font-size:var(--fs)}
+#banner.show{animation:banner 2.7s ease both}
+#toast{bottom:calc(var(--sab) + var(--btn) + 26px);transform:translateX(-50%);font-size:var(--fs);border-radius:999px;padding:.4em 1em}
+#toast.show{animation:toast 2.6s ease both}
+
+/* ---- full-screen overlays ---- */
+.scr{position:absolute;inset:0;z-index:50;display:none;align-items:center;justify-content:center;background:rgba(46,26,70,.45);
+  padding:calc(var(--sat) + 10px) calc(var(--sar) + 10px) calc(var(--sab) + 10px) calc(var(--sal) + 10px)}
+.scr.show{display:flex}
+.scr.dark{background:rgba(34,22,62,.84)}
+#scrPause{z-index:55}
+.card{display:flex;flex-direction:column;align-items:center;gap:clamp(8px,1.8vmin,16px);width:min(720px,100%);max-height:100%;overflow:auto;
+  text-align:center;background:#FFFBF2;border:5px solid #fff;border-radius:clamp(20px,4vmin,36px);padding:clamp(12px,3vmin,30px);
+  box-shadow:0 10px 0 rgba(0,0,0,.18)}
+.panel{display:flex;flex-direction:column;align-items:center;gap:clamp(6px,1.5vmin,14px);width:100%;height:100%;color:#fff;text-align:center}
+.slot{flex:1 1 auto;min-height:90px;width:100%}
+.logo{font-size:clamp(30px,8.5vmin,76px);line-height:1;font-weight:900;color:#E0692C;text-shadow:0 3px 0 #fff,0 6px 0 rgba(0,0,0,.12)}
+.logo span{color:#2F9BFF}
+h2{font-size:var(--fs-big);font-weight:900;line-height:1.1}
+p{font-size:var(--fs);font-weight:700;line-height:1.25}
+.tiny{font-size:clamp(13px,2.5vmin,18px);font-weight:600;opacity:.82}
+.row{display:flex;flex-wrap:wrap;justify-content:center;align-items:center;gap:clamp(8px,1.8vmin,16px)}
+.big{position:relative;overflow:hidden;min-height:clamp(52px,11vmin,84px);padding:0 1.1em;border:0;border-radius:999px;cursor:pointer;
+  font-size:var(--fs);font-weight:900;color:#fff;background:#34B36A;box-shadow:0 6px 0 rgba(0,0,0,.22)}
+.big.alt{background:#7C6BEA}.big.warm{background:#FF8A4C}.big.plain{background:#fff;color:var(--ink)}
+.big i{position:absolute;left:0;top:0;bottom:0;width:0;background:rgba(255,255,255,.32)}
+.big span{position:relative}
+.seg{display:inline-flex;padding:4px;border-radius:999px;background:#EADFCF}
+.seg button{min-height:clamp(44px,9vmin,64px);padding:0 .9em;border:0;border-radius:999px;background:transparent;cursor:pointer;
+  font-size:var(--fs);font-weight:900;color:var(--ink)}
+.seg button.on{background:#fff;box-shadow:0 3px 0 rgba(0,0,0,.15)}
+.bar{width:min(520px,90%);height:clamp(14px,3vmin,24px);border-radius:999px;overflow:hidden;background:rgba(255,255,255,.3);flex:0 0 auto}
+.bar i{display:block;width:0;height:100%;border-radius:999px;background:#7CE38B;transition:width .12s linear}
+.spin{width:clamp(44px,10vmin,72px);aspect-ratio:1;border-radius:50%;border:8px solid #EADFCF;border-top-color:#FF8A4C;animation:spin 1s linear infinite}
+.beltStrip{position:relative;width:min(360px,80%);height:clamp(22px,5vmin,40px);border-radius:8px;background:var(--belt);box-shadow:inset 0 -5px 0 rgba(0,0,0,.18);flex:0 0 auto}
+.beltStrip::after{content:"";position:absolute;left:50%;top:-12%;width:14%;height:124%;transform:translateX(-50%);border-radius:8px;background:var(--belt);box-shadow:inset 0 0 0 4px rgba(0,0,0,.15)}
+.cer{display:flex;justify-content:center;gap:clamp(8px,3vmin,28px)}
+.cer .st{transform:scale(0);font-size:var(--fs);font-weight:900}
+.cer .st span{display:block;font-size:clamp(46px,15vmin,120px);line-height:1.05}
+.cer .st.on{animation:starIn .7s cubic-bezier(.2,1.6,.4,1) forwards}
+.belts{display:flex;gap:8px}
+.belts i{width:clamp(40px,10vmin,80px);height:clamp(12px,2.6vmin,20px);border-radius:6px;box-shadow:inset 0 -3px 0 rgba(0,0,0,.2)}
+
+@keyframes bob{50%{transform:scale(1.07) translateY(-3px)}}
+@keyframes pop{0%{transform:scale(0) rotate(-90deg)}70%{transform:scale(1.3)}100%{transform:scale(1)}}
+@keyframes press{50%{transform:scale(.88)}}
+@keyframes spin{to{transform:rotate(360deg)}}
+@keyframes starIn{0%{transform:scale(0) rotate(-180deg)}100%{transform:scale(1) rotate(0)}}
+@keyframes banner{0%{transform:translate(-50%,-50%) scale(0);opacity:0}12%{transform:translate(-50%,-50%) scale(1.08);opacity:1}
+  20%,82%{transform:translate(-50%,-50%) scale(1);opacity:1}100%{transform:translate(-50%,-50%) scale(.6);opacity:0}}
+@keyframes toast{0%{opacity:0;transform:translate(-50%,20px)}12%,85%{opacity:1;transform:translate(-50%,0)}100%{opacity:0;transform:translate(-50%,0)}}
+@media (max-width:520px){#beltName{display:none}}
+@media (prefers-reduced-motion:reduce){.cue.now{animation:none}}
+</style>
+</head>
+<body>
+<div id="app">
+  <!-- Game scene: dojo, red panda, robot, targets, stars -->
+  <canvas id="stage" aria-label="TumbleTown Dojo game scene"></canvas>
+
+  <!-- In-game UI -->
+  <div id="ui">
+    <header id="hud">
+      <div class="chip" title="Belt"><i class="beltDot"></i><span id="beltName">Yellow Belt</span></div>
+      <div class="chip" title="Stars">⭐ <b id="starCount">0</b></div>
+      <div class="chip" title="Combo stars">💫 <b id="comboCount">0</b></div>
+      <span class="grow"></span>
+      <button class="rbtn" id="btnSound" aria-label="Sound on or off">🔊</button>
+      <button class="rbtn" id="btnRestart" aria-label="Restart game">🔄</button>
+      <button class="rbtn" id="btnPause" aria-label="Pause game">⏸️</button>
+    </header>
+    <section id="cueBar">
+      <div id="cueCards"></div>
+      <div id="promptText" aria-live="polite">Welcome to the dojo!</div>
+    </section>
+    <div id="playArea"></div>
+    <nav id="pad" aria-label="Touch controls">
+      <button class="pbtn sl" data-move="SL" aria-label="Step to the blue side"><span class="ic">⬅️</span><span class="lb">Step</span></button>
+      <button class="pbtn l"  data-move="L"  aria-label="Reach to the blue side"><span class="ic">👈</span><span class="lb">Reach</span></button>
+      <button class="pbtn b"  data-move="B"  aria-label="Block with both arms"><span class="ic">🙌</span><span class="lb">Block</span></button>
+      <button class="pbtn r"  data-move="R"  aria-label="Reach to the orange side"><span class="ic">👉</span><span class="lb">Reach</span></button>
+      <button class="pbtn sr" data-move="SR" aria-label="Step to the orange side"><span class="ic">➡️</span><span class="lb">Step</span></button>
+    </nav>
+  </div>
+
+  <!-- Mirrored camera preview + pose landmarks -->
+  <div id="camWrap" hidden>
+    <video id="cam" playsinline muted autoplay></video>
+    <canvas id="skel"></canvas>
+  </div>
+
+  <div id="banner"></div>
+  <div id="toast"></div>
+
+  <!-- Title / Start -->
+  <div class="scr show" id="scrTitle">
+    <div class="card">
+      <h1 class="logo">TumbleTown <span>Dojo</span></h1>
+      <p>Train with Tango the red panda! Reach, step and block. Slow and gentle.</p>
+      <div class="row">
+        <button class="big" id="btnCam">📷 Play with Camera</button>
+        <button class="big alt" id="btnTouch">👆 Touch or Keys</button>
+      </div>
+      <div class="row">
+        <div class="seg" role="group" aria-label="Standing or seated">
+          <button data-mode="standing" class="on">🧍 Standing</button>
+          <button data-mode="seated">🪑 Seated</button>
+        </div>
+        <button class="big plain" data-voice>🗣️ Voice: On</button>
+      </div>
+      <p class="tiny">Grown-ups: clear a little space and stay nearby. No jumping, kicking or fast moves are needed.
+        Keys: ← → reach, ↑ or Space block, Q / E step, P pause, R restart.</p>
+    </div>
+  </div>
+
+  <!-- Loading + camera/permission errors -->
+  <div class="scr" id="scrMsg">
+    <div class="card">
+      <h2 id="msgTitle">One moment…</h2>
+      <div class="spin" id="msgSpin"></div>
+      <p id="msgText"></p>
+      <div class="row">
+        <button class="big" id="msgRetry">📷 Try camera again</button>
+        <button class="big alt" id="msgTouch">👆 Play with touch or keys</button>
+        <button class="big plain" id="msgBack">Back</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Calibration -->
+  <div class="scr dark" id="scrCalib">
+    <div class="panel">
+      <h2>Let's get ready!</h2>
+      <div class="slot" id="calSlot"></div>
+      <p id="calMsg">Step into the picture!</p>
+      <div class="bar"><i id="calBar"></i></div>
+      <div class="row">
+        <button class="big plain" id="calSkip">Skip</button>
+        <button class="big alt" id="calTouch">👆 Use touch instead</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Pause -->
+  <div class="scr" id="scrPause">
+    <div class="card">
+      <h2>Resting time 😴</h2>
+      <div class="row">
+        <button class="big" id="pauseResume">▶ Keep playing</button>
+        <button class="big warm" id="pauseRestart">🔄 Start over</button>
+      </div>
+      <div class="row">
+        <div class="seg" role="group" aria-label="Standing or seated">
+          <button data-mode="standing" class="on">🧍 Standing</button>
+          <button data-mode="seated">🪑 Seated</button>
+        </div>
+        <button class="big plain" data-voice>🗣️ Voice: On</button>
+      </div>
+      <div class="row">
+        <button class="big alt" id="pauseRecal">📷 Calibrate again</button>
+        <button class="big plain" id="pauseMenu">🏠 Main menu</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Tracking lost -->
+  <div class="scr dark" id="scrLost">
+    <div class="panel">
+      <h2>Peekaboo! Where did you go?</h2>
+      <div class="slot" id="lostSlot"></div>
+      <p id="lostMsg">Take a step back so I can see your arms!</p>
+      <div class="bar"><i id="lostBar"></i></div>
+      <div class="row"><button class="big alt" id="lostTouch">👆 Play with touch instead</button></div>
+    </div>
+  </div>
+
+  <!-- Belt earned -->
+  <div class="scr" id="scrBelt">
+    <div class="card">
+      <h2 id="beltTitle">Yellow Belt earned!</h2>
+      <div class="beltStrip"></div>
+      <p id="beltStars"></p>
+      <button class="big" id="beltNext"><i id="beltFill"></i><span id="beltNextLabel">Next dojo ▶</span></button>
+      <p class="tiny" id="beltHint">Put your arms up to keep going! 🙌</p>
+    </div>
+  </div>
+
+  <!-- Final star ceremony -->
+  <div class="scr" id="scrFinal">
+    <div class="card">
+      <h2>🎉 Star Ceremony! 🎉</h2>
+      <div class="cer" id="cer">
+        <div class="st"><span>⭐</span>Reach Star</div>
+        <div class="st"><span>🌟</span>Block Star</div>
+        <div class="st"><span>💫</span>Combo Star</div>
+      </div>
+      <div class="belts"><i style="background:#FFD23F"></i><i style="background:#58C96B"></i><i style="background:#FF5E5E"></i></div>
+      <p>⭐ <b id="finStars">0</b> stars &nbsp; 💫 <b id="finCombos">0</b> combos &nbsp; 🔥 best streak <b id="finBest">0</b></p>
+      <div class="row">
+        <button class="big" id="finAgain">🔄 Play again</button>
+        <button class="big plain" id="finMenu">🏠 Main menu</button>
+      </div>
+    </div>
+  </div>
+  <noscript><p style="position:absolute;inset:0;display:grid;place-items:center;background:#fff;z-index:99">Please turn on JavaScript to play.</p></noscript>
+</div>
+
+<script>
+(() => {
+'use strict';
+
+/* ==================================================================
+   0. HELPERS, CONFIG AND GAME DATA
+   ================================================================== */
+const $ = id => document.getElementById(id);
+const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
+const lerp = (a, b, t) => a + (b - a) * t;
+const ease = t => (t < .5 ? 2*t*t : 1 - Math.pow(-2*t + 2, 2)/2);
+const pick = a => a[(Math.random()*a.length) | 0];
+const TAU = Math.PI*2;
+const BLUE = '#2F9BFF', ORANGE = '#FF9A3C', PURPLE = '#A77BFF';
+const CFONT = '"Arial Rounded MT Bold","Trebuchet MS",system-ui,sans-serif';
+
+const CFG = {
+  mpVersion: '0.10.14',
+  model: 'https://storage.googleapis.com/mediapipe-models/pose_landmarker/pose_landmarker_lite/float16/1/pose_landmarker_lite.task',
+  detectEveryMs: 30,     // cap pose detection at about 30 fps
+  smoothTau: 0.08,       // landmark low-pass time constant (seconds)
+  reachThr: 0.80,        // arm extension, in shoulder widths (before calibration)
+  stepThr: 0.50,         // sideways step (standing), in shoulder widths
+  leanThr: 0.24,         // sideways lean (seated)
+  baseTau: 4.0,          // how quickly "where I stand" re-centres (seconds)
+  tooClose: 0.50,        // shoulders wider than half the picture = too close
+  lostAfter: 1.2,        // seconds without tracking before pausing
+  reacquire: 1.0,        // seconds of stable tracking before resuming
+  flyTime: 1.3,          // slow, floaty target flight
+  gap: 0.9,              // rest between moves
+  wrongHold: 380,        // ms a wrong-side move must be held to count
+  virtHold: 480,         // ms a touch/key press stays "held"
+  hintAfter: 3.0         // seconds before the panda demonstrates the move
+};
+
+/* Moves. Left is always the BLUE side, right is always the ORANGE side. */
+const MOVES = {
+  L:  { kind:'paper', side:-1, color:BLUE,   opp:'R'  },
+  R:  { kind:'paper', side: 1, color:ORANGE, opp:'L'  },
+  SL: { kind:'kite',  side:-1, color:BLUE,   opp:'SR' },
+  SR: { kind:'kite',  side: 1, color:ORANGE, opp:'SL' },
+  B:  { kind:'ball',  side: 0, color:PURPLE, opp:null }
+};
+
+/* Three belts: each has its own dojo, target arrangement and sequences. */
+const BELTS = [
+  { name:'Yellow Belt', place:'Sunrise Dojo',       color:'#FFD23F', dark:'#D99A00', bg:'sunrise',   arrange:'line',   hover:14,
+    seqs:[['L','R'],['R','L'],['L','SL'],['R','SR'],['B','R']] },
+  { name:'Green Belt',  place:'Bamboo Garden Dojo', color:'#58C96B', dark:'#2E8F45', bg:'bamboo',    arrange:'zigzag', hover:12,
+    seqs:[['L','R','L'],['B','R'],['SL','L'],['R','L','B'],['SR','R','B']] },
+  { name:'Red Belt',    place:'Starlight Dojo',     color:'#FF5E5E', dark:'#C23333', bg:'starlight', arrange:'orbit',  hover:11,
+    seqs:[['L','R','SL'],['R','L','SR'],['B','L','R'],['SL','SR','B'],['L','B','R']] }
+];
+const PRAISE = ['Super combo!', 'Wonderful!', 'You did it!', 'Amazing moves!', 'High five!'];
+
+/* Shared state */
+const G = {
+  state:'title', paused:false, lost:false, useCam:false, mode:'standing',
+  belt:0, seq:0, step:0, curSeq:[], obj:null, ghosts:[], fx:[], floats:[], timers:[],
+  stars:0, combos:0, streak:0, best:0, resets:0, assist:false,
+  wrongArmed:false, wrongSince:0, hintT:0, badFor:0, goodFor:0, edgeT:0, edgeCool:0,
+  beltWaitT:0, camTok:0, cerTok:0,
+  virt:{ L:0, R:0, SL:0, SR:0, B:0 }
+};
+const V = { W:0, H:0, dpr:1, u:60, cx:0, floor:0 };          // scene layout
+const ARM = {                                                // panda arm poses [elbowX, elbowY, handX, handY]
+  down:[0.66,-0.90,0.72,-0.48], out:[0.98,-1.22,1.50,-1.30], block:[0.88,-1.36,0.64,-1.98],
+  up:[0.92,-1.50,1.12,-2.15],   wave:[0.94,-1.42,1.16,-2.08]
+};
+const armFor = (name, sgn, aim) => {
+  const a = ARM[name], o = [a[0]*sgn, a[1], a[2]*sgn, a[3]];
+  if (name === 'out' && aim != null){ o[3] = -aim; o[1] = lerp(-1.16, -aim, 0.55); }
+  return o;
+};
+const PANDA = { L:armFor('down',-1), R:armFor('down',1), lean:0, mood:'smile', cheerT:0, oopsT:0, reactT:0, reactMv:null, reactAim:null };
+const ROBOT = { throwT:0, side:1 };
+let bgDirty = true, animT = 0, frame = 0, lastT = performance.now(), muted = false;
+
+const stage = $('stage'), ctx = stage.getContext('2d'), bgC = document.createElement('canvas');
+const video = $('cam'), skel = $('skel'), sctx = skel.getContext('2d'), camWrap = $('camWrap');
+
+/* ---------- soft sounds (Web Audio, no files) ---------- */
+const Sfx = (() => {
+  let ac = null;
+  function unlock(){
+    try {
+      if (!ac){ const AC = window.AudioContext || window.webkitAudioContext; if (AC) ac = new AC(); }
+      if (ac && ac.state === 'suspended') ac.resume();
+    } catch (e) {}
+  }
+  function note(f0, f1, dur, o = {}){
+    if (!ac || muted) return;
+    const t = ac.currentTime + (o.delay || 0), osc = ac.createOscillator(), gain = ac.createGain();
+    osc.type = o.type || 'sine';
+    osc.frequency.setValueAtTime(f0, t);
+    if (o.f2){ osc.frequency.exponentialRampToValueAtTime(f1, t + dur*0.3); osc.frequency.exponentialRampToValueAtTime(o.f2, t + dur); }
+    else osc.frequency.exponentialRampToValueAtTime(f1, t + dur);
+    gain.gain.setValueAtTime(0.0001, t);
+    gain.gain.exponentialRampToValueAtTime(o.vol || 0.15, t + 0.02);
+    gain.gain.exponentialRampToValueAtTime(0.0001, t + dur);
+    osc.connect(gain); gain.connect(ac.destination);
+    osc.start(t); osc.stop(t + dur + 0.05);
+  }
+  return {
+    unlock,
+    boing(){ note(190, 520, 0.42, { f2:260, vol:.2 }); note(380, 1040, 0.3, { f2:520, vol:.05, type:'triangle' }); },
+    pop(){ note(700, 1100, 0.12, { type:'triangle', vol:.12 }); },
+    whoosh(){ note(300, 520, 0.25, { vol:.05 }); },
+    oops(){ note(392, 330, 0.22, { vol:.11 }); note(330, 262, 0.3, { vol:.11, delay:.2 }); },
+    tick(){ note(880, 1320, 0.14, { type:'triangle', vol:.12 }); },
+    chime(){ [523,659,784,1047].forEach((f, i) => note(f, f, 0.35, { type:'triangle', vol:.12, delay:i*0.1 })); },
+    fanfare(){ [523,523,659,784,659,784,1047].forEach((f, i) => note(f, f, 0.4, { type:'triangle', vol:.13, delay:i*0.16 })); }
+  };
+})();
+
+/* ---------- spoken prompts (Web Speech API) ---------- */
+const Voice = (() => {
+  const ok = 'speechSynthesis' in window && 'SpeechSynthesisUtterance' in window;
+  let on = true, timer = 0, primed = false;
+  return {
+    get on(){ return on; },
+    set on(v){ on = v; if (!v) this.hush(); },
+    prime(){ // some phones only allow speech after a first utterance inside a tap
+      if (!ok || primed) return; primed = true;
+      try { const u = new SpeechSynthesisUtterance(' '); u.volume = 0; speechSynthesis.speak(u); } catch (e) {}
+    },
+    say(text){
+      if (!ok || !on || muted) return;
+      try {
+        clearTimeout(timer); speechSynthesis.cancel();
+        timer = setTimeout(() => {
+          const u = new SpeechSynthesisUtterance(text);
+          u.lang = 'en-US'; u.rate = 0.92; u.pitch = 1.25;
+          speechSynthesis.speak(u);
+        }, 70);
+      } catch (e) {}
+    },
+    hush(){ if (ok){ clearTimeout(timer); try { speechSynthesis.cancel(); } catch (e) {} } }
+  };
+})();
+
+function moveWords(mv){
+  const w = G.mode === 'seated' ? 'Lean' : 'Step';
+  switch (mv){
+    case 'L':  return { say:'Reach out to the blue side!',   html:'Reach to the <b class="tb">BLUE</b> side!' };
+    case 'R':  return { say:'Reach out to the orange side!', html:'Reach to the <b class="to">ORANGE</b> side!' };
+    case 'SL': return { say:w + ' to the blue side!',        html:w + ' to the <b class="tb">BLUE</b> side!' };
+    case 'SR': return { say:w + ' to the orange side!',      html:w + ' to the <b class="to">ORANGE</b> side!' };
+    default:   return { say:'Arms up! Block the big ball!',  html:'Arms up! <b class="tp">Block</b> the big ball!' };
+  }
+}
+
+/* ==================================================================
+   1. TRACKING SYSTEM
+   Camera (getUserMedia) -> MediaPipe Pose Landmarker -> smoothing ->
+   forgiving gesture flags (L, R, SL, SR, B) -> calibration and
+   tracking-loss detection.
+   ================================================================== */
+const GKEYS = ['L', 'R', 'SL', 'SR', 'B'];
+const T = {
+  stream:null, landmarker:null, ready:false, camOn:false, aspect:4/3,
+  lastVideoTime:-1, lastDetect:0, lastStamp:0, errors:0,
+  pts:Array.from({ length:33 }, () => ({ x:.5, y:.5, v:0 })),   // smoothed landmarks
+  hasPose:false, tracked:false, tooClose:false, armsSeen:false,
+  sw:0, swFrac:0, cxm:.5, torso:0, base:0, baseInit:false, reachL:0, reachR:0,
+  g:{}, deb:{},
+  calib:{ done:false, sw:0, restL:.15, restR:.15, thrL:CFG.reachThr, thrR:CFG.reachThr }
+};
+GKEYS.forEach(k => { T.g[k] = false; T.deb[k] = { raw:false, since:0 }; });
+
+/* --- camera start / stop with clear error names --- */
+async function startCamera(){
+  if (T.stream) return;
+  if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia){
+    throw Object.assign(new Error('no camera api'), { name: window.isSecureContext ? 'NoMediaDevices' : 'InsecureContext' });
+  }
+  const stream = await navigator.mediaDevices.getUserMedia({
+    audio:false,
+    video:{ facingMode:'user', width:{ ideal:640 }, height:{ ideal:480 }, frameRate:{ ideal:30 } }
+  });
+  T.stream = stream; video.srcObject = stream;
+  await new Promise((res, rej) => {
+    if (video.readyState >= 1) return res();
+    const to = setTimeout(() => rej(Object.assign(new Error('timeout'), { name:'CameraTimeout' })), 8000);
+    video.onloadedmetadata = () => { clearTimeout(to); res(); };
+  });
+  try { await video.play(); } catch (e) {}
+  T.aspect = (video.videoWidth || 4)/(video.videoHeight || 3);
+  T.camOn = true;
+  stream.getVideoTracks().forEach(tr => tr.addEventListener('ended', onCameraEnded));
+}
+function stopCamera(){
+  if (T.stream){ T.stream.getTracks().forEach(tr => tr.stop()); T.stream = null; }
+  video.srcObject = null;
+  T.camOn = false; T.hasPose = false; T.tracked = false; clearGestures(); placeCam();
+}
+function onCameraEnded(){
+  if (!T.camOn) return;
+  stopCamera();
+  if (G.state === 'play' || G.state === 'intro' || G.state === 'calib'){
+    G.useCam = false; G.lost = false; $('scrLost').classList.remove('show');
+    if (G.state === 'calib') startGame();
+    toast('The camera stopped. Use the big buttons!');
+  }
+}
+video.addEventListener('resize', () => { if (video.videoWidth){ T.aspect = video.videoWidth/video.videoHeight; placeCam(); } });
+
+/* --- MediaPipe Pose Landmarker from CDN (GPU first, CPU fallback) --- */
+async function loadModel(){
+  if (T.landmarker){ T.ready = true; return; }
+  const base = 'https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@' + CFG.mpVersion;
+  try {
+    const vision = await import(base + '/vision_bundle.mjs');
+    const files = await vision.FilesetResolver.forVisionTasks(base + '/wasm');
+    const make = delegate => vision.PoseLandmarker.createFromOptions(files, {
+      baseOptions:{ modelAssetPath:CFG.model, delegate },
+      runningMode:'VIDEO', numPoses:1,
+      minPoseDetectionConfidence:.5, minPosePresenceConfidence:.5, minTrackingConfidence:.5
+    });
+    try { T.landmarker = await make('GPU'); } catch (e) { T.landmarker = await make('CPU'); }
+  } catch (e) {
+    throw Object.assign(new Error('model'), { name:'ModelLoadError' });
+  }
+  T.ready = true;
+}
+
+/* --- one detection per new video frame --- */
+function trackStep(now){
+  if (!T.ready || !T.camOn || G.paused || document.hidden) return;
+  if (video.readyState < 2 || now - T.lastDetect < CFG.detectEveryMs) return;
+  if (video.currentTime === T.lastVideoTime) return;
+  T.lastVideoTime = video.currentTime; T.lastDetect = now;
+  let res = null;
+  try { res = T.landmarker.detectForVideo(video, now); T.errors = 0; }
+  catch (e) { if (++T.errors > 40) trackerFailed(); return; }
+  processPose(res && res.landmarks && res.landmarks[0], now);
+}
+function trackerFailed(){
+  T.ready = false; G.useCam = false; stopCamera();
+  G.lost = false; $('scrLost').classList.remove('show');
+  if (G.state === 'calib') startGame();
+  toast('Motion tracking stopped. Use the big buttons!');
+}
+function clearGestures(){ GKEYS.forEach(k => { T.g[k] = false; T.deb[k].raw = false; }); }
+
+/* Debounce: a gesture must hold for onMs to switch on and offMs to switch off. */
+function setG(key, raw, now, onMs, offMs){
+  const d = T.deb[key];
+  if (raw !== d.raw){ d.raw = raw; d.since = now; }
+  const held = now - d.since;
+  if (raw && !T.g[key] && held >= onMs) T.g[key] = true;
+  if (!raw && T.g[key] && held >= offMs) T.g[key] = false;
+}
+
+/* Smooth the landmarks, then turn them into forgiving gesture flags.
+   All distances are measured in shoulder widths, so they work at any
+   distance from the camera and for any body size. */
+function processPose(raw, now){
+  const dt = clamp((now - T.lastStamp)/1000, 0.001, 0.25);
+  T.lastStamp = now;
+  if (!raw || raw.length < 25){ T.hasPose = false; T.tracked = false; T.baseInit = false; clearGestures(); return; }
+
+  // exponential smoothing (snap on first sight so we do not glide in from stale data)
+  const snap = !T.hasPose, a = snap ? 1 : 1 - Math.exp(-dt/CFG.smoothTau);
+  for (let i = 0; i < 33; i++){
+    const p = raw[i], s = T.pts[i]; if (!p) continue;
+    const vis = p.visibility == null ? 1 : p.visibility;
+    s.x += (p.x - s.x)*a; s.y += (p.y - s.y)*a; s.v += (vis - s.v)*(snap ? 1 : Math.min(1, a*1.5));
+  }
+  T.hasPose = true;
+
+  // mirrored coordinates: the child's left arm is on the left of the screen
+  const asp = T.aspect;
+  const P = i => { const s = T.pts[i]; return { X:(1 - s.x)*asp, Y:s.y, v:s.v, mx:1 - s.x }; };
+  const ls = P(11), rs = P(12), le = P(13), re = P(14), lw = P(15), rw = P(16);
+  const swNow = Math.hypot(rs.X - ls.X, rs.Y - ls.Y);
+  T.swFrac = Math.abs(rs.mx - ls.mx);
+  T.cxm = (ls.mx + rs.mx)/2;
+  const shouldersOK = ls.v > .5 && rs.v > .5 && swNow > 0.02;
+  T.tooClose = shouldersOK && T.swFrac > CFG.tooClose;
+  T.armsSeen = le.v > .4 && re.v > .4 && lw.v > .3 && rw.v > .3;
+  T.tracked = shouldersOK && !T.tooClose && T.cxm > .04 && T.cxm < .96;
+  if (!T.tracked){ T.baseInit = false; clearGestures(); return; }
+
+  T.sw = (snap || !T.sw) ? swNow : lerp(T.sw, swNow, 1 - Math.exp(-dt/0.4));
+  const sw = Math.max(T.sw, T.calib.sw*0.6, 0.02);
+
+  // ARM EXTENSION: how far the wrist is to the side of its shoulder.
+  // Falls back to the elbow if the wrist leaves the picture; reaching across with the other hand also counts.
+  const reach = (s, e, w, dir, other) => {
+    let r = -9;
+    if (w.v > .35) r = dir*(w.X - s.X)/sw;
+    else if (e.v > .35) r = dir*(e.X - s.X)/sw*1.9;
+    if (other.v > .35) r = Math.max(r, dir*(other.X - s.X)/sw + 0.15);
+    return r;
+  };
+  T.reachL = reach(ls, le, lw, -1, rw);
+  T.reachR = reach(rs, re, rw, 1, lw);
+  const thrL = T.calib.thrL, thrR = T.calib.thrR;
+  setG('L', T.reachL > (T.g.L ? thrL*0.72 : thrL), now, 110, 170);
+  setG('R', T.reachR > (T.g.R ? thrR*0.72 : thrR), now, 110, 170);
+
+  // BLOCK: both forearms raised (wrist clearly above elbow, forearm pointing up).
+  const fore = (s, e, w) => {
+    if (w.v < .3 || e.v < .3) return false;
+    const rise = (e.Y - w.Y)/sw;
+    return rise > (T.g.B ? 0.08 : 0.22) && rise > 0.5*Math.abs(w.X - e.X)/sw && w.Y < s.Y + 0.8*sw;
+  };
+  setG('B', fore(ls, le, lw) && fore(rs, re, rw), now, 180, 220);
+
+  // SIDE STEP / LEAN: shoulders move sideways from a slowly re-centring baseline.
+  const torso = (ls.X + rs.X)/2;
+  if (!T.baseInit){ T.base = torso; T.baseInit = true; }
+  else T.base += (torso - T.base)*(1 - Math.exp(-dt/CFG.baseTau));
+  T.torso = torso;
+  const shift = (torso - T.base)/sw, sThr = G.mode === 'seated' ? CFG.leanThr : CFG.stepThr;
+  setG('SL', shift < -(T.g.SL ? sThr*0.6 : sThr), now, 140, 260);
+  setG('SR', shift >  (T.g.SR ? sThr*0.6 : sThr), now, 140, 260);
+}
+
+/* --- calibration: 1) stand still, arms down  2) arms out like wings --- */
+const Cal = { phase:'off', good:0, t:0, n:0, sw:0, rl:0, rr:0, maxL:0, maxR:0, hold:0, resume:false, prev:'play' };
+function beginCalibration(resume){
+  Object.assign(Cal, { phase:'still', good:0, t:0, n:0, sw:0, rl:0, rr:0, maxL:0, maxR:0, hold:0, resume:!!resume });
+  if (resume) Cal.prev = G.state;
+  G.paused = false; G.state = 'calib';
+  $('calBar').style.width = '0%';
+  showScreen('scrCalib');
+  Voice.say(G.mode === 'seated' ? 'Sit where I can see you, with your arms down.' : 'Stand where I can see you, with your arms down.');
+}
+function calibUpdate(dt, now){
+  const seated = G.mode === 'seated';
+  let msg = '';
+  if (Cal.phase === 'still'){
+    let ok = false;
+    if (now - T.lastStamp > 700 || !T.hasPose) msg = 'Step into the picture!';
+    else if (T.swFrac > 0.42) msg = seated ? 'Scoot back a little!' : 'Take a big step back!';
+    else if (!T.tracked) msg = 'Show me your shoulders!';
+    else if (T.cxm < .28 || T.cxm > .72) msg = 'Scoot to the middle!';
+    else if (!T.armsSeen) msg = 'Show me your arms!';
+    else if (T.reachL > 0.6 || T.reachR > 0.6) msg = 'Arms down by your sides!';
+    else { msg = 'Perfect! Hold still…'; ok = true; }
+    if (ok){ Cal.good += dt; Cal.n++; Cal.sw += T.sw; Cal.rl += T.reachL; Cal.rr += T.reachR; }
+    else Cal.good = Math.max(0, Cal.good - dt*1.5);
+    $('calBar').style.width = clamp(Cal.good/1.4, 0, 1)*100 + '%';
+    if (Cal.good >= 1.4 && Cal.n > 0){
+      T.calib.sw = Cal.sw/Cal.n;
+      T.calib.restL = clamp(Cal.rl/Cal.n, -0.2, 0.5);
+      T.calib.restR = clamp(Cal.rr/Cal.n, -0.2, 0.5);
+      Cal.phase = 'wings'; Cal.t = 0; Sfx.tick();
+      Voice.say('Great! Now stretch your arms out wide, like wings!');
+    }
+  } else if (Cal.phase === 'wings'){
+    Cal.t += dt;
+    msg = 'Now stretch your arms out wide, like wings!';
+    if (T.tracked){
+      Cal.maxL = clamp(Math.max(Cal.maxL, T.reachL), 0, 1.8);
+      Cal.maxR = clamp(Math.max(Cal.maxR, T.reachR), 0, 1.8);
+      if (T.reachL > T.calib.restL + 0.45 && T.reachR > T.calib.restR + 0.45) Cal.hold += dt;
+      else Cal.hold = Math.max(0, Cal.hold - dt);
+    }
+    $('calBar').style.width = clamp(Cal.hold/0.5, 0, 1)*100 + '%';
+    if (Cal.hold >= 0.5 || Cal.t > 10) finishCalibration(true);   // never gets stuck: defaults after 10 s
+  }
+  $('calMsg').textContent = msg;
+}
+function finishCalibration(measured){
+  const c = T.calib;
+  // personal threshold: a bit more than halfway between resting and full reach
+  const thr = (rest, max) => (measured && max - rest > 0.4) ? clamp(rest + 0.55*(max - rest), 0.5, 1.0) : CFG.reachThr;
+  c.thrL = thr(c.restL, Cal.maxL); c.thrR = thr(c.restR, Cal.maxR);
+  if (!c.sw) c.sw = T.sw || 0;
+  c.done = true; Cal.phase = 'off'; T.baseInit = false;
+  Sfx.chime();
+  if (Cal.resume){ Cal.resume = false; G.state = Cal.prev; showScreen(null); Voice.say('All set!'); }
+  else startGame();
+}
+
+/* --- tracking-loss watchdog: pause, friendly message, resume when stable --- */
+function trackingWatch(now, dt){
+  if (!G.useCam || G.state !== 'play' || G.paused) return;
+  const ok = T.tracked && now - T.lastStamp < 700;
+  if (!G.lost){
+    if (ok) G.badFor = 0;
+    else { G.badFor += dt; if (G.badFor > CFG.lostAfter) setLost(true); }
+  } else {
+    G.goodFor = ok ? G.goodFor + dt : Math.max(0, G.goodFor - dt*2);
+    $('lostBar').style.width = clamp(G.goodFor/CFG.reacquire, 0, 1)*100 + '%';
+    $('lostMsg').textContent = ok ? 'There you are! Hold still…'
+      : (T.tooClose ? 'Take a big step back!' : 'Take a step back so I can see your arms!');
+    if (G.goodFor >= CFG.reacquire) setLost(false);
+  }
+}
+function setLost(on){
+  G.lost = on; G.goodFor = 0; G.badFor = 0;
+  $('scrLost').classList.toggle('show', on);
+  $('lostBar').style.width = '0%';
+  if (on) Voice.say(T.tooClose ? 'You are very close! Take a big step back.' : 'I can not see you! Take a step back.');
+  else {
+    T.baseInit = false; clearGestures();
+    Voice.say('There you are!');
+    if (G.obj){ const mv = G.obj.mv; after(1.2, () => { if (G.obj && G.obj.mv === mv) Voice.say(moveWords(mv).say); }); }
+  }
+  placeCam();
+}
+
+/* ==================================================================
+   2. GAME LOGIC
+   Belts -> sequences -> moves. The robot throws one floating target
+   per move. A correct move pops it; finishing a sequence earns a
+   combo star. A mistake only resets the combo, nothing else.
+   ================================================================== */
+const running = () => (G.state === 'play' || G.state === 'intro') && !G.paused && !G.lost;
+const after = (sec, fn) => G.timers.push({ t:sec, fn });
+/* A move counts if the camera sees it OR a touch/key press is "held". */
+const isOn = (mv, now) => (G.useCam && T.g[mv]) || G.virt[mv] > now;
+
+/* Fresh random combos for every stage (belt) and every new game. No combo repeats. */
+function shuffleSeqs(){
+  const POOL = ['L','R','SL','SR','B'], used = new Set();
+  BELTS.forEach(b => {
+    const lens = b.lens || (b.lens = b.seqs.map(s => s.length));
+    b.seqs = lens.map(n => {
+      let s, tries = 0;
+      do {
+        s = [];
+        while (s.length < n){
+          const m = POOL[Math.floor(Math.random() * POOL.length)];
+          if (s[s.length - 1] !== m) s.push(m);
+        }
+      } while (used.has(s.join(',')) && ++tries < 60);
+      used.add(s.join(','));
+      return s;
+    });
+  });
+}
+
+function startGame(){
+  G.cerTok++;
+  Object.assign(G, { stars:0, combos:0, streak:0, best:0, belt:0, seq:0, step:0, obj:null, paused:false, lost:false,
+                     badFor:0, goodFor:0, resets:0, assist:false, edgeT:0, edgeCool:0 });
+  G.timers = []; G.ghosts = []; G.fx = []; G.floats = [];
+  GKEYS.forEach(k => { G.virt[k] = 0; });
+  $('scrLost').classList.remove('show');
+  showScreen(null);
+  if (document.activeElement && document.activeElement.blur) document.activeElement.blur();
+  shuffleSeqs();
+  beginBelt(0);
+}
+
+function beginBelt(i){
+  const b = BELTS[i];
+  G.belt = i; G.state = 'intro'; G.obj = null; G.curSeq = []; G.step = 0; bgDirty = true;
+  document.documentElement.style.setProperty('--belt', b.color);
+  $('beltName').textContent = b.name;
+  $('cueCards').textContent = '';
+  setPrompt('Welcome to the <b>' + b.place + '</b>!');
+  banner(b.name + '<small>' + b.place + '</small>');
+  updateHUD(); Sfx.chime();
+  Voice.say(b.name + '! Welcome to the ' + b.place + '.');
+  after(2.9, () => { G.state = 'play'; beginSeq(0); });
+}
+
+function beginSeq(k){
+  G.seq = k; G.curSeq = BELTS[G.belt].seqs[k].slice();
+  G.step = 0; G.resets = 0; G.assist = false;
+  buildCues(); spawnStep();
+}
+
+/* The robot throws the object for the current move. */
+function spawnStep(){
+  let mv = G.curSeq[G.step];
+  // keep the child inside the picture: flip a step that would lead out of frame
+  if (G.useCam && T.tracked){
+    const flip = (mv === 'SL' && T.cxm < .32) ? 'SR' : (mv === 'SR' && T.cxm > .68) ? 'SL' : null;
+    if (flip){ mv = flip; G.curSeq[G.step] = mv; buildCues(); }
+  }
+  const d = MOVES[mv];
+  G.obj = { mv, kind:d.kind, side:d.side, color:d.color, phase:'fly', t:0, hoverT:0, popT:0,
+            slot:G.step, seed:Math.random()*10, x:0, y:0, r:0, reminded:false };
+  ROBOT.throwT = 0.6; ROBOT.side = d.side || 1;
+  G.wrongArmed = false; G.wrongSince = 0; G.hintT = 0;
+  markCues(); setPrompt(moveWords(mv).html);
+  Sfx.whoosh(); Voice.say(moveWords(mv).say);
+}
+
+function hit(){
+  const o = G.obj, d = MOVES[o.mv];
+  G.stars++;
+  burst(o.x, o.y, d.color, 16);
+  floatText(o.x, o.y - o.r*1.2, '+1 ★');
+  Sfx.boing(); if (o.kind !== 'ball') Sfx.pop();
+  o.phase = 'pop'; o.popT = 0; G.ghosts.push(o); G.obj = null;
+  PANDA.reactT = 0.8; PANDA.reactMv = o.mv;
+  PANDA.reactAim = o.kind === 'paper' ? (V.floor - slotPos(o).y)/V.u : null;
+  if (o.mv === 'SL' || o.mv === 'SR'){          // the new spot becomes "the middle"
+    T.base = T.torso; T.g.SL = T.g.SR = false; T.deb.SL.raw = T.deb.SR.raw = false;
+  }
+  G.step++; markCues(); updateHUD();
+  if (G.step >= G.curSeq.length) after(0.5, seqDone); else after(CFG.gap, spawnStep);
+}
+
+function seqDone(){
+  G.combos++; G.streak++; G.best = Math.max(G.best, G.streak);
+  PANDA.cheerT = 2.1;
+  burst(V.cx, V.floor - 2.2*V.u, '#FFD23F', 26);
+  floatText(V.cx, V.floor - 3.0*V.u, G.streak >= 2 ? 'Combo x' + G.streak + '!' : 'Combo star!');
+  setPrompt('💫 Combo star! 💫');
+  Sfx.chime(); updateHUD();
+  Voice.say(pick(PRAISE) + (G.streak >= 2 ? ' ' + G.streak + ' combos in a row!' : ''));
+  after(2.4, () => {
+    if (G.seq + 1 < BELTS[G.belt].seqs.length) beginSeq(G.seq + 1); else beltDone();
+  });
+}
+
+/* A mistake is gentle: the target floats away and the combo starts again.
+   After two tries the game switches to "helper mode" where nothing can go wrong. */
+function miss(why){
+  const o = G.obj;
+  o.phase = 'away'; o.popT = 0; G.ghosts.push(o); G.obj = null;
+  G.streak = 0; G.step = 0; G.resets++;
+  if (G.resets >= 2) G.assist = true;
+  PANDA.oopsT = 1.2; Sfx.oops();
+  setPrompt(why === 'wrong' ? "Oopsie! Other side. Let's try again!" : "It floated away! Let's try again!");
+  Voice.say(why === 'wrong' ? "Oopsie! Let's try the other side." : "It floated away. Let's try again!");
+  markCues(); updateHUD();
+  after(1.9, spawnStep);
+}
+
+function beltDone(){
+  const b = BELTS[G.belt], last = G.belt + 1 >= BELTS.length;
+  G.state = 'beltDone'; G.obj = null; G.beltWaitT = 0;
+  $('beltTitle').textContent = '🎉 ' + b.name + ' earned!';
+  $('beltStars').textContent = '⭐ ' + G.stars + ' stars   💫 ' + G.combos + ' combos';
+  $('beltNextLabel').textContent = last ? 'Star ceremony ▶' : 'Next dojo ▶';
+  $('beltHint').hidden = !G.useCam;
+  $('beltFill').style.width = '0%';
+  showScreen('scrBelt'); Sfx.fanfare();
+  Voice.say('Hooray! You earned the ' + b.name + '!');
+}
+function beltWait(dt){           // hands-free: continues by itself, or right away with arms up
+  G.beltWaitT += dt;
+  $('beltFill').style.width = clamp(G.beltWaitT/8, 0, 1)*100 + '%';
+  if (G.beltWaitT > 8 || (G.useCam && T.g.B && G.beltWaitT > 2.5)) nextBelt();
+}
+function nextBelt(){
+  if (G.state !== 'beltDone') return;
+  showScreen(null);
+  if (G.belt + 1 < BELTS.length) beginBelt(G.belt + 1); else finale();
+}
+
+/* Final star ceremony: three big stars, one at a time. */
+function finale(){
+  G.state = 'final';
+  $('finStars').textContent = G.stars; $('finCombos').textContent = G.combos; $('finBest').textContent = G.best;
+  const stars = Array.from(document.querySelectorAll('#cer .st'));
+  stars.forEach(s => s.classList.remove('on'));
+  showScreen('scrFinal');
+  Voice.say('Time for the star ceremony!');
+  const tok = ++G.cerTok;
+  stars.forEach((s, i) => setTimeout(() => {
+    if (tok !== G.cerTok) return;
+    s.classList.add('on'); Sfx.tick();
+    burst(V.W*(0.25 + i*0.25), V.H*0.3, '#FFD23F', 18);
+  }, 1500 + i*850));
+  setTimeout(() => {
+    if (tok !== G.cerTok) return;
+    Sfx.fanfare(); Voice.say('You did it! You are a Tumble Town Dojo star!');
+  }, 1500 + stars.length*850);
+}
+
+function gameUpdate(dt, now){
+  // timers only tick while the game is really running (not paused, not lost)
+  const due = [];
+  for (const tm of G.timers){ tm.t -= dt; if (tm.t <= 0) due.push(tm); }
+  if (due.length){ G.timers = G.timers.filter(tm => tm.t > 0); due.forEach(tm => tm.fn()); }
+  if (G.state !== 'play') return;
+
+  const o = G.obj;
+  if (o){
+    o.t += dt;
+    if (o.phase === 'fly' && o.t >= CFG.flyTime){ o.phase = 'hover'; o.hoverT = 0; }
+    if (o.phase === 'hover'){
+      o.hoverT += dt; G.hintT += dt;
+      if (!o.reminded && o.hoverT > 6){ o.reminded = true; Voice.say(moveWords(o.mv).say); }
+    }
+    const d = MOVES[o.mv], tappable = o.phase === 'hover' || o.t >= CFG.flyTime*0.6;
+    // a wrong-side move only counts if it STARTS while this target is out
+    const wrong = d.opp ? isOn(d.opp, now) : false;
+    if (!wrong){ G.wrongArmed = true; G.wrongSince = 0; }
+    if (tappable){
+      if (isOn(o.mv, now)) hit();
+      else if (wrong && G.wrongArmed && !G.assist){
+        if (!G.wrongSince) G.wrongSince = now;
+        else if (now - G.wrongSince > CFG.wrongHold) miss('wrong');
+      }
+      else if (o.phase === 'hover' && !G.assist && o.hoverT > BELTS[G.belt].hover) miss('away');
+    }
+  }
+  for (const gh of G.ghosts) gh.popT += dt;
+  G.ghosts = G.ghosts.filter(gh => gh.popT < 1.1);
+
+  // gentle reminder if the child drifts to the edge of the camera picture
+  G.edgeCool -= dt;
+  if (G.useCam && T.tracked && (T.cxm < .2 || T.cxm > .8)){
+    G.edgeT += dt;
+    if (G.edgeT > 1.5 && G.edgeCool <= 0){ G.edgeT = 0; G.edgeCool = 9; toast('Scoot back to the middle!'); Voice.say('Scoot back to the middle!'); }
+  } else G.edgeT = 0;
+}
+
+/* --- flow controls: start, pause, restart, menu --- */
+async function startWithCamera(){
+  const tok = ++G.camTok;
+  G.useCam = true; G.state = 'loading';
+  showMsg('Waking up the camera…', 'Please say yes when the browser asks to use the camera.', { spin:true, touch:true, back:true });
+  try {
+    await startCamera();
+    if (tok !== G.camTok){ if (!G.useCam) stopCamera(); return; }
+    $('msgText').textContent = 'Loading the motion helper…';
+    await loadModel();
+    if (tok !== G.camTok){ if (!G.useCam) stopCamera(); return; }
+  } catch (e) {
+    if (tok !== G.camTok) return;
+    stopCamera(); G.useCam = false; G.state = 'title'; showError(e); return;
+  }
+  placeCam(); beginCalibration(false);
+}
+function startWithTouch(){ G.camTok++; G.useCam = false; stopCamera(); startGame(); }
+function switchToTouch(){               // from calibration or the tracking-lost screen
+  G.camTok++; G.useCam = false; stopCamera();
+  if (G.state === 'calib' && !Cal.resume) startGame();
+  else {
+    if (G.state === 'calib'){ G.state = Cal.prev; Cal.resume = false; }
+    G.lost = false; $('scrLost').classList.remove('show'); showScreen(null);
+    toast('Use the big buttons!');
+  }
+}
+function setPaused(on){
+  if (on && G.state !== 'play' && G.state !== 'intro') return;
+  G.paused = on;
+  $('scrPause').classList.toggle('show', on);
+  $('pauseRecal').hidden = !(G.useCam && T.camOn);
+  if (on) Voice.hush();
+  else if (document.activeElement && document.activeElement.blur) document.activeElement.blur();
+  placeCam();
+}
+function restart(){
+  if (G.state === 'title' || G.state === 'loading' || G.state === 'calib') return;
+  Voice.hush(); G.paused = false; $('scrPause').classList.remove('show');
+  if (G.useCam && T.camOn && !T.calib.done) beginCalibration(false); else startGame();
+}
+function toTitle(){
+  G.camTok++; G.cerTok++; Voice.hush(); stopCamera();
+  Object.assign(G, { useCam:false, paused:false, lost:false, obj:null, state:'title', belt:0, curSeq:[], step:0 });
+  G.timers = []; G.ghosts = [];
+  bgDirty = true; document.documentElement.style.setProperty('--belt', BELTS[0].color);
+  $('beltName').textContent = BELTS[0].name; $('cueCards').textContent = '';
+  setPrompt('Welcome to the dojo!');
+  $('scrLost').classList.remove('show'); showScreen('scrTitle');
+}
+function setMode(m){
+  G.mode = m;
+  document.querySelectorAll('[data-mode]').forEach(b => b.classList.toggle('on', b.dataset.mode === m));
+  document.querySelectorAll('.pbtn.sl .lb, .pbtn.sr .lb').forEach(e => { e.textContent = m === 'seated' ? 'Lean' : 'Step'; });
+  T.baseInit = false;
+  if (G.obj) setPrompt(moveWords(G.obj.mv).html);
+}
+
+/* --- touch + keyboard alternatives feed the same move flags as the camera --- */
+function press(mv){
+  Sfx.unlock();
+  const btn = document.querySelector('.pbtn[data-move="' + mv + '"]');
+  if (btn){ btn.classList.remove('hit'); void btn.offsetWidth; btn.classList.add('hit'); }
+  if (G.state === 'play' && !G.paused && !G.lost) G.virt[mv] = performance.now() + CFG.virtHold;
+  else if (G.state === 'beltDone' && mv === 'B') nextBelt();
+}
+const KEYS = { ArrowLeft:'L', a:'L', A:'L', ArrowRight:'R', d:'R', D:'R', ArrowUp:'B', w:'B', W:'B', ' ':'B',
+               q:'SL', Q:'SL', z:'SL', Z:'SL', e:'SR', E:'SR', c:'SR', C:'SR' };
+
+/* ==================================================================
+   3. UI AND RENDERING
+   Canvas drawing (dojo, panda, robot, targets, stars), camera preview
+   with landmarks, overlays, HUD and responsive layout.
+   ================================================================== */
+
+/* ---------- small canvas helpers ---------- */
+function rr(g, x, y, w, h, r){ g.beginPath(); g.moveTo(x + r, y); g.arcTo(x + w, y, x + w, y + h, r); g.arcTo(x + w, y + h, x, y + h, r); g.arcTo(x, y + h, x, y, r); g.arcTo(x, y, x + w, y, r); g.closePath(); }
+function ell(g, x, y, rx, ry){ g.beginPath(); g.ellipse(x, y, rx, ry, 0, 0, TAU); g.fill(); }
+function starPath(g, x, y, R, r, n){ g.beginPath(); for (let i = 0; i < n*2; i++){ const a = -Math.PI/2 + i*Math.PI/n, q = i % 2 ? r : R; g.lineTo(x + Math.cos(a)*q, y + Math.sin(a)*q); } g.closePath(); }
+function paw(g, x, y, s, col){ g.fillStyle = col; ell(g, x, y + s*.15, s*.5, s*.4); for (const d of [-1, 0, 1]) ell(g, x + d*s*.45, y - s*.42 + Math.abs(d)*s*.12, s*.2, s*.22); }
+function arrow(g, x, y, s, ang, col){
+  g.save(); g.translate(x, y); g.rotate(ang);
+  g.beginPath(); g.moveTo(s, 0); g.lineTo(0, -s*.8); g.lineTo(0, -s*.35); g.lineTo(-s, -s*.35); g.lineTo(-s, s*.35); g.lineTo(0, s*.35); g.lineTo(0, s*.8); g.closePath();
+  g.lineJoin = 'round'; g.lineWidth = s*.3; g.strokeStyle = '#fff'; g.stroke(); g.fillStyle = col; g.fill();
+  g.restore();
+}
+
+/* ---------- Tango the red panda (original character, drawn with shapes) ---------- */
+function drawPanda(g, x, y, u, p){
+  const t = p.t || 0, lean = p.lean || 0;
+  const RUST = '#E0692C', RUST2 = '#B94E1C', LIGHT = '#F7B77B', DARK = '#4A2618', CREAM = '#FFF4E2', INK = '#2B1A12';
+  g.save(); g.translate(x + lean*0.5*u, y); g.rotate(lean*0.09); g.scale(u, u);
+  g.lineCap = 'round'; g.lineJoin = 'round';
+  // striped tail
+  for (let i = 10; i >= 0; i--){
+    const k = i/10, sway = Math.sin(t*1.8 + k*2)*0.05*k;
+    g.fillStyle = i === 10 ? DARK : (i % 2 ? LIGHT : RUST);
+    g.beginPath(); g.arc(0.42 + k*0.75 + sway, -0.34 - k*k*0.85, 0.2 + Math.sin(k*Math.PI)*0.07 - k*0.04, 0, TAU); g.fill();
+  }
+  // feet, body, tummy
+  g.fillStyle = DARK; ell(g, -0.3, -0.07, 0.27, 0.14); ell(g, 0.3, -0.07, 0.27, 0.14);
+  const br = 1 + Math.sin(t*2.2)*0.012;
+  g.save(); g.scale(1, br);
+  g.fillStyle = RUST; ell(g, 0, -0.74, 0.6, 0.7);
+  g.fillStyle = CREAM; ell(g, 0, -0.7, 0.38, 0.48);
+  // colourful training belt with knot
+  g.save(); g.beginPath(); g.ellipse(0, -0.74, 0.6, 0.7, 0, 0, TAU); g.clip();
+  g.fillStyle = p.belt; g.fillRect(-0.7, -0.66, 1.4, 0.17);
+  g.fillStyle = p.beltDark; g.fillRect(-0.7, -0.51, 1.4, 0.03);
+  g.restore();
+  g.strokeStyle = p.belt; g.lineWidth = 0.11;
+  g.beginPath(); g.moveTo(0.12, -0.56); g.lineTo(0.02, -0.26); g.moveTo(0.14, -0.56); g.lineTo(0.3, -0.28); g.stroke();
+  g.fillStyle = p.beltDark; rr(g, 0.04, -0.67, 0.18, 0.19, 0.05); g.fill();
+  g.restore();
+  // head
+  const hy = -1.86 + Math.sin(t*2.2)*0.012;
+  for (const s of [-1, 1]){
+    g.fillStyle = CREAM; g.beginPath(); g.arc(s*0.5, hy - 0.5, 0.22, 0, TAU); g.fill();
+    g.fillStyle = RUST2; g.beginPath(); g.arc(s*0.5, hy - 0.48, 0.12, 0, TAU); g.fill();
+  }
+  g.fillStyle = RUST; ell(g, 0, hy, 0.7, 0.61);
+  g.fillStyle = CREAM;
+  ell(g, -0.44, hy + 0.16, 0.25, 0.2); ell(g, 0.44, hy + 0.16, 0.25, 0.2); ell(g, 0, hy + 0.2, 0.27, 0.21);
+  ell(g, -0.27, hy - 0.27, 0.09, 0.07); ell(g, 0.27, hy - 0.27, 0.09, 0.07);
+  g.fillStyle = 'rgba(255,120,140,.45)'; ell(g, -0.5, hy + 0.2, 0.09, 0.06); ell(g, 0.5, hy + 0.2, 0.09, 0.06);
+  g.strokeStyle = INK; g.lineWidth = 0.04;
+   const blink = t > 0 && (t % 3.6) < 0.13;
+  if (p.mood === 'happy' || blink){
+    for (const s of [-1, 1]){ g.beginPath(); g.arc(s*0.26, hy - 0.03, 0.08, Math.PI*1.1, Math.PI*1.9); g.stroke(); }
+  } else {
+    g.fillStyle = INK; ell(g, -0.26, hy - 0.06, 0.075, 0.09); ell(g, 0.26, hy - 0.06, 0.075, 0.09);
+    g.fillStyle = '#fff'; ell(g, -0.235, hy - 0.09, 0.025, 0.025); ell(g, 0.285, hy - 0.09, 0.025, 0.025);
+  }
+  g.fillStyle = INK; ell(g, 0, hy + 0.1, 0.075, 0.05);
+  if (p.mood === 'happy'){ g.fillStyle = '#C2413B'; g.beginPath(); g.arc(0, hy + 0.19, 0.13, 0, Math.PI); g.closePath(); g.fill(); }
+  else if (p.mood === 'oops'){ g.beginPath(); g.arc(0, hy + 0.27, 0.05, 0, TAU); g.stroke(); }
+  else { for (const s of [-1, 1]){ g.beginPath(); g.arc(s*0.07, hy + 0.17, 0.07, 0.1*Math.PI, 0.9*Math.PI); g.stroke(); } }
+  // arms last, so raised forearms sit in front of the face
+  for (const [a, s] of [[p.L, -1], [p.R, 1]]){
+    g.strokeStyle = DARK; g.lineWidth = 0.24;
+    g.beginPath(); g.moveTo(s*0.44, -1.16); g.lineTo(a[0], a[1]); g.lineTo(a[2], a[3]); g.stroke();
+    g.fillStyle = DARK; g.beginPath(); g.arc(a[2], a[3], 0.16, 0, TAU); g.fill();
+    g.fillStyle = '#F7B6A8'; g.beginPath(); g.arc(a[2], a[3], 0.07, 0, TAU); g.fill();
+  }
+  g.restore();
+}
+
+/* ---------- Bloop the friendly training robot ---------- */
+function drawRobot(g, x, y, s, st){
+  g.save(); g.translate(x, y); g.scale(s, s); g.lineCap = 'round';
+  g.fillStyle = 'rgba(120,230,255,.35)'; ell(g, 0, 1.02 + 0.04*Math.sin(st.t*6), 0.42, 0.1);
+  const thr = st.throwT > 0 ? Math.sin((1 - st.throwT/0.6)*Math.PI) : 0;
+  for (const sd of [-1, 1]){
+    const lift = st.cheer ? 0.85 + Math.sin(st.t*6 + sd)*0.1 : (sd === st.side ? thr : 0);
+    const hx = sd*(1.0 + 0.08*lift), hy = 0.5 - lift*1.05;
+    g.strokeStyle = '#5CC8BA'; g.lineWidth = 0.13;
+    g.beginPath(); g.moveTo(sd*0.5, 0.18); g.quadraticCurveTo(sd*0.95, 0.3 - lift*0.2, hx, hy); g.stroke();
+    g.fillStyle = '#FFD86B'; g.beginPath(); g.arc(hx, hy, 0.14, 0, TAU); g.fill();
+  }
+  g.fillStyle = '#8EE3D5'; rr(g, -0.55, -0.1, 1.1, 0.9, 0.3); g.fill();
+  starPath(g, 0, 0.35, 0.2, 0.09, 5); g.fillStyle = '#FFD86B'; g.fill();
+  g.fillStyle = '#5CC8BA'; rr(g, -0.3, 0.76, 0.6, 0.16, 0.08); g.fill();
+  g.strokeStyle = '#5CC8BA'; g.lineWidth = 0.07; g.beginPath(); g.moveTo(0, -1.05); g.lineTo(0, -1.32); g.stroke();
+  g.fillStyle = '#FF8FB1'; g.beginPath(); g.arc(0, -1.38, 0.1 + 0.02*Math.sin(st.t*5), 0, TAU); g.fill();
+  g.fillStyle = '#5CC8BA'; ell(g, -0.76, -0.6, 0.08, 0.16); ell(g, 0.76, -0.6, 0.08, 0.16);
+  g.fillStyle = '#B8F2E6'; rr(g, -0.72, -1.08, 1.44, 0.98, 0.34); g.fill();
+  g.fillStyle = '#27455C'; rr(g, -0.55, -0.92, 1.1, 0.66, 0.24); g.fill();
+  g.strokeStyle = '#8CFFF0'; g.lineWidth = 0.07;
+  const blink = (st.t % 4.3) < 0.12;
+  for (const sd of [-1, 1]){
+    g.beginPath();
+    if (blink){ g.moveTo(sd*0.24 - 0.09, -0.62); g.lineTo(sd*0.24 + 0.09, -0.62); }
+    else g.arc(sd*0.24, -0.6, 0.1, Math.PI*1.1, Math.PI*1.9);
+    g.stroke();
+  }
+  g.beginPath(); g.arc(0, -0.52, 0.15, 0.15*Math.PI, 0.85*Math.PI); g.stroke();
+  g.fillStyle = 'rgba(255,143,177,.7)'; ell(g, -0.4, -0.45, 0.06, 0.04); ell(g, 0.4, -0.45, 0.06, 0.04);
+  g.restore();
+}
+
+/* ---------- targets: paper square, paper kite (step), big foam ball (block) ---------- */
+function drawPaper(g, x, y, r, color, rot, alpha){
+  g.save(); g.translate(x, y); g.rotate(rot); g.globalAlpha = alpha;
+  g.fillStyle = 'rgba(0,0,0,.12)'; rr(g, -r*.95 + 3, -r*.95 + 4, r*1.9, r*1.9, r*.18); g.fill();
+  g.fillStyle = '#FFFDF4'; rr(g, -r*.95, -r*.95, r*1.9, r*1.9, r*.18); g.fill();
+  g.lineWidth = r*.09; g.strokeStyle = color; g.stroke();
+  g.fillStyle = color; g.beginPath(); g.arc(0, 0, r*.68, 0, TAU); g.fill();
+  g.fillStyle = '#fff'; g.beginPath(); g.arc(0, 0, r*.46, 0, TAU); g.fill();
+  starPath(g, 0, 0, r*.34, r*.15, 5); g.fillStyle = '#FFD23F'; g.fill();
+  g.restore();
+}
+function drawKite(g, x, y, r, color, rot, alpha, tt){
+  g.save(); g.translate(x, y); g.globalAlpha = alpha;
+  g.strokeStyle = color; g.lineWidth = r*.07; g.lineCap = 'round'; g.beginPath(); g.moveTo(0, r*1.1);
+  for (let i = 1; i <= 8; i++) g.lineTo(Math.sin(tt*2 + i*.9)*r*.18, r*1.1 + i*r*.13);
+  g.stroke();
+  g.rotate(rot);
+  g.beginPath(); g.moveTo(0, -r*1.15); g.lineTo(r*.92, 0); g.lineTo(0, r*1.15); g.lineTo(-r*.92, 0); g.closePath();
+  g.fillStyle = '#FFFDF4'; g.fill(); g.lineWidth = r*.12; g.lineJoin = 'round'; g.strokeStyle = color; g.stroke();
+  paw(g, 0, 0, r*.5, color);
+  g.restore();
+}
+function drawBall(g, x, y, r, sx, sy, alpha){
+  g.save(); g.translate(x, y); g.scale(sx, sy); g.globalAlpha = alpha;
+  const gr = g.createRadialGradient(-r*.3, -r*.35, r*.1, 0, 0, r);
+  gr.addColorStop(0, '#F1E4FF'); gr.addColorStop(1, '#A77BFF');
+  g.fillStyle = gr; g.beginPath(); g.arc(0, 0, r, 0, TAU); g.fill();
+  g.fillStyle = 'rgba(255,255,255,.35)';
+  for (const [a, b, c] of [[-.45, .3, .16], [.5, -.25, .13], [.15, .58, .1], [-.1, -.62, .09]]) ell(g, a*r, b*r, c*r, c*r);
+  g.strokeStyle = '#5B3FA8'; g.lineWidth = r*.07; g.lineCap = 'round';      // sleepy smile
+  for (const s of [-1, 1]){ g.beginPath(); g.arc(s*r*.25, -r*.05, r*.1, Math.PI*1.1, Math.PI*1.9); g.stroke(); }
+  g.beginPath(); g.arc(0, r*.12, r*.2, .15*Math.PI, .85*Math.PI); g.stroke();
+  g.restore();
+}
+
+/* Where a target hovers. Each belt uses a different arrangement. */
+function slotPos(o){
+  const u = V.u, arr = BELTS[G.belt].arrange;
+  if (o.kind === 'ball') return { x:V.cx, y:V.floor - 3.15*u, r:0.56*u };
+  if (o.kind === 'kite') return { x:V.cx + o.side*2.12*u, y:V.floor - 1.15*u, r:0.42*u };
+  let h = 1.4;                                               // belt 1: one tidy line
+  if (arr === 'zigzag') h = o.slot % 2 === 0 ? 1.95 : 0.95;  // belt 2: high, low, high
+  if (arr === 'orbit')  h = [1.15, 1.6, 2.05][o.slot % 3];   // belt 3: three levels, circling
+  return { x:V.cx + o.side*1.58*u, y:V.floor - h*u, r:0.4*u };
+}
+function robotPos(){ return { x:V.cx, y:V.floor - 4.35*V.u + Math.sin(animT*1.7)*0.05*V.u }; }
+function objPos(o){
+  const s = slotPos(o), u = V.u, arr = BELTS[G.belt].arrange, tt = o.t + o.seed;
+  let x = s.x, y = s.y + Math.sin(tt*1.6)*0.07*u;
+  if (o.kind !== 'ball'){
+    if (arr === 'zigzag') x += Math.sin(tt*1.1)*0.1*u;
+    if (arr === 'orbit'){ x += Math.cos(tt*1.4)*0.09*u; y += Math.sin(tt*1.4)*0.09*u; }
+  }
+  if (o.phase === 'fly'){
+    const e = ease(clamp(o.t/CFG.flyTime, 0, 1)), rb = robotPos(), w = Math.sin(e*Math.PI);
+    let fx = lerp(rb.x, x, e), fy = lerp(rb.y, y, e);
+    if (o.kind !== 'ball'){
+      fy -= w*0.45*u;
+      if (arr === 'zigzag') fx += Math.sin(e*Math.PI*3)*0.3*u*w;
+      if (arr === 'orbit'){ fx += Math.cos(e*TAU*1.5)*0.28*u*w; fy += Math.sin(e*TAU*1.5)*0.28*u*w; }
+    }
+    return { x:fx, y:fy, r:s.r*lerp(0.3, 1, e) };
+  }
+  if (o.phase === 'pop' && o.kind === 'ball') y -= ease(clamp(o.popT/0.8, 0, 1))*1.5*u;
+  if (o.phase === 'away'){ const k = clamp(o.popT, 0, 1); y -= k*1.2*u; x += (o.side || 0.4)*k*0.6*u; }
+  return { x, y, r:s.r };
+}
+function drawObj(g, o){
+  const p = objPos(o); o.x = p.x; o.y = p.y; o.r = p.r;
+  const tt = o.t + o.seed, ball = o.kind === 'ball', arr = BELTS[G.belt].arrange;
+  let alpha = 1, sc = 1;
+  if (o.phase === 'pop'){ const k = clamp(o.popT/(ball ? 0.8 : 0.35), 0, 1); alpha = 1 - k; if (!ball) sc = 1 + k*0.6; }
+  else if (o.phase === 'away') alpha = 1 - clamp(o.popT, 0, 1);
+  const r = p.r*sc;
+  if (o.phase === 'hover'){                     // pulsing halo: "this one!"
+    g.globalAlpha = .4 + .2*Math.sin(animT*5); g.strokeStyle = '#fff'; g.lineWidth = r*.14;
+    g.beginPath(); g.arc(p.x, p.y, r*1.4 + Math.sin(animT*5)*r*.08, 0, TAU); g.stroke(); g.globalAlpha = 1;
+  }
+  if (ball){
+    const sq = o.phase === 'pop' ? Math.sin(o.popT*22)*0.18*(1 - clamp(o.popT/0.8, 0, 1)) : Math.sin(tt*2.2)*0.03;
+    drawBall(g, p.x, p.y, r, 1 + sq, 1 - sq, alpha);
+  } else if (o.kind === 'kite') drawKite(g, p.x, p.y, r, o.color, Math.sin(tt*1.5)*0.12, alpha, tt);
+  else {
+    drawPaper(g, p.x, p.y, r, o.color, Math.sin(tt*1.3)*0.14, alpha);
+    if (alpha > 0.5 && arr !== 'line'){         // little paper friends circling the target
+      const n = arr === 'zigzag' ? 2 : 3;
+      for (let i = 0; i < n; i++){
+        const a = tt*1.8 + i*TAU/n, dx = p.x + Math.cos(a)*r*1.5, dy = p.y + Math.sin(a)*r*1.5;
+        if (arr === 'zigzag'){ g.save(); g.translate(dx, dy); g.rotate(a); g.fillStyle = '#6BCB77'; ell(g, 0, 0, r*.22, r*.1); g.restore(); }
+        else { starPath(g, dx, dy, r*.2, r*.09, 5); g.fillStyle = '#FFE98A'; g.fill(); }
+      }
+    }
+  }
+}
+/* Big pictorial pointers next to the live target. */
+function drawGuide(g, o){
+  const u = V.u, bob = Math.abs(Math.sin(animT*4))*0.12*u;
+  if (o.kind === 'ball'){
+    for (const s of [-1, 1]) arrow(g, V.cx + s*1.3*u, V.floor - 2.3*u - bob, 0.2*u, -Math.PI/2, PURPLE);
+    return;
+  }
+  arrow(g, o.x, o.y - o.r*1.95 - bob, 0.18*u, Math.PI/2, o.color);
+  if (o.kind === 'kite'){
+    for (let i = 0; i < 3; i++){
+      g.globalAlpha = 0.35 + 0.6*Math.max(0, Math.sin(animT*4 - i*0.9));
+      paw(g, V.cx + o.side*(0.8 + i*0.45)*u, V.floor + 0.1*u, 0.16*u, o.color);
+    }
+    g.globalAlpha = 1;
+  }
+}
+
+/* Picture cue card: the panda doing the move, plus a big arrow. */
+function cueIcon(mv){
+  const c = document.createElement('canvas'); c.width = c.height = 200;
+  const g = c.getContext('2d'), d = MOVES[mv], b = BELTS[G.belt];
+  g.fillStyle = '#fff'; g.fillRect(0, 0, 200, 200);
+  g.globalAlpha = .22; g.fillStyle = d.color; g.fillRect(0, 0, 200, 200); g.globalAlpha = 1;
+  const pose = { L:armFor('down', -1), R:armFor('down', 1), lean:0, mood:'smile', belt:b.color, beltDark:b.dark, t:0 };
+  let u = 54, ox = 100;
+  if (mv === 'L') pose.L = armFor('out', -1);
+  if (mv === 'R') pose.R = armFor('out', 1);
+  if (mv === 'B'){ pose.L = armFor('block', -1); pose.R = armFor('block', 1); u = 50; }
+  if (mv === 'SL'){ pose.lean = -1; ox = 114; }
+  if (mv === 'SR'){ pose.lean = 1; ox = 86; }
+  drawPanda(g, ox, 186, u, pose);
+  if (mv === 'L') arrow(g, 34, 34, 22, Math.PI, d.color);
+  if (mv === 'R') arrow(g, 166, 34, 22, 0, d.color);
+  if (mv === 'SL'){ arrow(g, 34, 34, 22, Math.PI, d.color); paw(g, 22, 182, 13, d.color); paw(g, 40, 158, 11, d.color); }
+  if (mv === 'SR'){ arrow(g, 166, 34, 22, 0, d.color); paw(g, 178, 182, 13, d.color); paw(g, 160, 158, 11, d.color); }
+  if (mv === 'B'){ drawBall(g, 100, 28, 22, 1, 1, 1); arrow(g, 30, 70, 18, -Math.PI/2, d.color); arrow(g, 170, 70, 18, -Math.PI/2, d.color); }
+  return c;
+}
+
+/* ---------- impact stars and floating text ---------- */
+function burst(x, y, color, n){
+  for (let i = 0; i < n; i++){
+    const a = Math.random()*TAU, sp = (1.2 + Math.random()*2.6)*V.u;
+    G.fx.push({ x, y, vx:Math.cos(a)*sp, vy:Math.sin(a)*sp - V.u, rot:Math.random()*TAU, vr:(Math.random() - .5)*8,
+      life:0.9 + Math.random()*0.4, size:(0.08 + Math.random()*0.12)*V.u, grav:2.2*V.u,
+      color: i % 3 === 0 ? '#FFD23F' : (i % 3 === 1 ? color : '#fff') });
+  }
+}
+function floatText(x, y, txt){ G.floats.push({ x, y, txt, life:1.2 }); }
+function updateFx(dt){
+  for (const p of G.fx){ p.life -= dt; p.vy += p.grav*dt; p.x += p.vx*dt; p.y += p.vy*dt; p.rot += p.vr*dt; }
+  G.fx = G.fx.filter(p => p.life > 0 && p.y < V.H + 40);
+  if (G.fx.length > 260) G.fx.splice(0, G.fx.length - 260);
+  for (const f of G.floats){ f.life -= dt; f.y -= V.u*0.9*dt; }
+  G.floats = G.floats.filter(f => f.life > 0);
+}
+
+/* The panda copies the child's moves, shows the move after a wait, and cheers. */
+function updatePanda(dt, now){
+  let L = 'down', R = 'down', lean = 0, mood = 'smile', aimL = null, aimR = null;
+  const o = G.obj, live = G.state === 'play' && !G.paused && !G.lost;
+  if (PANDA.cheerT > 0 || G.state === 'beltDone' || G.state === 'final'){ L = R = 'up'; mood = 'happy'; }
+  else if (G.state === 'title' || G.state === 'intro' || G.state === 'loading'){ R = 'wave'; mood = 'happy'; }
+  else if (G.state === 'play'){
+    const rm = PANDA.reactT > 0 ? PANDA.reactMv : null;
+    const on = m => (live && isOn(m, now)) || rm === m;
+    let any = false;
+    if (o && o.kind === 'paper'){ const h = (V.floor - slotPos(o).y)/V.u; if (o.side < 0) aimL = h; else aimR = h; }
+    if (rm === 'L' && PANDA.reactAim != null) aimL = PANDA.reactAim;
+    if (rm === 'R' && PANDA.reactAim != null) aimR = PANDA.reactAim;
+    if (on('B')){ L = R = 'block'; any = true; }
+    else { if (on('L')){ L = 'out'; any = true; } if (on('R')){ R = 'out'; any = true; } }
+    if (on('SL')){ lean = -1; any = true; } else if (on('SR')){ lean = 1; any = true; }
+    if (!any && live && o && o.phase === 'hover' && (G.assist || G.hintT > CFG.hintAfter) && Math.sin(animT*3.2) > -0.3){
+      const m = o.mv;                                   // slow demonstration
+      if (m === 'B') L = R = 'block'; else if (m === 'L') L = 'out'; else if (m === 'R') R = 'out';
+      else lean = m === 'SL' ? -0.8 : 0.8;
+    }
+    if (PANDA.oopsT > 0) mood = 'oops';
+  }
+  const tl = armFor(L, -1, aimL), tr = armFor(R, 1, aimR);
+  if (R === 'wave') tr[2] += Math.sin(animT*6)*0.12;
+  if (L === 'up'){ tl[3] += Math.sin(animT*7)*0.05; tr[3] += Math.cos(animT*7)*0.05; }
+  const k = 1 - Math.exp(-dt*11);
+  for (let i = 0; i < 4; i++){ PANDA.L[i] += (tl[i] - PANDA.L[i])*k; PANDA.R[i] += (tr[i] - PANDA.R[i])*k; }
+  PANDA.lean += (lean - PANDA.lean)*(1 - Math.exp(-dt*7));
+  PANDA.mood = mood;
+  PANDA.cheerT = Math.max(0, PANDA.cheerT - dt); PANDA.oopsT = Math.max(0, PANDA.oopsT - dt); PANDA.reactT = Math.max(0, PANDA.reactT - dt);
+  ROBOT.throwT = Math.max(0, ROBOT.throwT - dt);
+}
+
+/* ---------- three colourful dojo backgrounds (painted once, then cached) ---------- */
+function paintBg(){
+  bgDirty = false;
+  bgC.width = stage.width; bgC.height = stage.height;
+  const g = bgC.getContext('2d'); g.setTransform(V.dpr, 0, 0, V.dpr, 0, 0);
+  const W = V.W, H = V.H, u = V.u, cx = V.cx, hz = V.floor - 0.45*u, kind = BELTS[G.belt].bg;
+  let seed = 11 + G.belt*7; const rnd = () => (seed = (seed*16807) % 2147483647)/2147483647;
+  const vgrad = (y0, y1, cols) => { const gr = g.createLinearGradient(0, y0, 0, y1); cols.forEach((c, i) => gr.addColorStop(i/(cols.length - 1), c)); return gr; };
+  const floorLines = col => { g.strokeStyle = col; g.lineWidth = 2; g.beginPath(); for (let i = -9; i <= 9; i++){ g.moveTo(cx + i*0.9*u, hz); g.lineTo(cx + i*2.6*u, H + 5); } g.stroke(); };
+  let mat;
+  if (kind === 'sunrise'){                              // Sunrise Dojo: warm sun and paper screens
+    g.fillStyle = vgrad(0, hz, ['#FF9E6B', '#FFC47E', '#FFE9A8']); g.fillRect(0, 0, W, hz + 1);
+    const far = Math.max(W, H)*1.5;
+    g.save(); g.translate(cx, hz - 0.5*u); g.fillStyle = 'rgba(255,255,255,.17)';
+    for (let i = 0; i < 14; i++){ g.rotate(TAU/14); g.beginPath(); g.moveTo(0, 0); g.lineTo(-0.16*far, -far); g.lineTo(0.16*far, -far); g.fill(); }
+    g.restore();
+    g.fillStyle = '#FFF4B8'; g.beginPath(); g.arc(cx, hz - 0.5*u, 2.1*u, 0, TAU); g.fill();
+    const top = hz - 3.3*u;
+    for (const s of [-1, 1]){
+      const x0 = cx + s*1.95*u, x1 = s < 0 ? -10 : W + 10, xl = Math.min(x0, x1), wd = Math.abs(x1 - x0);
+      g.fillStyle = 'rgba(255,249,232,.86)'; g.fillRect(xl, top, wd, hz - top);
+      g.strokeStyle = '#B46A34'; g.lineWidth = Math.max(2, 0.06*u); g.beginPath();
+      for (let x = x0; s < 0 ? x > x1 : x < x1; x += s*0.8*u){ g.moveTo(x, top); g.lineTo(x, hz); }
+      for (let y = top; y < hz; y += 0.82*u){ g.moveTo(xl, y); g.lineTo(xl + wd, y); }
+      g.stroke();
+      g.fillStyle = '#A85B2A'; g.fillRect(x0 - 0.11*u, top, 0.22*u, hz - top);
+    }
+    g.fillStyle = '#A85B2A'; g.fillRect(0, hz - 3.55*u, W, 0.26*u);
+    g.fillStyle = vgrad(hz, H, ['#E9D27E', '#C6AA52']); g.fillRect(0, hz, W, H - hz);
+    floorLines('rgba(120,90,20,.22)'); mat = 'rgba(255,120,90,.55)';
+  } else if (kind === 'bamboo'){                        // Bamboo Garden Dojo: green hills and bamboo
+    g.fillStyle = vgrad(0, hz, ['#8FE3C0', '#CFF5C4', '#F5FFD8']); g.fillRect(0, 0, W, hz + 1);
+    g.fillStyle = '#9ADB8F'; ell(g, cx - 2.4*u, hz, 3.2*u, 1.4*u);
+    g.fillStyle = '#7CCB80'; ell(g, cx + 2.6*u, hz, 3.6*u, 1.8*u);
+    for (const s of [-1, 1]){
+      let x = cx + s*1.9*u; const edge = s < 0 ? -u : W + u;
+      while (s < 0 ? x > edge : x < edge){
+        const w = (0.15 + rnd()*0.1)*u;
+        g.fillStyle = rnd() > .5 ? '#3FA650' : '#59BF63'; g.fillRect(x - w/2, 0, w, hz);
+        g.fillStyle = 'rgba(255,255,255,.25)'; g.fillRect(x - w/2, 0, w*0.3, hz);
+        for (let y = hz - rnd()*0.5*u; y > 0; y -= 0.75*u){
+          g.fillStyle = '#2E8440'; g.fillRect(x - w/2 - 1, y, w + 2, Math.max(2, 0.04*u));
+          if (rnd() > .55){ g.save(); g.translate(x, y); g.rotate(-0.6*s + (rnd() - .5)); g.fillStyle = '#6BCB77'; ell(g, s*0.35*u, 0, 0.32*u, 0.08*u); g.restore(); }
+        }
+        x += s*(0.3 + rnd()*0.45)*u;
+      }
+    }
+    g.fillStyle = vgrad(hz, H, ['#EBC391', '#CF9960']); g.fillRect(0, hz, W, H - hz);
+    g.strokeStyle = 'rgba(120,70,20,.22)'; g.lineWidth = 2; g.beginPath();
+    for (let y = hz + 0.3*u, k = 0; y < H; y += (0.3 + k*0.12)*u, k++){ g.moveTo(0, y); g.lineTo(W, y); }
+    g.stroke(); mat = 'rgba(96,205,150,.6)';
+  } else {                                              // Starlight Dojo: night sky, moon, lanterns
+    g.fillStyle = vgrad(0, hz, ['#1E1A5C', '#47308C', '#A85BA6', '#FF9EC4']); g.fillRect(0, 0, W, hz + 1);
+    g.fillStyle = '#fff';
+    for (let i = 0; i < 70; i++){ g.globalAlpha = .3 + rnd()*.6; g.beginPath(); g.arc(rnd()*W, rnd()*hz*0.85, 0.6 + rnd()*1.6, 0, TAU); g.fill(); }
+    g.globalAlpha = 1;
+    const mx = cx - Math.min(2.2*u, W*0.34), my = hz - 3.9*u;
+    g.fillStyle = 'rgba(255,246,201,.25)'; g.beginPath(); g.arc(mx, my, 0.62*u, 0, TAU); g.fill();
+    g.fillStyle = '#FFF6C9'; g.beginPath(); g.arc(mx, my, 0.42*u, 0, TAU); g.fill();
+    g.fillStyle = 'rgba(230,210,150,.7)'; ell(g, mx - 0.12*u, my - 0.08*u, 0.09*u, 0.09*u); ell(g, mx + 0.15*u, my + 0.12*u, 0.06*u, 0.06*u);
+    g.fillStyle = '#3B2D80'; g.beginPath(); g.moveTo(-10, hz);
+    for (let x = -10; x <= W + 2*u; x += 1.3*u){ g.lineTo(x + 0.65*u, hz - (0.9 + rnd()*1.2)*u); g.lineTo(x + 1.3*u, hz - rnd()*0.4*u); }
+    g.lineTo(W + 10, hz); g.closePath(); g.fill();
+    for (let i = 0; i < 8; i++){
+      const x = W*(i + .5)/8, y = hz - 3.45*u + Math.sin(i/7*Math.PI)*0.28*u;
+      const gl = g.createRadialGradient(x, y, 0, x, y, 0.55*u); gl.addColorStop(0, 'rgba(255,240,180,.55)'); gl.addColorStop(1, 'rgba(255,240,180,0)');
+      g.fillStyle = gl; g.fillRect(x - 0.6*u, y - 0.6*u, 1.2*u, 1.2*u);
+      g.fillStyle = ['#FFD86B', '#FF9EC4', '#8CE8FF', '#B8F28A'][i % 4]; ell(g, x, y, 0.13*u, 0.17*u);
+    }
+    g.fillStyle = vgrad(hz, H, ['#6C58BC', '#3D3182']); g.fillRect(0, hz, W, H - hz);
+    floorLines('rgba(255,255,255,.13)'); mat = 'rgba(255,158,196,.5)';
+  }
+  // soft training mat, then the side colours: BLUE glow on the left, ORANGE on the right
+  g.fillStyle = mat; ell(g, cx, V.floor + 0.08*u, 2.5*u, 0.42*u);
+  g.strokeStyle = 'rgba(255,255,255,.75)'; g.lineWidth = Math.max(2, 0.05*u);
+  g.beginPath(); g.ellipse(cx, V.floor + 0.08*u, 2.5*u, 0.42*u, 0, 0, TAU); g.stroke();
+  const gw = Math.max(40, u);
+  let gr = g.createLinearGradient(0, 0, gw, 0); gr.addColorStop(0, 'rgba(47,155,255,.6)'); gr.addColorStop(1, 'rgba(47,155,255,0)');
+  g.fillStyle = gr; g.fillRect(0, 0, gw, H);
+  gr = g.createLinearGradient(W, 0, W - gw, 0); gr.addColorStop(0, 'rgba(255,154,60,.6)'); gr.addColorStop(1, 'rgba(255,154,60,0)');
+  g.fillStyle = gr; g.fillRect(W - gw, 0, gw, H);
+}
+function ambient(g){                 // sparkles, drifting leaves or petals, depending on the dojo
+  const kind = BELTS[G.belt].bg, W = V.W, H = V.H, t = animT;
+  for (let i = 0; i < 14; i++){
+    const fx = (i*0.618034) % 1, fy = (i*1.4142) % 1;
+    if (kind === 'sunrise'){
+      g.globalAlpha = .35 + .25*Math.sin(t*2 + i); g.fillStyle = '#fff';
+      g.beginPath(); g.arc(fx*W + Math.sin(t*.6 + i)*14, H - ((fy*H + t*(12 + i*2)) % H), 2 + (i % 3), 0, TAU); g.fill();
+    } else if (kind === 'bamboo'){
+      g.save(); g.translate((fx*W + Math.sin(t*.8 + i)*30 + t*6) % W, (fy*H + t*(18 + i*3)) % H); g.rotate(Math.sin(t + i)*.9);
+      g.globalAlpha = .7; g.fillStyle = i % 2 ? '#6BCB77' : '#A5D86B'; ell(g, 0, 0, 9, 4); g.restore();
+    } else if (i < 7){
+      g.globalAlpha = Math.abs(Math.sin(t*1.5 + i*1.7)); starPath(g, fx*W, fy*(V.floor - V.u)*0.7, 7, 3, 4); g.fillStyle = '#FFF6C9'; g.fill();
+    } else {
+      g.save(); g.translate((fx*W + Math.sin(t*.7 + i)*40) % W, (fy*H + t*(16 + i*2)) % H); g.rotate(t + i);
+      g.globalAlpha = .75; g.fillStyle = '#FFC1DA'; ell(g, 0, 0, 7, 4); g.restore();
+    }
+  }
+  g.globalAlpha = 1;
+}
+function sideLanterns(g){            // blue lantern = left side, orange lantern = right side
+  const u = V.u, hz = V.floor - 0.45*u, dx = Math.min(2.38*u, V.W/2 - 0.5*u);
+  for (const s of [-1, 1]){
+    g.save(); g.translate(V.cx + s*dx, hz - 3.5*u); g.rotate(Math.sin(animT*1.2 + s)*0.08);
+    g.strokeStyle = 'rgba(80,50,30,.6)'; g.lineWidth = Math.max(1.5, 0.03*u); g.beginPath(); g.moveTo(0, 0); g.lineTo(0, 0.5*u); g.stroke();
+    g.fillStyle = s < 0 ? BLUE : ORANGE; ell(g, 0, 0.86*u, 0.3*u, 0.36*u);
+    g.fillStyle = 'rgba(255,255,255,.28)'; ell(g, -0.1*u, 0.8*u, 0.08*u, 0.24*u);
+    g.fillStyle = 'rgba(60,40,30,.7)'; g.fillRect(-0.14*u, 0.47*u, 0.28*u, 0.07*u); g.fillRect(-0.14*u, 1.18*u, 0.28*u, 0.07*u);
+    paw(g, 0, 0.88*u, 0.2*u, '#fff');
+    g.restore();
+  }
+}
+
+/* ---------- pose-landmark visualisation on the mirrored preview ---------- */
+const BONES = [[11,13,BLUE],[13,15,BLUE],[12,14,ORANGE],[14,16,ORANGE],[11,12,'#fff'],[11,23,'#fff'],[12,24,'#fff'],[23,24,'#fff']];
+const JOINTS = [0, 11, 12, 13, 14, 15, 16, 23, 24];
+function drawSkeleton(){
+  if (!T.camOn || camWrap.hidden) return;
+  const w = skel.width, h = skel.height; sctx.clearRect(0, 0, w, h);
+  if (!T.hasPose) return;
+  const X = i => (1 - T.pts[i].x)*w, Y = i => T.pts[i].y*h, lw = Math.max(3, w*0.014);
+  sctx.lineCap = 'round'; sctx.lineWidth = lw;
+  for (const [a, b, col] of BONES){
+    if (T.pts[a].v < .3 || T.pts[b].v < .3) continue;
+    sctx.strokeStyle = col; sctx.beginPath(); sctx.moveTo(X(a), Y(a)); sctx.lineTo(X(b), Y(b)); sctx.stroke();
+  }
+  for (const i of JOINTS){
+    if (T.pts[i].v < .3) continue;
+    sctx.fillStyle = '#fff'; sctx.beginPath(); sctx.arc(X(i), Y(i), lw*0.9, 0, TAU); sctx.fill();
+  }
+  // green rings on the hands when a move is recognised
+  sctx.strokeStyle = '#7CE38B'; sctx.lineWidth = lw*0.8;
+  if (T.g.L || T.g.B){ sctx.beginPath(); sctx.arc(X(15), Y(15), lw*2.6, 0, TAU); sctx.stroke(); }
+  if (T.g.R || T.g.B){ sctx.beginPath(); sctx.arc(X(16), Y(16), lw*2.6, 0, TAU); sctx.stroke(); }
+}
+
+/* ---------- one frame of the scene ---------- */
+function render(dt, now){
+  const g = ctx, u = V.u, b = BELTS[G.belt];
+  updatePanda(dt, now); updateFx(dt);
+  const party = G.state === 'beltDone' || G.state === 'final';
+  if (party && frame % 4 === 0){       // gentle star rain for celebrations
+    G.fx.push({ x:Math.random()*V.W, y:-10, vx:(Math.random() - .5)*40, vy:60 + Math.random()*80, rot:Math.random()*TAU,
+      vr:(Math.random() - .5)*5, life:4, size:(0.1 + Math.random()*0.12)*u, grav:30, color:pick(['#FFD23F', '#FF9EC4', '#8CE8FF', '#fff', b.color]) });
+  }
+  g.setTransform(V.dpr, 0, 0, V.dpr, 0, 0);
+  if (bgDirty) paintBg();
+  g.drawImage(bgC, 0, 0, V.W, V.H);
+  ambient(g); sideLanterns(g);
+  const rb = robotPos();
+  drawRobot(g, rb.x, rb.y, 0.5*u, { t:animT, throwT:ROBOT.throwT, side:ROBOT.side, cheer:party || PANDA.cheerT > 0 });
+  g.fillStyle = 'rgba(0,0,0,.16)'; ell(g, V.cx + PANDA.lean*0.5*u, V.floor + 0.04*u, 0.85*u, 0.14*u);
+  drawPanda(g, V.cx, V.floor, u, { L:PANDA.L, R:PANDA.R, lean:PANDA.lean, mood:PANDA.mood, belt:b.color, beltDark:b.dark, t:animT });
+  for (const o of G.ghosts) drawObj(g, o);
+  if (G.obj){ drawObj(g, G.obj); if (G.obj.phase === 'hover' && !G.paused && !G.lost) drawGuide(g, G.obj); }
+  for (const p of G.fx){
+    g.save(); g.translate(p.x, p.y); g.rotate(p.rot); g.globalAlpha = clamp(p.life/0.4, 0, 1);
+    starPath(g, 0, 0, p.size, p.size*0.45, 5); g.fillStyle = p.color; g.fill(); g.restore();
+  }
+  g.textAlign = 'center'; g.lineJoin = 'round'; g.font = '900 ' + Math.round(u*0.42) + 'px ' + CFONT;
+  for (const f of G.floats){
+    g.globalAlpha = clamp(f.life/0.5, 0, 1); g.lineWidth = u*0.09; g.strokeStyle = '#fff'; g.strokeText(f.txt, f.x, f.y);
+    g.fillStyle = '#E0692C'; g.fillText(f.txt, f.x, f.y);
+  }
+  g.globalAlpha = 1;
+  drawSkeleton();
+}
+
+/* ---------- responsive layout (portrait + landscape) ---------- */
+function layout(){
+  const r = $('app').getBoundingClientRect();
+  V.W = r.width; V.H = r.height; V.dpr = Math.min(window.devicePixelRatio || 1, 2);
+  const pw = Math.max(1, Math.round(V.W*V.dpr)), ph = Math.max(1, Math.round(V.H*V.dpr));
+  if (stage.width !== pw || stage.height !== ph){ stage.width = pw; stage.height = ph; }
+  const p = $('playArea').getBoundingClientRect();      // free space between cue cards and touch pad
+  V.u = Math.max(16, Math.min(p.height/5.35, p.width/5.3));
+  V.cx = p.left - r.left + p.width/2;
+  V.floor = (p.bottom - r.top) - Math.max(0.12*V.u, (p.height - 5.35*V.u)*0.45);
+  bgDirty = true; placeCam();
+}
+/* Camera preview: large inside the calibration / step-back screens, small in the corner while playing. */
+function placeCam(){
+  if (!T.camOn){ camWrap.hidden = true; return; }
+  camWrap.hidden = false;
+  const asp = T.aspect || 4/3;
+  let slot = null, w, h, x, y;
+  if (G.state === 'calib') slot = $('calSlot');
+  else if (G.lost && !G.paused) slot = $('lostSlot');
+  if (slot){
+    const r = slot.getBoundingClientRect();
+    w = r.width; h = w/asp; if (h > r.height){ h = r.height; w = h*asp; }
+    x = r.left + (r.width - w)/2; y = r.top + (r.height - h)/2;
+  } else {
+    const box = clamp(Math.min(V.W, V.H)*0.25, 96, 240);
+    w = box; h = w/asp; if (h > box){ h = box; w = h*asp; }
+    const pad = $('pad').getBoundingClientRect(), first = $('pad').firstElementChild.getBoundingClientRect();
+    x = $('hud').getBoundingClientRect().left + 4;
+    y = (first.left - x > w + 14) ? pad.bottom - h - 4 : pad.top - h - 10;   // beside the pad if there is room, else above it
+  }
+  camWrap.classList.toggle('big', !!slot);
+  camWrap.style.left = x + 'px'; camWrap.style.top = y + 'px'; camWrap.style.width = w + 'px'; camWrap.style.height = h + 'px';
+  const cw = Math.max(1, Math.round(w*V.dpr)), ch = Math.max(1, Math.round(h*V.dpr));
+  if (skel.width !== cw || skel.height !== ch){ skel.width = cw; skel.height = ch; }
+}
+
+/* ---------- HUD, cue cards, overlays ---------- */
+const SCREENS = ['scrTitle', 'scrMsg', 'scrCalib', 'scrBelt', 'scrFinal'];
+function showScreen(id){ SCREENS.forEach(s => $(s).classList.toggle('show', s === id)); placeCam(); requestAnimationFrame(placeCam); }
+function updateHUD(){ $('starCount').textContent = G.stars; $('comboCount').textContent = G.combos; }
+function setPrompt(html){ $('promptText').innerHTML = html; }
+function buildCues(){
+  const box = $('cueCards'); box.textContent = '';
+  G.curSeq.forEach(mv => {
+    const d = document.createElement('div'); d.className = 'cue';
+    d.style.setProperty('--c', MOVES[mv].color); d.appendChild(cueIcon(mv)); box.appendChild(d);
+  });
+  markCues();
+}
+function markCues(){
+  Array.from($('cueCards').children).forEach((d, i) => {
+    d.classList.toggle('done', i < G.step);
+    d.classList.toggle('now', i === G.step && G.step < G.curSeq.length);
+  });
+}
+function replay(el, html){ el.innerHTML = html; el.classList.remove('show'); void el.offsetWidth; el.classList.add('show'); }
+function banner(html){ replay($('banner'), html); }
+function toast(text){ const t = $('toast'); t.textContent = ''; replay(t, text.replace(/</g, '&lt;')); }
+function showMsg(title, text, o){
+  $('msgTitle').textContent = title; $('msgText').textContent = text;
+  $('msgSpin').hidden = !o.spin; $('msgRetry').hidden = !o.retry; $('msgTouch').hidden = !o.touch; $('msgBack').hidden = !o.back;
+  showScreen('scrMsg');
+}
+/* Friendly explanations for camera permission and loading problems. */
+function showError(err){
+  const name = (err && err.name) || 'Error';
+  let title = 'Oops! The camera is shy', text;
+  switch (name){
+    case 'NotAllowedError': case 'PermissionDeniedError': case 'SecurityError':
+      text = 'Camera permission is switched off. Allow the camera in your browser (look near the address bar), then try again.'; break;
+    case 'NotFoundError': case 'DevicesNotFoundError': case 'OverconstrainedError':
+      text = 'I could not find a camera on this device.'; break;
+    case 'NotReadableError': case 'TrackStartError': case 'AbortError': case 'CameraTimeout':
+      text = 'The camera is busy or not answering. Close other apps that use it and try again.'; break;
+    case 'InsecureContext':
+      text = 'The camera only works on a secure page (https or localhost).'; break;
+    case 'NoMediaDevices':
+      text = 'This browser cannot use the camera.'; break;
+    case 'ModelLoadError':
+      title = 'The motion helper did not load'; text = 'Please check the internet connection and try again.'; break;
+    default:
+      text = 'Something went wrong while starting the camera.';
+  }
+  showMsg(title, text + ' You can also play with touch or the keyboard.', { retry:true, touch:true, back:true });
+}
+
+/* ---------- buttons, touch pad, keyboard ---------- */
+const unlockAV = () => { Sfx.unlock(); Voice.prime(); };
+const on = (id, fn) => $(id).addEventListener('click', () => { unlockAV(); fn(); });
+on('btnCam', startWithCamera);
+on('btnTouch', startWithTouch);
+on('msgRetry', startWithCamera);
+on('msgTouch', startWithTouch);
+on('msgBack', toTitle);
+on('calSkip', () => finishCalibration(false));
+on('calTouch', switchToTouch);
+on('lostTouch', switchToTouch);
+on('pauseResume', () => setPaused(false));
+on('pauseRestart', restart);
+on('pauseRecal', () => { $('scrPause').classList.remove('show'); G.paused = false; beginCalibration(true); });
+on('pauseMenu', () => { $('scrPause').classList.remove('show'); toTitle(); });
+on('beltNext', nextBelt);
+on('finAgain', restart);
+on('finMenu', toTitle);
+on('btnPause', () => setPaused(!G.paused));
+on('btnRestart', restart);
+on('btnSound', () => { muted = !muted; $('btnSound').textContent = muted ? '🔇' : '🔊'; if (muted) Voice.hush(); $('btnSound').blur(); });
+document.querySelectorAll('[data-mode]').forEach(b => b.addEventListener('click', () => setMode(b.dataset.mode)));
+document.querySelectorAll('[data-voice]').forEach(b => b.addEventListener('click', () => {
+  Voice.on = !Voice.on;
+  document.querySelectorAll('[data-voice]').forEach(v => { v.textContent = '🗣️ Voice: ' + (Voice.on ? 'On' : 'Off'); });
+  if (Voice.on){ Voice.prime(); Voice.say('Voice on!'); }
+}));
+document.querySelectorAll('.pbtn').forEach(b => {
+  b.addEventListener('pointerdown', e => { e.preventDefault(); press(b.dataset.move); });
+  b.addEventListener('click', () => b.blur());
+});
+window.addEventListener('keydown', e => {
+  if (e.repeat) return;
+  const k = e.key, onBtn = e.target && e.target.tagName === 'BUTTON';
+  if (k === 'p' || k === 'P' || k === 'Escape'){ if (G.paused || G.state === 'play' || G.state === 'intro') setPaused(!G.paused); return; }
+  if (k === 'r' || k === 'R'){ restart(); return; }
+  if (k === 'Enter' && !onBtn){
+    unlockAV();
+    if (G.paused) setPaused(false);
+    else if (G.state === 'title') startWithCamera();
+    else if (G.state === 'beltDone') nextBelt();
+    else if (G.state === 'final') restart();
+    return;
+  }
+  const mv = KEYS[k];
+  if (!mv) return;
+  if (G.state === 'play' && !G.paused){ e.preventDefault(); press(mv); }
+  else if (G.state === 'beltDone' && mv === 'B' && !onBtn){ e.preventDefault(); nextBelt(); }
+});
+window.addEventListener('keyup', e => { if (e.key === ' ' && G.state === 'play' && !G.paused) e.preventDefault(); });
+document.addEventListener('visibilitychange', () => { if (document.hidden && (G.state === 'play' || G.state === 'intro')) setPaused(true); });
+window.addEventListener('resize', layout);
+window.addEventListener('orientationchange', () => setTimeout(layout, 250));
+window.addEventListener('pagehide', () => { if (T.stream) T.stream.getTracks().forEach(tr => tr.stop()); });
+if ('ResizeObserver' in window) new ResizeObserver(layout).observe($('playArea'));
+
+/* ---------- main loop: tracking -> game logic -> drawing ---------- */
+function loop(now){
+  const dt = Math.min(0.05, Math.max(0, (now - lastT)/1000)); lastT = now; animT += dt; frame++;
+  try {
+    trackStep(now);
+    if (G.state === 'calib') calibUpdate(dt, now);
+    trackingWatch(now, dt);
+    if (running()) gameUpdate(dt, now);
+    else if (G.state === 'beltDone' && !G.paused) beltWait(dt);
+    render(dt, now);
+    if (frame % 15 === 0) placeCam();
+  } catch (err) { console.error(err); }
+  requestAnimationFrame(loop);
+}
+layout();
+requestAnimationFrame(loop);
+})();
+</script>
+</body>
+</html>

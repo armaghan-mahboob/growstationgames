@@ -1,0 +1,1024 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="theme-color" content="#0b1020" />
+    <title>Move & Learn — Physical Learning Games</title>
+
+    <style>
+      :root {
+        --bg: #08101f;
+        --bg-soft: #0e1730;
+        --card: rgba(255, 255, 255, 0.08);
+        --card-border: rgba(255, 255, 255, 0.12);
+        --text: #f8fafc;
+        --muted: #b6c0d4;
+        --accent: #7c5cff;
+        --accent-2: #24d5b2;
+        --shadow: 0 24px 70px rgba(0, 0, 0, 0.35);
+      }
+
+      * {
+        box-sizing: border-box;
+      }
+
+      html {
+        scroll-behavior: smooth;
+      }
+
+      body {
+        margin: 0;
+        min-height: 100vh;
+        font-family:
+          Inter,
+          ui-sans-serif,
+          system-ui,
+          -apple-system,
+          BlinkMacSystemFont,
+          "Segoe UI",
+          sans-serif;
+        color: var(--text);
+        background:
+          radial-gradient(
+            circle at 10% 10%,
+            rgba(124, 92, 255, 0.22),
+            transparent 28%
+          ),
+          radial-gradient(
+            circle at 88% 20%,
+            rgba(36, 213, 178, 0.15),
+            transparent 25%
+          ),
+          radial-gradient(
+            circle at 50% 100%,
+            rgba(255, 154, 92, 0.12),
+            transparent 30%
+          ),
+          var(--bg);
+        overflow-x: hidden;
+      }
+
+      body::before,
+      body::after {
+        content: "";
+        position: fixed;
+        width: 280px;
+        height: 280px;
+        border-radius: 50%;
+        filter: blur(70px);
+        pointer-events: none;
+        z-index: -1;
+        opacity: 0.22;
+      }
+
+      body::before {
+        left: -120px;
+        top: 45%;
+        background: #7c5cff;
+      }
+
+      body::after {
+        right: -120px;
+        top: 65%;
+        background: #24d5b2;
+      }
+
+      .container {
+        width: min(1180px, calc(100% - 36px));
+        margin: 0 auto;
+      }
+
+      .topbar {
+        padding: 22px 0 0;
+      }
+
+      .topbar-inner {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 20px;
+        padding: 16px 20px;
+        border: 1px solid var(--card-border);
+        border-radius: 22px;
+        background: rgba(8, 16, 31, 0.64);
+        backdrop-filter: blur(18px);
+        -webkit-backdrop-filter: blur(18px);
+        box-shadow: var(--shadow);
+      }
+
+      .brand {
+        display: flex;
+        align-items: center;
+        gap: 12px;
+        text-decoration: none;
+        color: var(--text);
+      }
+
+      .brand-icon {
+        width: 44px;
+        height: 44px;
+        display: grid;
+        place-items: center;
+        border-radius: 14px;
+        font-size: 24px;
+        background: linear-gradient(135deg, #7c5cff, #24d5b2);
+        box-shadow: 0 10px 30px rgba(124, 92, 255, 0.3);
+      }
+
+      .brand-copy strong {
+        display: block;
+        font-size: 16px;
+        letter-spacing: 0.01em;
+      }
+
+      .brand-copy span {
+        display: block;
+        color: var(--muted);
+        font-size: 12px;
+        margin-top: 2px;
+      }
+
+      .camera-note {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        color: #dbe5f6;
+        font-size: 13px;
+        padding: 10px 14px;
+        border-radius: 999px;
+        border: 1px solid rgba(255, 255, 255, 0.1);
+        background: rgba(255, 255, 255, 0.04);
+      }
+
+      .camera-dot {
+        width: 8px;
+        height: 8px;
+        border-radius: 50%;
+        background: #24d5b2;
+        box-shadow: 0 0 12px rgba(36, 213, 178, 0.9);
+      }
+
+      .hero {
+        padding: 76px 0 52px;
+        text-align: center;
+      }
+
+      .eyebrow {
+        display: inline-flex;
+        align-items: center;
+        gap: 8px;
+        padding: 9px 14px;
+        border-radius: 999px;
+        border: 1px solid rgba(124, 92, 255, 0.3);
+        background: rgba(124, 92, 255, 0.1);
+        color: #dcd5ff;
+        font-size: 12px;
+        font-weight: 800;
+        letter-spacing: 0.08em;
+        text-transform: uppercase;
+      }
+
+      .hero h1 {
+        max-width: 900px;
+        margin: 20px auto 16px;
+        font-size: clamp(42px, 7vw, 78px);
+        line-height: 0.98;
+        letter-spacing: -0.055em;
+      }
+
+      .hero h1 span {
+        background: linear-gradient(90deg, #ffffff, #b9abff 45%, #72f0d2);
+        -webkit-background-clip: text;
+        background-clip: text;
+        color: transparent;
+      }
+
+      .hero p {
+        max-width: 720px;
+        margin: 0 auto;
+        color: var(--muted);
+        font-size: clamp(16px, 2vw, 19px);
+        line-height: 1.65;
+      }
+
+      .stats {
+        display: flex;
+        justify-content: center;
+        flex-wrap: wrap;
+        gap: 12px;
+        margin-top: 28px;
+      }
+
+      .stat {
+        min-width: 130px;
+        padding: 12px 16px;
+        border-radius: 16px;
+        border: 1px solid var(--card-border);
+        background: rgba(255, 255, 255, 0.05);
+      }
+
+      .stat strong {
+        display: block;
+        font-size: 22px;
+      }
+
+      .stat span {
+        color: var(--muted);
+        font-size: 12px;
+      }
+
+      .section-head {
+        display: flex;
+        align-items: end;
+        justify-content: space-between;
+        gap: 20px;
+        margin-bottom: 20px;
+      }
+
+      .section-head h2 {
+        margin: 0;
+        font-size: clamp(24px, 4vw, 34px);
+        letter-spacing: -0.035em;
+      }
+
+      .section-head p {
+        margin: 7px 0 0;
+        color: var(--muted);
+        font-size: 14px;
+      }
+
+      .tools {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        flex-wrap: wrap;
+        justify-content: flex-end;
+      }
+
+      .search {
+        width: 230px;
+        max-width: 100%;
+        border: 1px solid var(--card-border);
+        background: rgba(255, 255, 255, 0.06);
+        color: var(--text);
+        outline: none;
+        padding: 12px 14px;
+        border-radius: 14px;
+        font: inherit;
+      }
+
+      .search::placeholder {
+        color: #8792a8;
+      }
+
+      .games {
+        display: grid;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: 20px;
+      }
+
+      .game-card {
+        position: relative;
+        overflow: hidden;
+        min-height: 320px;
+        display: flex;
+        flex-direction: column;
+        padding: 24px;
+        border: 1px solid var(--card-border);
+        border-radius: 26px;
+        background: linear-gradient(
+          145deg,
+          rgba(255, 255, 255, 0.09),
+          rgba(255, 255, 255, 0.035)
+        );
+        box-shadow: 0 18px 50px rgba(0, 0, 0, 0.18);
+        transition:
+          transform 0.25s ease,
+          border-color 0.25s ease,
+          box-shadow 0.25s ease;
+      }
+
+      .game-card:hover {
+        transform: translateY(-6px);
+        border-color: rgba(255, 255, 255, 0.24);
+        box-shadow: 0 28px 65px rgba(0, 0, 0, 0.28);
+      }
+
+      .game-card::after {
+        content: "";
+        position: absolute;
+        width: 180px;
+        height: 180px;
+        right: -70px;
+        top: -70px;
+        border-radius: 50%;
+        background: var(--game-accent);
+        opacity: 0.13;
+        filter: blur(12px);
+        pointer-events: none;
+      }
+
+      .game-top {
+        display: flex;
+        align-items: start;
+        justify-content: space-between;
+        gap: 16px;
+      }
+
+      .game-icon {
+        width: 68px;
+        height: 68px;
+        display: grid;
+        place-items: center;
+        border-radius: 20px;
+        font-size: 36px;
+        background: color-mix(in srgb, var(--game-accent) 16%, transparent);
+        border: 1px solid
+          color-mix(in srgb, var(--game-accent) 35%, transparent);
+      }
+
+      .category {
+        display: inline-flex;
+        padding: 7px 10px;
+        border-radius: 999px;
+        font-size: 11px;
+        font-weight: 800;
+        letter-spacing: 0.05em;
+        text-transform: uppercase;
+        color: #e7ecf8;
+        background: rgba(255, 255, 255, 0.07);
+      }
+
+      .game-card h3 {
+        margin: 22px 0 8px;
+        font-size: 26px;
+        letter-spacing: -0.03em;
+      }
+
+      .game-card p {
+        margin: 0;
+        color: var(--muted);
+        line-height: 1.6;
+        font-size: 14px;
+        max-width: 48ch;
+      }
+
+      .game-tags {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 8px;
+        margin-top: 18px;
+      }
+
+      .tag {
+        font-size: 11px;
+        color: #d8e0ef;
+        padding: 7px 9px;
+        border-radius: 10px;
+        background: rgba(255, 255, 255, 0.05);
+        border: 1px solid rgba(255, 255, 255, 0.07);
+      }
+
+      .game-actions {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        margin-top: auto;
+        padding-top: 24px;
+      }
+
+      .play-btn {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        gap: 9px;
+        min-height: 48px;
+        padding: 0 18px;
+        border-radius: 14px;
+        background: linear-gradient(
+          135deg,
+          var(--game-accent),
+          color-mix(in srgb, var(--game-accent) 65%, white)
+        );
+        color: white;
+        text-decoration: none;
+        font-size: 14px;
+        font-weight: 800;
+        box-shadow: 0 12px 28px
+          color-mix(in srgb, var(--game-accent) 22%, transparent);
+        transition:
+          transform 0.2s ease,
+          filter 0.2s ease;
+      }
+
+      .play-btn:hover {
+        transform: translateY(-2px);
+        filter: brightness(1.08);
+      }
+
+      .open-text {
+        color: #aeb8cb;
+        font-size: 12px;
+      }
+
+      .empty-state {
+        display: none;
+        padding: 50px 20px;
+        text-align: center;
+        border: 1px dashed rgba(255, 255, 255, 0.15);
+        border-radius: 22px;
+        color: var(--muted);
+        margin-top: 4px;
+      }
+
+      .coming {
+        margin: 28px 0 0;
+        padding: 24px;
+        text-align: center;
+        border-radius: 24px;
+        border: 1px dashed rgba(255, 255, 255, 0.15);
+        background: rgba(255, 255, 255, 0.025);
+      }
+
+      .coming-icon {
+        font-size: 30px;
+        margin-bottom: 8px;
+      }
+
+      .coming h3 {
+        margin: 0 0 7px;
+        font-size: 19px;
+      }
+
+      .coming p {
+        margin: 0;
+        color: var(--muted);
+        font-size: 14px;
+      }
+
+      footer {
+        padding: 52px 0 34px;
+        color: #8792a8;
+        font-size: 12px;
+        text-align: center;
+      }
+
+      @media (max-width: 760px) {
+        .container {
+          width: min(100% - 24px, 680px);
+        }
+
+        .topbar-inner {
+          padding: 13px 14px;
+          border-radius: 18px;
+        }
+
+        .camera-note {
+          display: none;
+        }
+
+        .hero {
+          padding: 54px 0 40px;
+        }
+
+        .games {
+          grid-template-columns: 1fr;
+        }
+
+        .section-head {
+          align-items: stretch;
+          flex-direction: column;
+        }
+
+        .tools {
+          justify-content: stretch;
+        }
+
+        .search {
+          width: 100%;
+        }
+
+        .game-card {
+          min-height: 300px;
+        }
+      }
+
+      @media (prefers-reduced-motion: reduce) {
+        html {
+          scroll-behavior: auto;
+        }
+
+        *,
+        *::before,
+        *::after {
+          animation-duration: 0.01ms !important;
+          animation-iteration-count: 1 !important;
+          transition-duration: 0.01ms !important;
+        }
+      }
+    </style>
+  </head>
+
+  <body>
+    <div class="container">
+      <header class="topbar">
+        <div class="topbar-inner">
+          <a class="brand" href="./index.html" aria-label="Move and Learn home">
+            <div class="brand-icon">🎮</div>
+            <div class="brand-copy">
+              <strong>Move & Learn</strong>
+              <span>Physical learning games for little explorers</span>
+            </div>
+          </a>
+
+          <div class="camera-note">
+            <span class="camera-dot"></span>
+            Works with a webcam
+          </div>
+        </div>
+      </header>
+
+      <main>
+        <section class="hero">
+          <div class="eyebrow">🌟 PLAY • MOVE • LEARN</div>
+
+          <h1>
+            Learning becomes a
+            <span>whole-body adventure.</span>
+          </h1>
+
+          <p>
+            Fun educational games where children learn by moving, pointing,
+            jumping, dancing, clapping and interacting with the screen.
+          </p>
+
+          <div class="stats">
+            <div class="stat">
+              <strong id="gameCount">0</strong>
+              <span>Games available</span>
+            </div>
+
+            <div class="stat">
+              <strong>3–5</strong>
+              <span>Recommended age</span>
+            </div>
+
+            <div class="stat">
+              <strong>📷</strong>
+              <span>Camera powered</span>
+            </div>
+          </div>
+        </section>
+
+        <section aria-labelledby="games-title">
+          <div class="section-head">
+            <div>
+              <h2 id="games-title">Choose a game</h2>
+              <p>Pick a game and start moving.</p>
+            </div>
+
+            <div class="tools">
+              <input
+                id="search"
+                class="search"
+                type="search"
+                placeholder="Search games..."
+                aria-label="Search games"
+              />
+            </div>
+          </div>
+
+          <div id="games" class="games"></div>
+
+          <div id="emptyState" class="empty-state">
+            <div style="font-size: 30px; margin-bottom: 8px">🔎</div>
+            <strong>No games found.</strong>
+            <div style="margin-top: 6px">Try a different search.</div>
+          </div>
+
+          <div class="coming">
+            <div class="coming-icon">🚀</div>
+            <h3>More games are coming!</h3>
+            <p>
+              New movement-based learning adventures can be added here anytime.
+            </p>
+          </div>
+        </section>
+      </main>
+
+      <footer>Move & Learn • Interactive Physical Learning Games</footer>
+    </div>
+
+    <script>
+      /*
+      ============================================================
+      ADD FUTURE GAMES HERE
+      ============================================================
+
+      To add a new game later, simply add another object:
+
+      {
+        title: "Jump the Answer",
+        file: "jump-the-answer.html",
+        icon: "➕",
+        category: "Math",
+        description: "Solve simple maths and jump to the answer.",
+        accent: "#ff9a5c",
+        tags: ["Math", "Jumping", "Numbers"]
+      }
+
+      Make sure the .html filename matches the actual file.
+    */
+
+      const games = [
+        {
+          title: "Animal Moves",
+          file: "animal-moves.html",
+          icon: "🐾",
+          category: "Movement",
+          description:
+            "Move like different animals and let the camera recognize your playful movements.",
+          accent: "#7c5cff",
+          tags: ["Animals", "Movement", "Body"],
+        },
+        {
+          title: "Freeze Dance",
+          file: "freeze-dance.html",
+          icon: "🕺",
+          category: "Dance",
+          description:
+            "Dance, move and freeze when the game says stop. A fun way to build listening and body control.",
+          accent: "#24d5b2",
+          tags: ["Dance", "Listening", "Movement"],
+        },
+        {
+          title: "Number Catcher",
+          file: "number-catcher.html",
+          icon: "🔢",
+          category: "Numbers",
+          description:
+            "Find the requested number and reach toward it before it gets away.",
+          accent: "#ff9a5c",
+          tags: ["Numbers", "Counting", "Reach"],
+        },
+        {
+          title: "Where Is My Body?",
+          file: "where-is-my-body-parts.html",
+          icon: "👀",
+          category: "Body",
+          description:
+            "Find your eyes, ears, nose, cheeks, chin and more by pointing to your own body.",
+          accent: "#ff5fa2",
+          tags: ["Body Parts", "Pointing", "Awareness"],
+        },
+        {
+          title: "Simon Says",
+          file: "simon-says-learning.html",
+          icon: "🗣️",
+          category: "Listening",
+          description:
+            "Follow fun instructions, move your body and test your listening skills with Simon Says.",
+          accent: "#6c8cff",
+          tags: ["Listening", "Movement", "Body"],
+        },
+
+        {
+          title: "Reach High, Reach Low",
+          file: "reach-high-reach-low.html",
+          icon: "🙌",
+          category: "Movement",
+          description:
+            "Reach high, reach low, and move in different directions while following fun instructions.",
+          accent: "#38bdf8",
+          tags: ["Movement", "Directions", "Reach"],
+        },
+        {
+          title: "Feed the Hungry Monster",
+          file: "feed-the-hungry-monster.html",
+          icon: "👹",
+          category: "Counting",
+          description:
+            "Help the hungry monster by collecting the right number of fruits and feeding it.",
+          accent: "#a855f7",
+          tags: ["Counting", "Reaching", "Numbers"],
+        },
+        {
+          title: "Touch the Color",
+          file: "touch-the-color.html",
+          icon: "🎨",
+          category: "Colors",
+          description:
+            "Find the right color and reach toward it to complete fun learning challenges.",
+          accent: "#f59e0b",
+          tags: ["Colors", "Pointing", "Reach"],
+        },
+        {
+          title: "Jump the Answer",
+          file: "jump-the-answer.html",
+          icon: "🤸",
+          category: "Math",
+          description:
+            "Solve simple maths problems and physically jump to the correct answer.",
+          accent: "#24d5b2",
+          tags: ["Math", "Jumping", "Numbers"],
+        },
+        {
+          title: "Hidden Shape Hunt",
+          file: "hidden-shape-hunt.html",
+          icon: "🔺",
+          category: "Shapes",
+          description:
+            "Explore a colorful world, find hidden shapes, and point toward the correct objects to complete each challenge.",
+          accent: "#f472b6",
+          tags: ["Shapes", "Pointing", "Visual Learning"],
+        },
+        {
+          title: "Clap the Answer",
+          file: "clap-the-answer.html",
+          icon: "👏",
+          category: "Math",
+          description:
+            "Count objects, solve simple number challenges, and clap the correct number of times to answer.",
+          accent: "#fbbf24",
+          tags: ["Math", "Counting", "Clapping"],
+        },
+        {
+          title: "Left or Right",
+          file: "Left-or-Right.html",
+          icon: "⬅️",
+          category: "Movement",
+          description:
+            "Learn left and right through fun movement challenges that encourage kids to follow directions and move their bodies.",
+          accent: "#60a5fa",
+          tags: ["Directions", "Movement", "Coordination"],
+        },
+        {
+          title: "Jump to the Color",
+          file: "jump-to-the-color.html",
+          icon: "🌈",
+          category: "Colors",
+          description:
+            "Listen to color instructions, find the matching color, and jump toward it to build color recognition and listening skills.",
+          accent: "#a78bfa",
+          tags: ["Colors", "Jumping", "Listening"],
+        },
+        {
+          title: "Number Hopscotch",
+          file: "number-hopscotch.html",
+          icon: "🔢",
+          category: "Math",
+          description:
+            "Practice number recognition, counting, and simple math by hopping onto the correct numbers in a fun, active learning game.",
+          accent: "#34d399",
+          tags: ["Numbers", "Counting", "Jumping"],
+        },
+        {
+          title: "Step on the Letter",
+          file: "step-on-the-letter.html",
+          icon: "🔤",
+          category: "Alphabet",
+          description:
+            "Learn the alphabet by listening to letter prompts and stepping toward the correct letter to build recognition and early literacy skills.",
+          accent: "#f97316",
+          tags: ["Alphabet", "Letters", "Movement"],
+        },
+        {
+          title: "Human Shape Maker",
+          file: "human-shape-maker.html",
+          icon: "🧍",
+          category: "Movement",
+          description: "Move your body to match fun shapes and poses.",
+          accent: "#a78bfa",
+          tags: ["Body Movement", "Coordination"],
+        },
+        {
+          title: "Growing Plants",
+          file: "growing-plants.html",
+          icon: "🌱",
+          category: "Nature",
+          description:
+            "Move your body to help seeds grow into beautiful plants.",
+          accent: "#4ade80",
+          tags: ["Nature", "Learning"],
+        },
+        {
+          title: "Clean the Room",
+          file: "clean-the-room.html",
+          icon: "🧹",
+          category: "Life Skills",
+          description: "Move around to pick up toys and tidy the room.",
+          accent: "#38bdf8",
+          tags: ["Life Skills", "Movement"],
+        },
+        {
+          title: "Rescue the Animals",
+          file: "rescue-the-animals.html",
+          icon: "🐾",
+          category: "Adventure",
+          description:
+            "Use body movements to rescue cute animals and bring them to safety.",
+          accent: "#fb923c",
+          tags: ["Animals", "Adventure"],
+        },
+        {
+          title: "Follow the Rhythm",
+          file: "follow-the-rhythm.html",
+          icon: "🎵",
+          category: "Music",
+          description:
+            "Follow the beat with fun body movements and dance poses.",
+          accent: "#e879f9",
+          tags: ["Music", "Coordination"],
+        },
+        {
+          title: "Opposites in Motion",
+          file: "opposites-in-motion.html",
+          icon: "🔄",
+          category: "Learning",
+          description:
+            "Learn opposites like up and down, fast and slow through movement.",
+          accent: "#60a5fa",
+          tags: ["Learning", "Body Movement"],
+        },
+        {
+          title: "Zoomie Road Rally",
+          file: "zoomie-road-rally.html",
+          icon: "🏎️",
+          category: "Racing",
+          description:
+            "Lean to steer, raise your hands for turbo, and race through colorful worlds collecting stars.",
+          accent: "#38bdf8",
+          tags: ["Racing", "Coordination"],
+        },
+        {
+          title: "Tumbletown Dojo",
+          file: "tumbletown-dojo.html",
+          icon: "🥋",
+          category: "Arcade",
+          description:
+            "Use fun body movements to dodge, block, and perform playful cartoon moves.",
+          accent: "#fb7185",
+          tags: ["Body Movement", "Arcade"],
+        },
+        {
+          title: "Wobblewheel Bike Adventure",
+          file: "wobblewheel-bike-adventure.html",
+          icon: "🚲",
+          category: "Racing",
+          description:
+            "Ride through colorful worlds, steer around obstacles, and collect stars with body movements.",
+          accent: "#22d3ee",
+          tags: ["Racing", "Coordination"],
+        },
+        {
+          title: "Cloud Hopper",
+          file: "cloud-hopper.html",
+          icon: "☁️",
+          category: "Adventure",
+          description:
+            "Hop between fluffy clouds, dodge playful obstacles, and explore a colorful sky.",
+          accent: "#818cf8",
+          tags: ["Adventure", "Movement"],
+        },
+        {
+          title: "Bubble Buddy Blaster",
+          file: "bubble-buddy-blaster.html",
+          icon: "🔫",
+          category: "Arcade",
+          description:
+            "Help a bubbly friend pop colorful bubbles using fun webcam-controlled movements.",
+          accent: "#f472b6",
+          tags: ["Arcade", "Coordination"],
+        },
+        {
+          title: "Sprinkle Switch",
+          file: "sprinkle-switch.html",
+          icon: "🍬",
+          category: "Puzzle",
+          description:
+            "Switch colorful candy tiles and match sweet patterns through playful movement challenges.",
+          accent: "#fb923c",
+          tags: ["Puzzle", "Learning"],
+        },
+        {
+          title: "Captain Comet",
+          file: "captain-comet.html",
+          icon: "🚀",
+          category: "Adventure",
+          description:
+            "Become a cosmic hero, dodge space obstacles, and collect glowing stars with body movements.",
+          accent: "#818cf8",
+          tags: ["Adventure", "Space"],
+        },
+        {
+          title: "Puddle Pop Bowling",
+          file: "puddle-pop-bowling.html",
+          icon: "🎳",
+          category: "Sports",
+          description:
+            "Roll splashy bowling balls to knock down colorful pins in a fun, playful bowling adventure.",
+          accent: "#38bdf8",
+          tags: ["Sports", "Coordination"],
+        },
+        {
+          title: "Submarine Sorter",
+          file: "submarine-sorter.html",
+          icon: "🐠",
+          category: "Puzzle",
+          description:
+            "Explore the ocean and sort colorful sea creatures into their correct groups using body movements.",
+          accent: "#38bdf8",
+          tags: ["Puzzle", "Ocean"],
+        },
+        {
+          title: "Rhythm Rocket Band",
+          file: "rhythm-rocket-band.html",
+          icon: "🎸",
+          category: "Music",
+          description:
+            "Make music and launch a colorful rocket by moving to the beat and following fun rhythm challenges.",
+          accent: "#c084fc",
+          tags: ["Music", "Rhythm"],
+        },
+      ];
+
+      const gamesContainer = document.getElementById("games");
+      const searchInput = document.getElementById("search");
+      const emptyState = document.getElementById("emptyState");
+      const gameCount = document.getElementById("gameCount");
+
+      gameCount.textContent = games.length;
+
+      function escapeHtml(value) {
+        return String(value)
+          .replaceAll("&", "&amp;")
+          .replaceAll("<", "&lt;")
+          .replaceAll(">", "&gt;")
+          .replaceAll('"', "&quot;")
+          .replaceAll("'", "&#039;");
+      }
+
+      function renderGames(list) {
+        gamesContainer.innerHTML = "";
+
+        list.forEach((game) => {
+          const card = document.createElement("article");
+          card.className = "game-card";
+          card.style.setProperty("--game-accent", game.accent);
+
+          card.innerHTML = `
+          <div class="game-top">
+            <div class="game-icon" aria-hidden="true">${escapeHtml(game.icon)}</div>
+            <span class="category">${escapeHtml(game.category)}</span>
+          </div>
+
+          <h3>${escapeHtml(game.title)}</h3>
+
+          <p>${escapeHtml(game.description)}</p>
+
+          <div class="game-tags">
+            ${game.tags
+              .map((tag) => `<span class="tag">${escapeHtml(tag)}</span>`)
+              .join("")}
+          </div>
+
+          <div class="game-actions">
+            <a class="play-btn" href="${encodeURI(game.file)}">
+              ▶ Play Game
+            </a>
+            <span class="open-text">Opens in this tab</span>
+          </div>
+        `;
+
+          gamesContainer.appendChild(card);
+        });
+
+        emptyState.style.display = list.length ? "none" : "block";
+      }
+
+      function filterGames() {
+        const query = searchInput.value.trim().toLowerCase();
+
+        const filtered = games.filter((game) => {
+          const searchable = [
+            game.title,
+            game.category,
+            game.description,
+            ...game.tags,
+          ]
+            .join(" ")
+            .toLowerCase();
+
+          return searchable.includes(query);
+        });
+
+        renderGames(filtered);
+      }
+
+      searchInput.addEventListener("input", filterGames);
+
+      renderGames(games);
+    </script>
+  </body>
+</html>

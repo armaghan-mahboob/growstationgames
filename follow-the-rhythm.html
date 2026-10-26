@@ -1,0 +1,1196 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#2FB4F5">
+<title>Follow the Rhythm</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Fredoka:wght@500;600;700&display=swap" rel="stylesheet">
+<style>
+/* ===================== BASE ===================== */
+:root{
+  --ink:#1E1B4B; --violet:#7C4DFF; --violet-d:#5B2FD6;
+  --sun:#FDE047; --pink:#FF5FA2; --green:#22C55E; --green-d:#15803D;
+  --beat:.667s; --spring:cubic-bezier(.34,1.56,.64,1);
+  --pad:clamp(8px,2vmin,20px); --r:clamp(12px,2.6vmin,26px);
+  --font:"Fredoka",ui-rounded,"Arial Rounded MT Bold","Nunito","Segoe UI",system-ui,sans-serif;
+}
+*{box-sizing:border-box}
+html,body{margin:0;height:100%;overflow:hidden}
+body{height:100dvh;font-family:var(--font);font-weight:600;color:var(--ink);background:#2FB4F5;
+  -webkit-tap-highlight-color:transparent;-webkit-user-select:none;user-select:none;touch-action:manipulation;overscroll-behavior:none}
+[hidden]{display:none!important}
+button{font:inherit;color:inherit}
+#video{position:fixed;left:0;top:0;width:2px;height:2px;opacity:0;pointer-events:none}
+#fx{position:fixed;inset:0;width:100%;height:100%;pointer-events:none;z-index:50}
+
+/* ===================== BACKGROUND ===================== */
+#bg{position:fixed;inset:0;overflow:hidden;background:linear-gradient(180deg,#2FB4F5 0%,#7ED6FB 60%,#C9F5E6 100%)}
+#bg .rays{position:absolute;left:50%;top:55%;width:170vmax;height:170vmax;margin:-85vmax 0 0 -85vmax;
+  background:repeating-conic-gradient(rgba(255,255,255,.15) 0 9deg,rgba(255,255,255,0) 9deg 18deg);animation:spin 90s linear infinite}
+#bg .glow{position:absolute;inset:0;background:radial-gradient(circle at 50% 55%,rgba(255,255,255,.55) 0,rgba(255,255,255,0) 45%)}
+#bg .hill{position:absolute;left:-15%;right:-15%;bottom:-20vh;height:36vh;border-radius:50%;background:linear-gradient(#8BE99A,#4CC96F)}
+#bg .notes span{position:absolute;bottom:-15vh;color:rgba(255,255,255,.8);font-size:clamp(22px,5vmin,54px);animation:floatUp linear infinite}
+
+/* ===================== APP SHELL + SCREENS ===================== */
+#app{position:fixed;inset:0;z-index:1;display:flex;flex-direction:column;
+  padding:max(var(--pad),env(safe-area-inset-top)) max(var(--pad),env(safe-area-inset-right)) max(var(--pad),env(safe-area-inset-bottom)) max(var(--pad),env(safe-area-inset-left))}
+.screen{display:none;flex:1;min-height:0;min-width:0}
+.screen.on{display:flex;flex-direction:column;align-items:center;gap:clamp(8px,2.2vh,22px);text-align:center;overflow:hidden auto}
+.screen.on::before,.screen.on::after{content:"";flex:1}
+.screen.on::before{order:-2}
+.screen.play.on{align-items:stretch;gap:var(--pad);overflow:hidden;text-align:left}
+.screen.play.on::before,.screen.play.on::after{display:none}
+
+.headline{margin:0;font-size:clamp(22px,min(6vw,7vh),60px);line-height:1.1;color:#fff;text-shadow:0 .07em 0 rgba(30,27,75,.35)}
+.sub{margin:0;font-size:clamp(15px,min(3.6vw,4vh),26px);color:#fff;max-width:30em}
+.big-emoji{font-size:clamp(56px,min(20vw,20vh),150px);line-height:1;animation:wiggle 1.2s ease-in-out infinite alternate}
+.spinner{flex:none;width:clamp(70px,18vmin,130px);aspect-ratio:1;border-radius:50%;border:clamp(8px,2vmin,14px) solid rgba(255,255,255,.5);border-top-color:#fff;animation:spin 1s linear infinite}
+
+/* Buttons: large, work with touch and mouse */
+.btn{flex:none;border:0;cursor:pointer;font-weight:700;color:#fff;background:var(--violet);border-radius:999px;padding:.5em 1.3em;
+  font-size:clamp(18px,min(4.6vw,5vh),34px);box-shadow:0 .26em 0 var(--violet-d),0 .5em 1em rgba(30,27,75,.25);transition:transform .08s,box-shadow .08s}
+.btn:active{transform:translateY(.18em);box-shadow:0 .08em 0 var(--violet-d),0 .2em .5em rgba(30,27,75,.25)}
+.btn.go{background:var(--green);box-shadow:0 .26em 0 var(--green-d),0 .5em 1em rgba(30,27,75,.25);font-size:clamp(26px,min(8vw,9vh),60px);animation:pulse 1.33s ease-in-out infinite}
+.btn.go:active{box-shadow:0 .08em 0 var(--green-d)}
+.btn.ghost{background:#fff;color:var(--ink);box-shadow:0 .26em 0 #B9C3F5,0 .5em 1em rgba(30,27,75,.2)}
+.btn.small{font-size:clamp(14px,min(3.6vw,4.2vh),24px);padding:.4em 1em}
+.btn:focus-visible,.ibtn:focus-visible{outline:4px solid var(--sun);outline-offset:3px}
+
+/* Start / result: title tiles and character */
+.title{margin:0;display:flex;flex-wrap:wrap;justify-content:center;--t:clamp(24px,min(8vw,9vh),78px);gap:calc(var(--t)*.35) calc(var(--t)*.5)}
+.word{display:inline-flex;gap:calc(var(--t)*.09)}
+.tile{width:var(--t);height:calc(var(--t)*1.12);display:grid;place-items:center;font-size:calc(var(--t)*.74);font-weight:700;color:#fff;background:var(--c);
+  border-radius:calc(var(--t)*.24);box-shadow:0 calc(var(--t)*.1) 0 rgba(30,27,75,.25);
+  animation:tileIn .6s var(--spring) both,tileBob calc(var(--beat)*2) ease-in-out infinite;animation-delay:var(--d),calc(var(--d) + .6s)}
+.side-bop{flex:none;height:clamp(120px,32vh,400px);aspect-ratio:320/440}
+.split .col{display:contents}
+.split .ttl{order:-1}
+.grown{margin:0;max-width:34em;font-weight:500;font-size:clamp(11px,min(2.7vw,2.6vh),17px);line-height:1.3;background:rgba(255,255,255,.72);border-radius:var(--r);padding:.5em .9em}
+.bigstars{display:flex;gap:.08em;font-size:clamp(44px,min(15vw,13vh),120px);line-height:1}
+.bigstars span{display:inline-block;filter:grayscale(1);opacity:.35;transform:scale(.75)}
+.bigstars span.on{filter:none;opacity:1;animation:starIn .6s var(--spring) both}
+.stats{display:flex;flex-wrap:wrap;justify-content:center;gap:clamp(6px,1.4vw,14px)}
+
+/* Calibration */
+#camBig{flex:none;height:clamp(150px,46vh,540px);width:auto;max-width:92vw;aspect-ratio:var(--cam-ar,4/3)}
+.checks{display:flex;flex-wrap:wrap;justify-content:center;gap:clamp(6px,1.4vw,14px)}
+.chk{background:rgba(255,255,255,.6);border-radius:999px;padding:.3em .8em;font-size:clamp(13px,min(3.2vw,3.4vh),24px);opacity:.8;transition:all .2s}
+.chk.ok{background:var(--green);color:#fff;opacity:1;transform:scale(1.06)}
+.meter{flex:none;width:min(80vw,520px);height:clamp(14px,3vh,26px);background:rgba(255,255,255,.6);border-radius:999px;overflow:hidden;border:3px solid #fff}
+.meter i{display:block;height:100%;width:0;background:linear-gradient(90deg,var(--sun),var(--green));border-radius:999px}
+
+/* ===================== HUD ===================== */
+.hud{flex:none;display:flex;align-items:center;flex-wrap:wrap;gap:clamp(6px,1.2vw,14px)}
+.pill{display:flex;align-items:center;gap:.35em;background:#fff;border-radius:999px;padding:.28em .8em;font-weight:700;white-space:nowrap;
+  font-size:clamp(15px,min(3.6vw,4.6vh),30px);box-shadow:0 .2em 0 rgba(30,27,75,.15)}
+.pill.big{font-size:clamp(17px,min(4.4vw,5vh),34px)}
+.pill.bump{animation:pop .35s var(--spring)}
+#pillLevel{background:var(--violet);color:#fff}
+.dots{flex:1 1 60px;min-width:0;display:flex;justify-content:center;gap:clamp(4px,1vw,10px)}
+.dot{width:clamp(12px,min(2.6vw,3.4vh),24px);aspect-ratio:1;border-radius:50%;background:rgba(255,255,255,.5);border:3px solid #fff}
+.dot.s3{background:var(--sun)}.dot.s2{background:#86EFAC}.dot.s1{background:#C4B5FD}
+.dot.cur{background:#fff;animation:pulse var(--beat) ease-in-out infinite alternate}
+.hud-btns{display:flex;gap:inherit;margin-left:auto}
+.ibtn{width:clamp(42px,min(9vw,10vh),64px);aspect-ratio:1;border-radius:50%;border:0;padding:0;background:#fff;cursor:pointer;display:grid;place-items:center;line-height:1;
+  font-size:clamp(18px,min(4.4vw,5vh),30px);box-shadow:0 .2em 0 rgba(30,27,75,.18)}
+.ibtn:active{transform:translateY(.12em)}
+
+/* ===================== STAGE ===================== */
+.stage{flex:1;min-height:0;display:grid;gap:var(--pad);align-items:center;justify-items:center;
+  --side:clamp(96px,20vw,280px);--cw:min(15vw,22vh,150px);
+  grid-template-columns:var(--side) minmax(0,1fr) var(--side);grid-template-rows:auto minmax(0,1fr) auto;
+  grid-template-areas:"banner banner banner" "seen teacher cam" "cards cards cards"}
+.banner{grid-area:banner;max-width:100%;background:#fff;border-radius:999px;padding:.16em .9em;font-weight:700;text-align:center;line-height:1.15;
+  font-size:clamp(22px,min(6.4vw,7.5vh),68px);box-shadow:0 .14em 0 rgba(30,27,75,.15)}
+.banner.pop{animation:bannerPop .4s var(--spring)}
+.banner.go{background:var(--sun)}
+.banner.win{background:var(--pink);color:#fff}
+.teacher{grid-area:teacher;position:relative;align-self:stretch;justify-self:stretch;min-height:0}
+.teacher .bop-slot{position:absolute;inset:0}
+.seen{grid-area:seen;display:flex;flex-direction:column;align-items:center;gap:.15em;background:rgba(255,255,255,.85);border-radius:var(--r);padding:.45em .8em;
+  font-size:clamp(12px,min(2.6vw,3vh),20px)}
+.seen-ico{font-size:clamp(34px,min(9vw,11vh),90px);line-height:1.1}
+.seen-ico.pop{animation:pop .35s var(--spring)}
+.cam{grid-area:cam;width:100%;display:flex;flex-direction:column;align-items:center;gap:.2em;color:#fff;font-size:clamp(12px,min(2.6vw,3vh),20px);text-shadow:0 1px 2px rgba(30,27,75,.5)}
+.camview{display:block;background:var(--ink);border:clamp(3px,.6vmin,6px) solid #fff;border-radius:var(--r);box-shadow:0 .3em .8em rgba(30,27,75,.3)}
+.cam .camview{width:100%;aspect-ratio:var(--cam-ar,4/3);max-height:38vh}
+
+/* Sequence cards */
+.cards{grid-area:cards;width:100%;display:flex;justify-content:center;align-items:center;gap:calc(var(--cw)*.12);min-height:calc(var(--cw)*1.3);perspective:900px}
+.card{position:relative;flex:none;width:var(--cw);height:calc(var(--cw)*1.18);transition:transform .25s var(--spring),opacity .25s}
+.card-in{position:absolute;inset:0;transform-style:preserve-3d;transition:transform .45s cubic-bezier(.4,.2,.2,1.2)}
+.card.hidden .card-in{transform:rotateY(180deg)}
+.cface{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:3%;overflow:hidden;background:#fff;
+  border:calc(var(--cw)*.06) solid var(--c);border-radius:calc(var(--cw)*.2);box-shadow:0 calc(var(--cw)*.06) 0 rgba(30,27,75,.18);
+  -webkit-backface-visibility:hidden;backface-visibility:hidden}
+.cback{transform:rotateY(180deg);background:var(--violet);border-color:#fff;color:#fff;font-size:calc(var(--cw)*.6);font-weight:700}
+.ico{display:inline-block;font-size:calc(var(--cw)*.5);line-height:1.05}
+.lbl{max-width:92%;font-size:calc(var(--cw)*.14);font-weight:700;line-height:1;text-align:center;color:#fff;background:var(--c);border-radius:.7em;padding:.22em .55em}
+.card.empty .cfront{background:rgba(255,255,255,.35);border-style:dashed;border-color:#fff;box-shadow:none}
+.card.empty .ico,.card.empty .lbl{visibility:hidden}
+.card.wait{opacity:.8}
+.card.now{transform:scale(1.12) translateY(-4%);z-index:2;opacity:1}
+.card.now .cface{box-shadow:0 0 0 calc(var(--cw)*.05) var(--sun),0 calc(var(--cw)*.1) calc(var(--cw)*.2) rgba(30,27,75,.3)}
+.card.pop{animation:cardPop .45s var(--spring)}
+.card.wobble{animation:wobble .5s}
+.card.skip{opacity:.6}
+.card.done::after{content:"✓";position:absolute;right:-8%;top:-10%;width:36%;aspect-ratio:1;display:grid;place-items:center;border-radius:50%;
+  background:var(--green);color:#fff;font-weight:700;font-size:calc(var(--cw)*.24);border:calc(var(--cw)*.03) solid #fff;animation:pop .4s var(--spring)}
+.card.anim[data-a="clap"] .ico{animation:icoPulse .333s ease-in-out infinite alternate}
+.card.anim[data-a="jump"] .ico{animation:icoJump var(--beat) ease-in-out infinite}
+.card.anim[data-a="up"] .ico{animation:icoUp var(--beat) ease-in-out infinite alternate}
+.card.anim[data-a="down"] .ico{animation:icoDown var(--beat) ease-in-out infinite alternate}
+.card.anim[data-a="wave"] .ico{animation:icoWave .4s ease-in-out infinite alternate;transform-origin:70% 80%}
+.card.anim[data-a="squat"] .ico{animation:icoSquat var(--beat) ease-in-out infinite alternate;transform-origin:50% 100%}
+.card.anim[data-a="turn"] .ico{animation:spin 1.1s linear infinite}
+.card.anim[data-a="head"] .ico{animation:icoNod .333s ease-in-out infinite alternate}
+.flystar{position:fixed;z-index:60;pointer-events:none;font-size:clamp(26px,6vmin,56px);line-height:1}
+
+/* Overlays (pause, tracking lost) */
+.overlay{position:absolute;inset:0;z-index:20;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:clamp(10px,3vh,26px);
+  padding:var(--pad);text-align:center;color:#fff;background:rgba(30,27,75,.74);-webkit-backdrop-filter:blur(6px);backdrop-filter:blur(6px);overflow:hidden auto}
+.overlay h2{margin:0;max-width:16em;font-size:clamp(24px,min(7vw,8vh),68px);line-height:1.12}
+#ovPause{z-index:21}
+
+/* ===================== TEACHER CHARACTER "BOP" ===================== */
+.bop{width:100%;height:100%;display:block;overflow:visible}
+.bop .plat1{fill:#FF8FB8}.bop .plat2{fill:#E0457F}
+.bop .shadow{fill:#1E1B4B;opacity:.2;transform-origin:150px 356px}
+.bop .feet ellipse{fill:#FF6B6B}
+.bop .leg line,.bop .arm line{stroke:#5B2FD6;stroke-width:22;stroke-linecap:round}
+.bop .torso,.bop .skull{fill:#7C4DFF}
+.bop .belly{fill:#D4C8FF}
+.bop .note{font-size:46px;fill:#7C4DFF;font-family:serif}
+.bop .ew,.bop .eh{fill:#fff}.bop .ep{fill:#1E1B4B}
+.bop .cheek{fill:#FF8FB8;opacity:.8}
+.bop .smile{fill:none;stroke:#1E1B4B;stroke-width:5;stroke-linecap:round}
+.bop .grin{display:none;fill:#1E1B4B;stroke:#1E1B4B;stroke-width:4;stroke-linejoin:round}
+.bop .band{fill:none;stroke:#1E1B4B;stroke-width:9;stroke-linecap:round}
+.bop .cup{fill:#FF5FA2;stroke:#1E1B4B;stroke-width:3}
+.bop .hand{fill:#FDE047;stroke:#E0B400;stroke-width:3}
+.bop .spark path{fill:#FDE047;stroke:#fff;stroke-width:3;opacity:0}
+.bop .fx-up path,.bop .fx-down path{fill:none;stroke:#fff;stroke-width:8;stroke-linecap:round;stroke-linejoin:round;opacity:0}
+.bop .eyes{transform-origin:150px 86px;animation:blink 4.2s infinite}
+/* joints (origins are in SVG user units) */
+.bop .rig{transform-origin:150px 352px}
+.bop .upper{transform-origin:150px 352px;transition:transform .3s var(--spring);animation:bopIdle var(--beat) ease-in-out infinite alternate}
+.bop .arm,.bop .fore,.bop .leg,.bop .shin{transition:transform .28s var(--spring)}
+.bop .armL{transform-origin:92px 172px;transform:rotate(16deg)}
+.bop .armL .fore{transform-origin:92px 230px;transform:rotate(-12deg)}
+.bop .armR{transform-origin:208px 172px;transform:rotate(-16deg)}
+.bop .armR .fore{transform-origin:208px 230px;transform:rotate(12deg)}
+.bop .legL{transform-origin:128px 284px}.bop .legL .shin{transform-origin:128px 318px}
+.bop .legR{transform-origin:172px 284px}.bop .legR .shin{transform-origin:172px 318px}
+/* poses */
+.bop.p-up .armL{transform:rotate(152deg)}.bop.p-up .armL .fore{transform:rotate(6deg)}
+.bop.p-up .armR{transform:rotate(-152deg)}.bop.p-up .armR .fore{transform:rotate(-6deg)}
+.bop.p-up .fx-up path{animation:fxUp var(--beat) ease-out infinite}
+.bop.p-down .armL{transform:rotate(3deg)}.bop.p-down .armL .fore{transform:rotate(0deg)}
+.bop.p-down .armR{transform:rotate(-3deg)}.bop.p-down .armR .fore{transform:rotate(0deg)}
+.bop.p-down .fx-down path{animation:fxDown var(--beat) ease-out infinite}
+.bop.p-clap .armL{animation:clapAL .333s ease-in-out infinite alternate}
+.bop.p-clap .armL .fore{animation:clapFL .333s ease-in-out infinite alternate}
+.bop.p-clap .armR{animation:clapAR .333s ease-in-out infinite alternate}
+.bop.p-clap .armR .fore{animation:clapFR .333s ease-in-out infinite alternate}
+.bop.p-clap .spark path{animation:spark .666s ease-in-out infinite}
+.bop.p-wave .armR{transform:rotate(-130deg)}
+.bop.p-wave .armR .fore{animation:waveF .4s ease-in-out infinite alternate}
+.bop.p-head .armL{transform:rotate(163deg)}.bop.p-head .armR{transform:rotate(-163deg)}
+.bop.p-head .armL .fore{animation:headFL .333s ease-in-out infinite alternate}
+.bop.p-head .armR .fore{animation:headFR .333s ease-in-out infinite alternate}
+.bop.p-squat .upper{animation:none;transform:translateY(36px)}
+.bop.p-squat .legL{transform:rotate(60deg)}.bop.p-squat .legL .shin{transform:rotate(-127deg)}
+.bop.p-squat .legR{transform:rotate(-60deg)}.bop.p-squat .legR .shin{transform:rotate(127deg)}
+.bop.p-squat .armL{transform:rotate(58deg)}.bop.p-squat .armL .fore{transform:rotate(-28deg)}
+.bop.p-squat .armR{transform:rotate(-58deg)}.bop.p-squat .armR .fore{transform:rotate(28deg)}
+.bop.p-jump .rig{animation:bopJump var(--beat) infinite}
+.bop.p-jump .upper{animation:none}
+.bop.p-jump .shadow{animation:bopShadow var(--beat) infinite}
+.bop.p-jump .armL{transform:rotate(105deg)}.bop.p-jump .armR{transform:rotate(-105deg)}
+.bop.p-turn .rig{animation:bopTurn 1.1s ease-in-out infinite}
+.bop.p-turn .face{animation:bopFace 1.1s linear infinite}
+.bop.p-turn .armL{transform:rotate(78deg)}.bop.p-turn .armR{transform:rotate(-78deg)}
+.bop.p-dance .rig{animation:bopDance calc(var(--beat)*2) ease-in-out infinite}
+.bop.p-dance .armL{animation:danceAL var(--beat) ease-in-out infinite alternate}
+.bop.p-dance .armR{animation:danceAR var(--beat) ease-in-out infinite alternate}
+.bop.p-dance .smile,.bop.p-jump .smile,.bop.p-up .smile{display:none}
+.bop.p-dance .grin,.bop.p-jump .grin,.bop.p-up .grin{display:block}
+body.paused .bop *,body.paused .card *{animation-play-state:paused}
+
+/* ===================== KEYFRAMES ===================== */
+@keyframes spin{to{transform:rotate(360deg)}}
+@keyframes floatUp{0%{transform:translateY(0) rotate(-10deg);opacity:0}10%{opacity:.8}100%{transform:translateY(-130vh) rotate(20deg);opacity:0}}
+@keyframes pulse{0%,100%{transform:scale(1)}50%{transform:scale(1.07)}}
+@keyframes pop{0%{transform:scale(.5)}100%{transform:scale(1)}}
+@keyframes bannerPop{0%{transform:scale(.7) rotate(-3deg)}100%{transform:scale(1) rotate(0)}}
+@keyframes cardPop{0%{transform:scale(.3) rotate(-12deg)}100%{transform:scale(1.12) translateY(-4%)}}
+@keyframes wobble{0%,100%{transform:rotate(0)}20%{transform:rotate(-7deg)}40%{transform:rotate(7deg)}60%{transform:rotate(-5deg)}80%{transform:rotate(4deg)}}
+@keyframes wiggle{from{transform:rotate(-6deg)}to{transform:rotate(6deg)}}
+@keyframes starIn{from{transform:scale(.2) rotate(-40deg)}to{transform:scale(1) rotate(0)}}
+@keyframes tileIn{from{transform:translateY(-120%) rotate(-20deg);opacity:0}to{transform:none;opacity:1}}
+@keyframes tileBob{0%,100%{transform:translateY(0)}50%{transform:translateY(-9%)}}
+@keyframes icoPulse{from{transform:scale(.85)}to{transform:scale(1.15)}}
+@keyframes icoJump{0%,100%{transform:translateY(8%) scale(1.1,.9)}50%{transform:translateY(-22%) scale(.95,1.08)}}
+@keyframes icoUp{from{transform:translateY(8%)}to{transform:translateY(-12%)}}
+@keyframes icoDown{from{transform:translateY(-10%)}to{transform:translateY(10%)}}
+@keyframes icoWave{from{transform:rotate(-18deg)}to{transform:rotate(18deg)}}
+@keyframes icoSquat{from{transform:scale(1,1)}to{transform:scale(1.15,.75)}}
+@keyframes icoNod{from{transform:translateY(-5%)}to{transform:translateY(5%)}}
+@keyframes blink{0%,93%,100%{transform:scaleY(1)}96%{transform:scaleY(.1)}}
+@keyframes bopIdle{from{transform:scale(1,1)}to{transform:scale(1.03,.965)}}
+@keyframes clapAL{from{transform:rotate(22deg)}to{transform:rotate(-13deg)}}
+@keyframes clapFL{from{transform:rotate(-140deg)}to{transform:rotate(-120deg)}}
+@keyframes clapAR{from{transform:rotate(-22deg)}to{transform:rotate(13deg)}}
+@keyframes clapFR{from{transform:rotate(140deg)}to{transform:rotate(120deg)}}
+@keyframes spark{0%,35%{opacity:0;transform:scale(.4)}50%{opacity:1;transform:scale(1.15)}72%,100%{opacity:0;transform:scale(1.5)}}
+@keyframes waveF{from{transform:rotate(-15deg)}to{transform:rotate(-72deg)}}
+@keyframes headFL{from{transform:rotate(42deg)}to{transform:rotate(30deg)}}
+@keyframes headFR{from{transform:rotate(-42deg)}to{transform:rotate(-30deg)}}
+@keyframes fxUp{0%{opacity:0;transform:translateY(10px)}40%{opacity:1}100%{opacity:0;transform:translateY(-14px)}}
+@keyframes fxDown{0%{opacity:0;transform:translateY(-10px)}40%{opacity:1}100%{opacity:0;transform:translateY(12px)}}
+@keyframes bopJump{0%{transform:translateY(0) scale(1.1,.86);animation-timing-function:cubic-bezier(.2,.7,.4,1)}45%{transform:translateY(-70px) scale(.94,1.08);animation-timing-function:cubic-bezier(.6,0,.9,.4)}80%,100%{transform:translateY(0) scale(1.1,.86)}}
+@keyframes bopShadow{0%,80%,100%{transform:scale(1);opacity:.2}45%{transform:scale(.6);opacity:.1}}
+@keyframes bopTurn{0%,100%{transform:scaleX(1)}25%{transform:scaleX(.08)}50%{transform:scaleX(-1)}75%{transform:scaleX(.08)}}
+@keyframes bopFace{0%,24%{opacity:1}26%,74%{opacity:0}76%,100%{opacity:1}}
+@keyframes bopDance{0%,100%{transform:rotate(-7deg)}25%,75%{transform:translateY(-20px) rotate(0)}50%{transform:rotate(7deg)}}
+@keyframes danceAL{from{transform:rotate(150deg)}to{transform:rotate(60deg)}}
+@keyframes danceAR{from{transform:rotate(-60deg)}to{transform:rotate(-150deg)}}
+
+/* ===================== RESPONSIVE ===================== */
+/* Portrait (phones and tablets held upright): teacher on top, cards, then "I saw" + camera */
+@media (orientation:portrait){
+  .stage{--cw:min(16.5vw,12vh,150px);grid-template-columns:minmax(0,1fr) minmax(0,1fr);grid-template-rows:auto minmax(0,1fr) auto auto;
+    grid-template-areas:"banner banner" "teacher teacher" "cards cards" "seen cam"}
+  .cam{align-items:flex-end;justify-self:end}
+  .cam .camview{width:auto;height:clamp(84px,17vh,220px);max-width:100%;max-height:none}
+  .seen{flex-direction:row;gap:.5em;justify-self:start;align-self:end}
+}
+/* Short landscape (phones on their side): teacher gets the full height */
+@media (orientation:landscape) and (max-height:520px){
+  .stage{--side:clamp(90px,18vw,200px);--cw:min(8.4vw,24vh,120px);
+    grid-template-columns:minmax(0,.9fr) minmax(0,1.6fr) var(--side);grid-template-rows:auto minmax(0,1fr);
+    grid-template-areas:"teacher banner cam" "teacher cards seen"}
+  .seen{align-self:start}
+}
+@media (orientation:landscape) and (max-height:600px){
+  .screen.split.on{flex-direction:row;justify-content:center;gap:clamp(12px,4vw,48px)}
+  .screen.split.on::before,.screen.split.on::after{display:none}
+  .split .col{display:flex;flex-direction:column;align-items:center;gap:clamp(6px,2.4vh,16px);min-width:0;max-height:100%;overflow:hidden auto}
+  .side-bop{height:min(76vh,360px)}
+}
+/* Phone */
+@media (max-width:599px){ .dots{order:9;flex-basis:100%} }
+/* Tablet */
+@media (min-width:600px) and (max-width:1023px){ .stage{--side:clamp(110px,20vw,220px)} }
+/* Laptop */
+@media (min-width:1024px) and (max-width:1439px){ .stage{--side:clamp(170px,20vw,280px)} }
+/* Desktop */
+@media (min-width:1440px){
+  #app{padding-left:max(var(--pad),calc((100vw - 1700px)/2));padding-right:max(var(--pad),calc((100vw - 1700px)/2))}
+  .stage{--side:300px;--cw:min(15vw,22vh,170px)}
+}
+@media (prefers-reduced-motion:reduce){ #bg .rays,#bg .notes span,.tile,.btn.go{animation:none} }
+</style>
+</head>
+<body data-screen="start">
+
+<div id="bg" aria-hidden="true"><div class="rays"></div><div class="glow"></div><div class="notes"></div><div class="hill"></div></div>
+<video id="video" playsinline muted autoplay></video>
+
+<div id="app">
+
+  <!-- START -->
+  <section class="screen split on" data-name="start">
+    <div class="bop-slot side-bop" data-pose="wave"></div>
+    <div class="col">
+      <h1 class="title ttl" id="title" aria-label="Follow the Rhythm"></h1>
+      <button class="btn go" id="btnStart">▶ Play</button>
+      <button class="btn ghost small" id="btnMode" aria-pressed="false">👀 Easy mode: OFF</button>
+      <p class="grown">Grown-ups: allow the camera and clear some space. Your child should stand far enough back that the whole body is in view. Easy mode keeps the pictures on screen. The video never leaves this device.</p>
+    </div>
+  </section>
+
+  <!-- LOADING -->
+  <section class="screen" data-name="load">
+    <div class="spinner"></div>
+    <h2 class="headline" id="loadMsg">Getting ready…</h2>
+  </section>
+
+  <!-- ERROR (camera permission, no camera, no internet) -->
+  <section class="screen" data-name="error">
+    <div class="big-emoji" id="errIco">🙈</div>
+    <h2 class="headline" id="errTitle"></h2>
+    <p class="sub" id="errText"></p>
+    <button class="btn go" id="btnRetry">Try again</button>
+  </section>
+
+  <!-- CALIBRATION -->
+  <section class="screen" data-name="calib">
+    <h2 class="headline" id="calibMsg">Stand where I can see you!</h2>
+    <canvas class="camview" id="camBig"></canvas>
+    <div class="checks">
+      <span class="chk" id="chkSee">👀 I see you</span>
+      <span class="chk" id="chkMid">🎯 In the middle</span>
+      <span class="chk" id="chkBody">🧍 Whole body</span>
+    </div>
+    <div class="meter"><i id="calibBar"></i></div>
+    <button class="btn ghost small" id="btnCalibSkip" hidden>Play anyway</button>
+  </section>
+
+  <!-- PLAY (also used for the practice tutorial) -->
+  <section class="screen play" data-name="play">
+    <header class="hud">
+      <div class="pill" id="pillLevel">Level 1</div>
+      <div class="pill" id="pillStars"><span>⭐</span><b id="numStars">0</b></div>
+      <div class="pill" id="pillStreak"><span>🔥</span><b id="numStreak">0</b></div>
+      <div class="dots" id="dots"></div>
+      <button class="btn ghost small" id="btnSkip" hidden>Skip practice</button>
+      <div class="hud-btns">
+        <button class="ibtn" id="btnSound" aria-label="Sound on or off">🔊</button>
+        <button class="ibtn" id="btnPause" aria-label="Pause">⏸️</button>
+        <button class="ibtn" id="btnRestart" aria-label="Restart">🔄</button>
+      </div>
+    </header>
+    <main class="stage">
+      <div class="banner" id="banner"><span id="bannerTxt">Watch me!</span></div>
+      <aside class="seen"><span>I saw</span><div class="seen-ico" id="seenIco">👀</div></aside>
+      <div class="teacher"><div class="bop-slot" id="teacher" data-stage="1"></div></div>
+      <aside class="cam"><canvas class="camview" id="camSmall"></canvas><span>You</span></aside>
+      <div class="cards" id="cards"></div>
+    </main>
+  </section>
+
+  <!-- RESULT -->
+  <section class="screen split" data-name="result">
+    <div class="bop-slot side-bop" data-pose="dance"></div>
+    <div class="col">
+      <h2 class="headline ttl" id="resTitle">You did it!</h2>
+      <div class="bigstars" id="bigStars"><span>⭐</span><span>⭐</span><span>⭐</span></div>
+      <div class="stats">
+        <div class="pill big"><span>⭐</span><b id="resStars">0</b> stars</div>
+        <div class="pill big"><span>🔥</span>Best streak <b id="resStreak">0</b></div>
+      </div>
+      <button class="btn go" id="btnAgain">▶ Play again</button>
+      <button class="btn ghost small" id="btnHome2">🏠 Home</button>
+    </div>
+  </section>
+
+  <!-- OVERLAYS -->
+  <div class="overlay" id="ovLost" hidden>
+    <div class="big-emoji">🙈</div>
+    <h2>I can’t see you. Step back so I can see you!</h2>
+  </div>
+  <div class="overlay" id="ovPause" hidden>
+    <div class="big-emoji">⏸️</div>
+    <h2>Paused</h2>
+    <button class="btn go" id="btnResume">▶ Keep playing</button>
+    <button class="btn" id="btnRestart2">🔄 Start again</button>
+    <button class="btn ghost small" id="btnHome">🏠 Home</button>
+  </div>
+</div>
+
+<canvas id="fx" aria-hidden="true"></canvas>
+
+<script>
+(() => {
+'use strict';
+
+/* =====================================================================
+   1. CONFIG
+   ===================================================================== */
+const MP_BASE    = 'https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.14';
+const POSE_MODEL = 'https://storage.googleapis.com/mediapipe-models/pose_landmarker/pose_landmarker_lite/float16/1/pose_landmarker_lite.task';
+const HAND_MODEL = 'https://storage.googleapis.com/mediapipe-models/hand_landmarker/hand_landmarker/float16/1/hand_landmarker.task';
+const TOTAL_ROUNDS = 8;
+
+const $  = s => document.querySelector(s);
+const $$ = s => [...document.querySelectorAll(s)];
+const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
+const now  = () => performance.now();
+const rand = (a, b) => a + Math.random() * (b - a);
+const pick = a => a[Math.floor(Math.random() * a.length)];
+
+// hold = how long (ms) a pose must be held; 0 = one-shot movement
+const ACTIONS = {
+  clap:  { ico:'👏', label:'CLAP',       say:'Clap!',        tell:'Clap your hands!',     color:'#FF6B6B', hold:0   },
+  jump:  { ico:'🦘', label:'JUMP',       say:'Jump!',        tell:'Jump up high!',        color:'#22C55E', hold:0   },
+  up:    { ico:'🙌', label:'HANDS UP',   say:'Hands up!',    tell:'Put your hands up!',   color:'#F59E0B', hold:200 },
+  down:  { ico:'👇', label:'HANDS DOWN', say:'Hands down!',  tell:'Put your hands down!', color:'#0EA5E9', hold:450 },
+  wave:  { ico:'👋', label:'WAVE',       say:'Wave!',        tell:'Wave hello!',          color:'#EC4899', hold:0   },
+  squat: { ico:'🐸', label:'SQUAT',      say:'Squat!',       tell:'Squat down low!',      color:'#14B8A6', hold:160 },
+  turn:  { ico:'🔄', label:'TURN',       say:'Turn!',        tell:'Turn around!',         color:'#A855F7', hold:0   },
+  head:  { ico:'🙆', label:'TOUCH HEAD', say:'Touch head!',  tell:'Touch your head!',     color:'#F97316', hold:220 }
+};
+const ALL    = Object.keys(ACTIONS);
+const POOLS  = { 2:['clap','up','jump','wave'], 3:['clap','up','jump','wave','squat','head'], 4:ALL, 5:ALL };
+const NEW_AT = { 3:['squat','head'], 4:['turn','down'] };   // moves introduced when a sequence length unlocks
+// Movements that look alike on camera. They never count as a "wrong" action.
+const CONFUSE = {
+  clap:['up','head','wave'], jump:['up','squat','wave'], up:['wave','head','jump','clap'], down:['squat','jump'],
+  wave:['up','head','clap'], squat:['jump','clap'], turn:['clap','wave','up','jump','squat','head'], head:['up','wave','clap']
+};
+const PRAISE   = ['Yes!','Great!','Wow!','Yay!','Nice!'];
+const LOST_MSG = "I can't see you. Step back so I can see you!";
+
+/* =====================================================================
+   2. AUDIO: sound effects, backing beat, speech
+   ===================================================================== */
+const Sfx = (() => {
+  let AC = null, out = null, mute = false, nbuf = null;
+  function init(){
+    if (AC){ if (AC.state === 'suspended') AC.resume(); return; }
+    const C = window.AudioContext || window.webkitAudioContext; if (!C) return;
+    try { AC = new C(); out = AC.createGain(); out.gain.value = mute ? 0 : .85; out.connect(AC.destination); } catch(e){ AC = null; }
+  }
+  function tone(f, d, o = {}){
+    if (!AC) return;
+    const t0 = o.at != null ? o.at : AC.currentTime + (o.t || 0), osc = AC.createOscillator(), g = AC.createGain();
+    osc.type = o.type || 'sine'; osc.frequency.setValueAtTime(f, t0);
+    if (o.to) osc.frequency.exponentialRampToValueAtTime(o.to, t0 + d);
+    g.gain.setValueAtTime(.0001, t0); g.gain.exponentialRampToValueAtTime(o.g || .2, t0 + .012); g.gain.exponentialRampToValueAtTime(.0001, t0 + d);
+    osc.connect(g); g.connect(out); osc.start(t0); osc.stop(t0 + d + .05);
+  }
+  function noise(d, o = {}){
+    if (!AC) return;
+    if (!nbuf){ nbuf = AC.createBuffer(1, Math.floor(AC.sampleRate * .6), AC.sampleRate); const ch = nbuf.getChannelData(0); for (let i = 0; i < ch.length; i++) ch[i] = Math.random() * 2 - 1; }
+    const t0 = o.at != null ? o.at : AC.currentTime + (o.t || 0), src = AC.createBufferSource(), f = AC.createBiquadFilter(), g = AC.createGain();
+    src.buffer = nbuf; f.type = o.type || 'bandpass'; f.frequency.value = o.f || 1500; f.Q.value = .9;
+    g.gain.setValueAtTime(o.g || .3, t0); g.gain.exponentialRampToValueAtTime(.0001, t0 + d);
+    src.connect(f); f.connect(g); g.connect(out); src.start(t0); src.stop(t0 + d + .03);
+  }
+  const run = (notes, step, o = {}) => notes.forEach((f, i) => { if (f) tone(f, o.d || .16, Object.assign({}, o, { t:(o.t || 0) + i * step })); });
+  const ACT = {
+    clap(){ noise(.09, {f:1300, g:.5}); noise(.13, {f:2400, g:.28, t:.015}); },
+    jump(){ tone(250, .3, {to:760, type:'triangle', g:.26}); },
+    up(){ run([523,659,784], .07, {type:'triangle', g:.2}); },
+    down(){ run([784,659,523], .07, {type:'triangle', g:.2}); },
+    wave(){ run([880,660,880,660], .09, {d:.1, g:.16}); },
+    squat(){ tone(420, .32, {to:160, type:'triangle', g:.26}); },
+    turn(){ tone(380, .22, {to:920, g:.18}); tone(920, .24, {to:380, g:.18, t:.22}); },
+    head(){ tone(940, .07, {g:.24}); tone(1250, .09, {g:.22, t:.12}); }
+  };
+  return {
+    init, tone, noise, ctx:() => AC, muted:() => mute,
+    setMuted(m){ mute = m; if (out) out.gain.value = m ? 0 : .85; },
+    action(a){ if (ACT[a]) ACT[a](); },
+    ding(){ tone(1047, .13, {g:.18}); tone(1568, .26, {g:.18, t:.09}); },
+    star(){ tone(1760, .1, {g:.12}); tone(2349, .14, {g:.1, t:.06}); },
+    oops(){ tone(330, .2, {g:.13}); tone(262, .26, {g:.12, t:.16}); },   // soft, never harsh
+    soft(){ tone(440, .22, {g:.1}); },
+    cue(){ run([659,880], .13, {d:.2, type:'triangle', g:.2}); },
+    fanfare(){ run([523,659,784,1047], .11, {d:.2, type:'triangle', g:.22}); tone(1319, .45, {t:.46, type:'triangle', g:.2}); },
+    cheer(){ run([784,988,1175,1568], .08, {d:.18, type:'triangle', g:.2}); noise(.5, {f:6000, type:'highpass', g:.05, t:.1}); },
+    jingle(){ run([523,523,659,784,0,659,784,1047,0,784,1047,1319], .17, {d:.24, type:'triangle', g:.22}); }
+  };
+})();
+
+// Quiet 90 BPM groove so the whole game has a pulse
+const Beat = {
+  on:false, bpm:90, next:0, n:0, id:0,
+  start(){ const AC = Sfx.ctx(); if (!AC || this.on) return; this.on = true; this.next = AC.currentTime + .1; this.n = 0; this.id = setInterval(() => this.pump(), 40); },
+  stop(){ if (!this.on) return; this.on = false; clearInterval(this.id); },
+  pump(){
+    const AC = Sfx.ctx(), e = 30 / this.bpm;
+    if (this.next < AC.currentTime - .5) this.next = AC.currentTime + .05;
+    while (this.next < AC.currentTime + .2){ this.hit(this.n, this.next); this.next += e; this.n = (this.n + 1) % 8; }
+  },
+  hit(n, at){
+    if (n === 0 || n === 4) Sfx.tone(120, .16, {at, to:50, g:.2});
+    if (n === 2 || n === 6) Sfx.noise(.06, {at, f:1800, g:.06});
+    if (n % 2 === 1) Sfx.noise(.03, {at, f:6000, type:'highpass', g:.025});
+    const bass = [131,0,0,165,196,0,165,0][n]; if (bass) Sfx.tone(bass, .2, {at, type:'triangle', g:.06});
+  },
+  ms(){ return 60000 / this.bpm; },
+  untilBeat(){ const AC = Sfx.ctx(); if (!this.on || !AC) return 0; return Math.max(0, (this.next - AC.currentTime + (this.n % 2 ? 30 / this.bpm : 0)) * 1000); }
+};
+
+const Voice = (() => {
+  const ok = 'speechSynthesis' in window; let voice = null, token = 0;
+  function choose(){
+    if (!ok) return; const vs = speechSynthesis.getVoices(); if (!vs.length) return;
+    const en = vs.filter(v => /^en/i.test(v.lang));
+    for (const p of [/samantha/i, /google us english/i, /aria|jenny|zira/i, /karen|moira|tessa/i, /female/i]){ const f = en.find(v => p.test(v.name)); if (f){ voice = f; return; } }
+    voice = en[0] || null;
+  }
+  if (ok){ choose(); speechSynthesis.onvoiceschanged = choose; }
+  function say(text){
+    if (!ok || Sfx.muted()) return;
+    try {
+      const u = new SpeechSynthesisUtterance(text);
+      if (voice) u.voice = voice; u.lang = (voice && voice.lang) || 'en-US'; u.rate = 1; u.pitch = 1.25;
+      const my = ++token;
+      if (speechSynthesis.speaking || speechSynthesis.pending){ speechSynthesis.cancel(); setTimeout(() => { if (my === token) speechSynthesis.speak(u); }, 60); }
+      else speechSynthesis.speak(u);
+    } catch(e){}
+  }
+  function hush(){ token++; if (ok) try { speechSynthesis.cancel(); } catch(e){} }
+  return { say, hush };
+})();
+
+/* =====================================================================
+   3. TRACKING SYSTEM: webcam, MediaPipe Pose + Hand landmarkers, smoothing
+   ===================================================================== */
+const Track = { video:$('#video'), stream:null, poseLm:null, handLm:null, ar:4/3, arSet:false,
+                pose:null, hands:[], poseAt:0, hasPose:false, lastVT:-1, frame:0 };
+
+async function startCamera(){
+  if (Track.stream && Track.stream.active) return;
+  if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia){ const e = new Error('insecure'); e.name = 'Insecure'; throw e; }
+  let stream;
+  try { stream = await navigator.mediaDevices.getUserMedia({ audio:false, video:{ facingMode:'user', width:{ideal:640}, height:{ideal:480}, frameRate:{ideal:30} } }); }
+  catch(e){ if (e && (e.name === 'OverconstrainedError' || e.name === 'NotFoundError')) stream = await navigator.mediaDevices.getUserMedia({ audio:false, video:true }); else throw e; }
+  Track.stream = stream; const v = Track.video; v.srcObject = stream;
+  await new Promise(r => { if (v.readyState >= 1) r(); else v.addEventListener('loadedmetadata', r, { once:true }); });
+  try { await v.play(); } catch(e){}
+}
+
+async function loadModels(){
+  if (Track.poseLm) return;
+  const vision  = await import(MP_BASE + '/vision_bundle.mjs');
+  const fileset = await vision.FilesetResolver.forVisionTasks(MP_BASE + '/wasm');
+  const make = async (Cls, path, extra) => {            // try GPU first, fall back to CPU
+    try { return await Cls.createFromOptions(fileset, Object.assign({ baseOptions:{ modelAssetPath:path, delegate:'GPU' }, runningMode:'VIDEO' }, extra)); }
+    catch(e){ return await Cls.createFromOptions(fileset, Object.assign({ baseOptions:{ modelAssetPath:path, delegate:'CPU' }, runningMode:'VIDEO' }, extra)); }
+  };
+  Track.poseLm = await make(vision.PoseLandmarker, POSE_MODEL, { numPoses:1, minPoseDetectionConfidence:.4, minPosePresenceConfidence:.4, minTrackingConfidence:.4 });
+  try { Track.handLm = await make(vision.HandLandmarker, HAND_MODEL, { numHands:2, minHandDetectionConfidence:.4, minHandPresenceConfidence:.4, minTrackingConfidence:.4 }); }
+  catch(e){ Track.handLm = null; }                       // the game still works with pose only
+}
+
+// Adaptive smoothing: steady when still, quick when moving fast
+function smoothPose(lm, t){
+  if (!Track.pose || t - Track.poseAt > 500){ Track.pose = lm.map(p => ({ x:p.x, y:p.y, v:p.visibility == null ? 1 : p.visibility })); return; }
+  for (let i = 0; i < lm.length; i++){
+    const s = Track.pose[i], p = lm[i], a = clamp(.35 + Math.hypot(p.x - s.x, p.y - s.y) * 14, .35, .9);
+    s.x += (p.x - s.x) * a; s.y += (p.y - s.y) * a; s.v += ((p.visibility == null ? 1 : p.visibility) - s.v) * .5;
+  }
+}
+
+function trackFrame(t){
+  const v = Track.video;
+  if (Track.poseLm && v.readyState >= 2 && v.videoWidth && v.currentTime !== Track.lastVT){
+    Track.lastVT = v.currentTime; Track.frame++;
+    const ar = v.videoWidth / v.videoHeight;
+    if (!Track.arSet || Math.abs(ar - Track.ar) > .01){ Track.ar = ar; Track.arSet = true; document.documentElement.style.setProperty('--cam-ar', v.videoWidth + ' / ' + v.videoHeight); }
+    let lm = null;
+    try { const r = Track.poseLm.detectForVideo(v, t); lm = r && r.landmarks && r.landmarks[0]; } catch(e){}
+    if (lm && lm.length >= 29){ smoothPose(lm, t); Track.poseAt = t; }
+    if (Track.handLm && Track.frame % 2 === 0){          // hands every other frame to stay fast on tablets and phones
+      try { const r = Track.handLm.detectForVideo(v, t); Track.hands = (r && r.landmarks) || []; } catch(e){ Track.hands = []; }
+    }
+    const was = Track.hasPose;
+    Track.hasPose = !!Track.pose && t - Track.poseAt < 350 && (Track.pose[11].v + Track.pose[12].v) / 2 > .4;
+    if (Track.hasPose) Gest.update(t); else if (was) Gest.soft();
+  } else if (Track.hasPose && t - Track.poseAt > 600){ Track.hasPose = false; Gest.soft(); }
+}
+
+/* =====================================================================
+   4. GESTURE ENGINE: broad, forgiving action categories with cooldowns.
+      All thresholds are in "body units" (U = shoulder width), so they
+      work at any distance from the camera. Tune the numbers here.
+   ===================================================================== */
+function swings(h, thr){           // count left/right direction changes in a wrist history
+  if (h.length < 3) return 0;
+  let n = 0, dir = 0, lo = h[0].x, hi = h[0].x;
+  for (const s of h){
+    if (dir === 0){ lo = Math.min(lo, s.x); hi = Math.max(hi, s.x);
+      if (s.x - lo > thr){ dir = 1; hi = s.x; n++; } else if (hi - s.x > thr){ dir = -1; lo = s.x; n++; } }
+    else if (dir === 1){ if (s.x > hi) hi = s.x; else if (hi - s.x > thr){ dir = -1; lo = s.x; n++; } }
+    else { if (s.x < lo) lo = s.x; else if (s.x - lo > thr){ dir = 1; hi = s.x; n++; } }
+  }
+  return n;
+}
+
+const Gest = {
+  U:0, info:null, faceAvg:.8,
+  baseSh:0, baseHip:0, baseAn:0, baseLeg:0, offSince:0, anOff:0,
+  since:{}, lastTrue:{}, fired:{}, cool:{},
+  clapArmed:false, turnArmed:true, turnAt:0, squatEndAt:0,
+  wav:{ L:{h:[], low:0}, R:{h:[], low:0} },
+
+  reset(){ this.U = 0; this.faceAvg = .8; this.baseLeg = 0; this.cool = {}; this.turnArmed = true; this.soft(); },
+  soft(){  // person left the picture: forget short-term state
+    this.since = {}; this.fired = {}; this.lastTrue = {}; this.clapArmed = false;
+    this.baseSh = this.baseHip = this.baseAn = 0; this.offSince = this.anOff = 0;
+    this.wav.L.h.length = 0; this.wav.R.h.length = 0;
+  },
+  st(name, on, t){   // track how long a pose has been held (with a little flicker tolerance)
+    if (on){ this.lastTrue[name] = t; if (!this.since[name]) this.since[name] = t; }
+    else if (this.since[name] && t - (this.lastTrue[name] || 0) > 130){ this.since[name] = 0; this.fired[name] = false; if (name === 'squat') this.squatEndAt = t; }
+  },
+  hold(name, ms, t){ if (this.since[name] && !this.fired[name] && t - this.since[name] >= ms){ this.fired[name] = true; onAction(name, t); } },
+
+  update(t){
+    const lm = Track.pose, AR = Track.ar;
+    const P = i => ({ x:lm[i].x * AR, y:lm[i].y, v:lm[i].v });
+    const mid = (a, b) => ({ x:(a.x + b.x) / 2, y:(a.y + b.y) / 2 }), dist = (a, b) => Math.hypot(a.x - b.x, a.y - b.y);
+    const nose = P(0), lear = P(7), rear = P(8), lsh = P(11), rsh = P(12), lwr = P(15), rwr = P(16),
+          lhip = P(23), rhip = P(24), lkn = P(25), rkn = P(26), lan = P(27), ran = P(28);
+    const shMid = mid(lsh, rsh), hipMid = mid(lhip, rhip), anMid = mid(lan, ran);
+    const shW = dist(lsh, rsh), torso = dist(shMid, hipMid);
+    const hipsVis = Math.min(lhip.v, rhip.v) > .45, kneesVis = Math.min(lkn.v, rkn.v) > .45, ankVis = Math.min(lan.v, ran.v) > .55;
+
+    // Body unit: grows fast, shrinks slowly, so turning sideways does not shrink it
+    const target = hipsVis ? Math.max(shW, .55 * torso) : shW;
+    this.U = this.U ? this.U + (target - this.U) * (target > this.U ? .2 : .02) : target;
+    const U = Math.max(this.U, .02);
+    this.info = { cx:(lm[11].x + lm[12].x) / 2, top:lm[0].y, torso, hipsVis, kneesVis, ankVis };
+
+    // Facing the camera? (works even if a camera delivers a flipped picture)
+    const rawFace = (lsh.x - rsh.x) / U;
+    this.faceAvg += (rawFace - this.faceAvg) * .005;
+    const facing = rawFace * (this.faceAvg < -.3 ? -1 : 1);
+
+    // Standing-height baselines, updated only while the child is fairly still
+    if (!this.baseSh){ this.baseSh = shMid.y; this.baseHip = hipMid.y; }
+    const riseSh = (this.baseSh - shMid.y) / U, riseHip = hipsVis ? (this.baseHip - hipMid.y) / U : riseSh;
+    if (Math.abs(riseSh) < .1){ this.baseSh += (shMid.y - this.baseSh) * .08; this.baseHip += (hipMid.y - this.baseHip) * .08; this.offSince = 0; }
+    else { if (!this.offSince) this.offSince = t;
+      if (t - this.offSince > (riseSh < 0 ? 6000 : 2200)){ this.baseSh = shMid.y; this.baseHip = hipMid.y; this.offSince = 0; this.cool.jump = t + 900; } }
+    let riseAn = 0;
+    if (ankVis){
+      if (!this.baseAn) this.baseAn = anMid.y;
+      riseAn = (this.baseAn - anMid.y) / U;
+      if (Math.abs(riseAn) < .06){ this.baseAn += (anMid.y - this.baseAn) * .08; this.anOff = 0; }
+      else { if (!this.anOff) this.anOff = t; if (t - this.anOff > 1500){ this.baseAn = anMid.y; this.anOff = 0; } }
+    } else this.baseAn = 0;
+
+    // JUMP: body pops above standing height (small hops count). Cooldown stops double counting.
+    const jumpA = riseSh > .17 && riseHip > .11, jumpB = ankVis && riseAn > .09 && riseSh > .09;
+    if ((jumpA || jumpB) && t > (this.cool.jump || 0) && t - this.squatEndAt > 500){ this.cool.jump = t + 900; onAction('jump', t); }
+
+    // SQUAT: body drops, or legs fold. A good knee bend is enough.
+    let squat = -riseHip > .3 && -riseSh > .22;
+    if (hipsVis && ankVis){
+      const leg = (anMid.y - hipMid.y) / U;
+      if (!this.baseLeg) this.baseLeg = leg; else if (Math.abs(riseSh) < .1 && !squat) this.baseLeg += (leg - this.baseLeg) * .05;
+      if (leg < this.baseLeg * .72 && -riseSh > .12) squat = true;
+    }
+    this.st('squat', squat, t); this.hold('squat', 160, t);
+
+    // HANDS UP: both wrists above the shoulders. "upLoose" accepts one hand high.
+    const upL = lwr.v > .15 && lwr.y < lsh.y - .1 * U, upR = rwr.v > .15 && rwr.y < rsh.y - .1 * U, waist = (shMid.y + hipMid.y) / 2;
+    const up = upL && upR;
+    this.st('up', up, t); this.hold('up', 200, t);
+    this.st('upLoose', up || (upL && lwr.y < nose.y && rwr.y < waist) || (upR && rwr.y < nose.y && lwr.y < waist), t);
+
+    // HANDS DOWN: both wrists around hip height or lower (only checked when the game asks for it)
+    const hipY = hipsVis ? hipMid.y : shMid.y + 1.3 * U;
+    this.st('down', lwr.y > hipY - .3 * U && rwr.y > hipY - .3 * U, t);
+
+    // TOUCH HEAD: a wrist or a tracked palm close to the head. One hand is enough.
+    const headC = (lear.v > .3 && rear.v > .3) ? mid(lear, rear) : nose;
+    const palms = Track.hands.map(h => { let x = 0, y = 0; for (const i of [0,5,9,13,17]){ x += h[i].x; y += h[i].y; } return { x:x / 5 * AR, y:y / 5 }; });
+    let head = (lwr.v > .2 && dist(lwr, headC) < .62 * U) || (rwr.v > .2 && dist(rwr, headC) < .62 * U);
+    if (lwr.y < shMid.y || rwr.y < shMid.y) for (const p of palms) if (p.y < shMid.y && dist(p, headC) < .52 * U) head = true;
+    this.st('head', head, t); this.hold('head', 220, t);
+
+    // CLAP: hands apart, then together. Nearly touching counts. Palms refine the pose wrists.
+    let d = (lwr.v > .2 && rwr.v > .2) ? dist(lwr, rwr) / U : 9;
+    if (d < 1 && palms.length >= 2) d = Math.min(d, dist(palms[0], palms[1]) / U);
+    if (d > .78) this.clapArmed = true;
+    else if (d < .5 && this.clapArmed && facing > .55 && t > (this.cool.clap || 0) && t - this.turnAt > 600){
+      this.clapArmed = false; this.cool.clap = t + 550; onAction('clap', t);
+    }
+
+    // WAVE: a raised hand moving side to side
+    let sw = 0;
+    for (const [k, wr, sh] of [['L', lwr, lsh], ['R', rwr, rsh]]){
+      const w = this.wav[k];
+      if (wr.v > .25 && wr.y < sh.y + .15 * U){ w.h.push({ t, x:(wr.x - shMid.x) / U }); w.low = 0; }
+      else { if (!w.low) w.low = t; if (t - w.low > 200) w.h.length = 0; }
+      while (w.h.length && t - w.h[0].t > 1400) w.h.shift();
+      sw = Math.max(sw, swings(w.h, .14));
+    }
+    if (d > .7){
+      if (sw >= 3 && t > (this.cool.wave || 0)){ this.cool.wave = this.cool.waveLoose = t + 1100; this.wav.L.h.length = 0; this.wav.R.h.length = 0; onAction('wave', t); }
+      else if (sw >= 2 && t > (this.cool.waveLoose || 0)){ this.cool.waveLoose = t + 800; onAction('waveLoose', t); }
+    }
+
+    // TURN: shoulders go narrow (sideways) or swap sides (back to camera). A half turn counts.
+    if (facing > .7) this.turnArmed = true;
+    this.st('side', facing < .45, t);
+    if (this.since.side && this.turnArmed && t - this.since.side >= 120 && t > (this.cool.turn || 0)){
+      this.turnArmed = false; this.cool.turn = t + 1500; this.turnAt = t; onAction('turn', t);
+    }
+  }
+};
+
+/* =====================================================================
+   5. UI: character, cards, HUD, camera preview, effects
+   ===================================================================== */
+function bopSVG(stage){
+  const arm = x => `<g class="arm arm${x < 150 ? 'L' : 'R'}"><line x1="${x}" y1="172" x2="${x}" y2="230"/><g class="fore"><line x1="${x}" y1="230" x2="${x}" y2="286"/><circle class="hand" cx="${x}" cy="286" r="15"/></g></g>`;
+  const leg = x => `<g class="leg leg${x < 150 ? 'L' : 'R'}"><line x1="${x}" y1="284" x2="${x}" y2="318"/><g class="shin"><line x1="${x}" y1="318" x2="${x}" y2="350"/></g></g>`;
+  return `<svg class="bop" viewBox="-10 -50 320 440" preserveAspectRatio="xMidYMax meet" aria-hidden="true">
+    ${stage ? '<ellipse class="plat2" cx="150" cy="366" rx="140" ry="22"/><ellipse class="plat1" cx="150" cy="358" rx="140" ry="22"/>' : ''}
+    <ellipse class="shadow" cx="150" cy="356" rx="78" ry="11"/>
+    <g class="rig">
+      <g class="feet"><ellipse cx="122" cy="352" rx="25" ry="12"/><ellipse cx="178" cy="352" rx="25" ry="12"/></g>
+      <g class="upper">
+        ${leg(128)}${leg(172)}
+        <ellipse class="torso" cx="150" cy="222" rx="64" ry="72"/>
+        <ellipse class="belly" cx="150" cy="238" rx="40" ry="44"/>
+        <text class="note" x="150" y="256" text-anchor="middle">♪</text>
+        <g class="head">
+          <circle class="skull" cx="150" cy="92" r="56"/>
+          <g class="face">
+            <g class="eyes"><circle class="ew" cx="129" cy="86" r="14"/><circle class="ew" cx="171" cy="86" r="14"/>
+              <circle class="ep" cx="131" cy="88" r="7"/><circle class="ep" cx="169" cy="88" r="7"/>
+              <circle class="eh" cx="133.5" cy="85" r="2.5"/><circle class="eh" cx="171.5" cy="85" r="2.5"/></g>
+            <ellipse class="cheek" cx="110" cy="108" rx="10" ry="7"/><ellipse class="cheek" cx="190" cy="108" rx="10" ry="7"/>
+            <path class="smile" d="M133 112 Q150 130 167 112"/>
+            <path class="grin" d="M130 110 Q150 142 170 110 Z"/>
+          </g>
+          <path class="band" d="M97 88 Q97 28 150 28 Q203 28 203 88"/>
+          <rect class="cup" x="84" y="72" width="22" height="40" rx="10"/><rect class="cup" x="194" y="72" width="22" height="40" rx="10"/>
+        </g>
+        <g class="fx-up"><path d="M32 40 l12 -12 l12 12"/><path d="M244 40 l12 -12 l12 12"/></g>
+        <g class="fx-down"><path d="M80 312 l12 12 l12 -12"/><path d="M196 312 l12 12 l12 -12"/></g>
+        <g class="spark" transform="translate(150 166)"><path d="M0 -22 L5 -5 L22 0 L5 5 L0 22 L-5 5 L-22 0 L-5 -5 Z"/></g>
+        ${arm(92)}${arm(208)}
+      </g>
+    </g>
+  </svg>`;
+}
+function setPose(svg, pose){ if (svg) svg.setAttribute('class', 'bop' + (pose && pose !== 'idle' ? ' p-' + pose : '')); }
+
+$$('.bop-slot').forEach(s => { s.innerHTML = bopSVG(s.dataset.stage === '1'); setPose(s.firstElementChild, s.dataset.pose || 'idle'); });
+const teacherSlot = $('#teacher'), teacher = teacherSlot.firstElementChild;
+const $camBig = $('#camBig'), $camSmall = $('#camSmall');
+const UI = { cards:[] };
+
+// Title letter tiles
+(() => {
+  const col = ['#FF6B6B','#F59E0B','#22C55E','#0EA5E9','#A855F7','#EC4899'];
+  $('#title').innerHTML = 'FOLLOW THE RHYTHM'.split(' ').map((w, wi) =>
+    `<span class="word">${[...w].map((ch, i) => `<span class="tile" style="--c:${col[(i + wi * 2) % col.length]};--d:${(i + wi * 4) * 70}ms">${ch}</span>`).join('')}</span>`).join('');
+  const nb = $('#bg .notes');
+  for (let i = 0; i < 9; i++){ const s = document.createElement('span'); s.textContent = pick(['♪','♫','♩','♬']); s.style.left = rand(2, 95) + '%'; s.style.animationDuration = rand(10, 20) + 's'; s.style.animationDelay = -rand(0, 20) + 's'; nb.appendChild(s); }
+})();
+
+function show(name){ document.body.dataset.screen = name; $$('.screen').forEach(s => s.classList.toggle('on', s.dataset.name === name)); }
+function rePop(el, cls = 'pop'){ el.classList.remove(cls); void el.offsetWidth; el.classList.add(cls); }
+function setBanner(txt, tone){ const b = $('#banner'); $('#bannerTxt').textContent = txt; b.className = 'banner' + (tone ? ' ' + tone : ''); rePop(b); }
+function setNum(sel, v){ const el = $(sel); if (el.textContent !== String(v)){ el.textContent = v; rePop(el.parentElement, 'bump'); } }
+function updateHUD(){
+  const practice = Game.mode === 'practice';
+  $('#pillLevel').textContent = practice ? 'Practice' : 'Level ' + Game.level;
+  setNum('#numStars', Game.stars); setNum('#numStreak', Game.streak);
+  $('#btnSkip').hidden = !practice; $('#dots').style.visibility = practice ? 'hidden' : 'visible';
+}
+function renderDots(){
+  $('#dots').innerHTML = Array.from({ length:TOTAL_ROUNDS }, (_, i) => { const r = Game.results[i]; return `<i class="dot${r ? ' s' + r : ''}${!r && i === Game.round ? ' cur' : ''}"></i>`; }).join('');
+}
+function renderCards(seq, cls){
+  const box = $('#cards'); box.innerHTML = '';
+  seq.forEach(a => {
+    const A = ACTIONS[a], c = document.createElement('div');
+    c.className = 'card ' + cls; c.dataset.a = a; c.style.setProperty('--c', A.color);
+    c.innerHTML = `<div class="card-in"><div class="cface cfront"><span class="ico">${A.ico}</span><span class="lbl">${A.label}</span></div><div class="cface cback">?</div></div>`;
+    box.appendChild(c);
+  });
+  UI.cards = [...box.children];
+}
+function markNow(i){ UI.cards.forEach((c, j) => c.classList.toggle('now', j === i)); }
+
+let seenTimer = 0;
+function showSeen(name){       // "I saw" bubble: instant feedback for every detected movement
+  const A = ACTIONS[name]; if (!A) return;
+  const el = $('#seenIco'); el.textContent = A.ico; rePop(el);
+  clearTimeout(seenTimer); seenTimer = setTimeout(() => { el.textContent = '👀'; }, 1400);
+}
+function flyStar(fromEl, delay = 0){
+  const a = fromEl.getBoundingClientRect(), b = $('#pillStars').getBoundingClientRect();
+  const s = document.createElement('div'); s.className = 'flystar'; s.textContent = '⭐';
+  s.style.left = (a.left + a.width / 2) + 'px'; s.style.top = (a.top + a.height / 2) + 'px';
+  document.body.appendChild(s);
+  const dx = b.left + b.width / 2 - (a.left + a.width / 2), dy = b.top + b.height / 2 - (a.top + a.height / 2);
+  if (!s.animate){ s.remove(); return; }
+  const an = s.animate([
+    { transform:'translate(-50%,-50%) scale(.4)', opacity:0 },
+    { transform:'translate(-50%,-50%) scale(1.5)', opacity:1, offset:.25 },
+    { transform:`translate(calc(-50% + ${dx}px), calc(-50% + ${dy}px)) scale(.6)`, opacity:1 }
+  ], { duration:750, delay, easing:'cubic-bezier(.5,0,.3,1)', fill:'both' });
+  an.onfinish = () => { s.remove(); rePop($('#pillStars'), 'bump'); Sfx.star(); };
+}
+
+// Confetti
+const FX = (() => {
+  const cv = $('#fx'), ctx = cv.getContext('2d'); let parts = [], W = 0, H = 0, dpr = 1, dirty = false;
+  const COL = ['#FF6B6B','#FDE047','#22C55E','#38BDF8','#A855F7','#FF5FA2','#ffffff'];
+  function resize(){ dpr = Math.min(2, window.devicePixelRatio || 1); W = cv.width = Math.round(innerWidth * dpr); H = cv.height = Math.round(innerHeight * dpr); }
+  function burst(x, y, n = 40){
+    for (let i = 0; i < n; i++){ const a = rand(0, Math.PI * 2), s = rand(3, 11);
+      parts.push({ x:x * dpr, y:y * dpr, vx:Math.cos(a) * s * dpr, vy:(Math.sin(a) * s - 5) * dpr, g:.28, r:rand(0, 6), vr:rand(-.3, .3), w:rand(6, 13) * dpr, c:pick(COL), life:rand(900, 1700), age:0 }); }
+  }
+  function rain(n = 120){
+    for (let i = 0; i < n; i++) parts.push({ x:rand(0, W), y:rand(-H * .6, 0), vx:rand(-1, 1) * dpr, vy:rand(2, 5) * dpr, g:.03, r:rand(0, 6), vr:rand(-.2, .2), w:rand(7, 14) * dpr, c:pick(COL), life:rand(3000, 5000), age:0 });
+  }
+  function tick(dt){
+    if (!parts.length){ if (dirty){ ctx.clearRect(0, 0, W, H); dirty = false; } return; }
+    dirty = true; ctx.clearRect(0, 0, W, H); const k = dt / 16.7;
+    for (const p of parts){
+      p.age += dt; p.vy += p.g * dpr * k; p.vx *= .99; p.x += p.vx * k; p.y += p.vy * k; p.r += p.vr * k;
+      ctx.globalAlpha = clamp((1 - p.age / p.life) / .3, 0, 1);
+      ctx.save(); ctx.translate(p.x, p.y); ctx.rotate(p.r); ctx.fillStyle = p.c; ctx.fillRect(-p.w / 2, -p.w / 4, p.w, p.w / 2); ctx.restore();
+    }
+    ctx.globalAlpha = 1; parts = parts.filter(p => p.age < p.life && p.y < H + 40);
+  }
+  resize(); addEventListener('resize', resize);
+  return { burst, rain, tick };
+})();
+function burstAt(el, n){ const r = el.getBoundingClientRect(); FX.burst(r.left + r.width / 2, r.top + r.height / 2, n); }
+
+// Mirrored camera preview with a friendly stick figure on top
+const BONES = [[11,12],[11,13],[13,15],[12,14],[14,16],[11,23],[12,24],[23,24],[23,25],[25,27],[24,26],[26,28]];
+function drawBody(ctx, map, W){
+  const lm = Track.pose; if (!lm || !Track.hasPose) return;
+  const lw = Math.max(3, W * .018);
+  ctx.lineCap = 'round'; ctx.lineJoin = 'round';
+  for (const pass of [0, 1]){
+    ctx.strokeStyle = pass ? '#7C4DFF' : '#fff'; ctx.lineWidth = pass ? lw : lw * 1.9; ctx.beginPath();
+    for (const [a, b] of BONES){ if (lm[a].v < .3 || lm[b].v < .3) continue; const p = map(lm[a]), q = map(lm[b]); ctx.moveTo(p[0], p[1]); ctx.lineTo(q[0], q[1]); }
+    ctx.stroke();
+  }
+  const n = map(lm[0]), a = map(lm[11]), b = map(lm[12]), r = Math.max(lw * 1.5, Math.hypot(a[0] - b[0], a[1] - b[1]) * .38);
+  ctx.fillStyle = 'rgba(255,255,255,.25)'; ctx.strokeStyle = '#fff'; ctx.lineWidth = lw * .8; ctx.beginPath(); ctx.arc(n[0], n[1], r, 0, 7); ctx.fill(); ctx.stroke();
+  const dot = (i, c, s) => { if (lm[i].v < .25) return; const p = map(lm[i]); ctx.fillStyle = c; ctx.strokeStyle = '#fff'; ctx.lineWidth = lw * .4; ctx.beginPath(); ctx.arc(p[0], p[1], lw * s, 0, 7); ctx.fill(); ctx.stroke(); };
+  dot(15, '#FDE047', 1.5); dot(16, '#FDE047', 1.5); dot(27, '#FF6B6B', 1.2); dot(28, '#FF6B6B', 1.2);
+  ctx.fillStyle = '#FFF3B0';
+  for (const h of Track.hands) for (const i of [4, 8, 12, 16, 20]){ const p = map(h[i]); ctx.beginPath(); ctx.arc(p[0], p[1], lw * .45, 0, 7); ctx.fill(); }
+}
+function drawCam(cv, guide){
+  const w = cv.clientWidth, h = cv.clientHeight; if (!w || !h) return;
+  const dpr = Math.min(2, window.devicePixelRatio || 1), W = Math.round(w * dpr), H = Math.round(h * dpr);
+  if (cv.width !== W || cv.height !== H){ cv.width = W; cv.height = H; }
+  const ctx = cv.getContext('2d'), v = Track.video, vw = v.videoWidth, vh = v.videoHeight;
+  ctx.clearRect(0, 0, W, H); if (!vw) return;
+  const s = Math.max(W / vw, H / vh), dw = vw * s, dh = vh * s, ox = (W - dw) / 2, oy = (H - dh) / 2;
+  ctx.save(); ctx.translate(W, 0); ctx.scale(-1, 1);                 // mirror so movement feels natural
+  try { ctx.drawImage(v, ox, oy, dw, dh); } catch(e){}
+  drawBody(ctx, p => [ox + p.x * dw, oy + p.y * dh], W);
+  ctx.restore();
+  if (guide){                                                        // "stand here" frame on the calibration screen
+    ctx.strokeStyle = Calib.ok ? '#22C55E' : '#fff'; ctx.lineWidth = Math.max(4, W * .012); ctx.setLineDash([W * .04, W * .03]);
+    ctx.beginPath(); if (ctx.roundRect) ctx.roundRect(W * .2, H * .04, W * .6, H * .93, W * .06); else ctx.rect(W * .2, H * .04, W * .6, H * .93);
+    ctx.stroke(); ctx.setLineDash([]);
+  }
+}
+
+/* =====================================================================
+   6. GAME LOGIC
+   ===================================================================== */
+// Pausable game clock: every timed step goes through here, so Pause and "I can't see you" freeze the game cleanly
+const Sched = {
+  t:0, q:[], gen:0,
+  after(ms, fn){ const k = { at:this.t + ms, fn, gen:this.gen, dead:false }; this.q.push(k); return k; },
+  cancel(k){ if (k) k.dead = true; },
+  clear(){ this.q = []; this.gen++; },
+  tick(dt){
+    this.t += dt; if (!this.q.length) return;
+    const due = [], keep = [];
+    for (const k of this.q){ if (k.dead) continue; (k.at <= this.t ? due : keep).push(k); }
+    this.q = keep; due.sort((a, b) => a.at - b.at);
+    for (const k of due) if (!k.dead && k.gen === this.gen) k.fn();
+  }
+};
+
+const Game = { mode:'idle', easy:false, practiced:false, round:0, len:2, level:1, goodAtLen:0,
+               stars:0, streak:0, best:0, hits:0, steps:0, seq:[], lastSeq:null, idx:0, step:null,
+               helped:0, skipped:0, known:new Set(), results:[], userPaused:false, lost:false, badSince:0, goodSince:0 };
+const running = () => Game.mode !== 'idle' && !Game.userPaused && !Game.lost && document.body.dataset.screen === 'play';
+
+/* ---------- Boot: camera permission + model download ---------- */
+let booting = false;
+function showError(o){ $('#errIco').textContent = o.ico; $('#errTitle').textContent = o.title; $('#errText').textContent = o.text; show('error'); }
+function camError(e){
+  const n = e && e.name;
+  if (n === 'Insecure') return { ico:'🔒', title:'The camera needs a safe page', text:'Open this game from https:// or from localhost so the browser can use the camera.' };
+  if (n === 'NotAllowedError' || n === 'SecurityError' || n === 'PermissionDeniedError') return { ico:'🙈', title:'I need the camera to play', text:'Please allow the camera in your browser, then press Try again.' };
+  if (n === 'NotFoundError' || n === 'DevicesNotFoundError' || n === 'OverconstrainedError') return { ico:'📷', title:"I can't find a camera", text:'Plug in or switch on a camera, then press Try again.' };
+  if (n === 'NotReadableError' || n === 'AbortError') return { ico:'📷', title:'The camera is busy', text:'Close other apps that use the camera, then press Try again.' };
+  return { ico:'🌧️', title:'Something went wrong', text:'Please press Try again.' };
+}
+async function boot(){
+  if (booting) return; booting = true;
+  show('load'); $('#loadMsg').textContent = 'Waking up the camera…';
+  try { await startCamera(); } catch(e){ booting = false; return showError(camError(e)); }
+  $('#loadMsg').textContent = 'Bop is learning to see you…';
+  try { await loadModels(); } catch(e){ booting = false; return showError({ ico:'🌧️', title:"Bop couldn't get ready", text:'The motion helper did not download. Check the internet connection, then press Try again.' }); }
+  booting = false; startCalibration();
+}
+
+/* ---------- Calibration: is the child visible and centred? ---------- */
+const Calib = { prog:0, msg:'', saidAt:0, t0:0, ok:false };
+function startCalibration(){
+  Gest.reset(); Calib.prog = 0; Calib.msg = ''; Calib.ok = false; Calib.t0 = Calib.saidAt = now();
+  $('#btnCalibSkip').hidden = true; $('#calibBar').style.width = '0%'; show('calib');
+  Voice.say('Stand back so I can see all of you!');
+}
+function calibTick(t, dt){
+  const I = Gest.info, seen = Track.hasPose && !!I;
+  let mid = false, body = false, full = false, msg = 'Stand where I can see you!';
+  if (seen){
+    mid = I.cx > .19 && I.cx < .81;
+    const close = I.torso > .46 || I.top < .01 || !I.hipsVis, far = I.torso < .07;
+    body = !close && !far; full = body && I.kneesVis && I.ankVis;
+    msg = close ? 'Step back so I can see all of you!' : far ? 'Come a little closer!' : !mid ? 'Move to the middle!' : full ? 'Perfect! Hold still…' : 'Good! Step back a bit more if you can.';
+  }
+  const ok = seen && mid && body; Calib.ok = ok;
+  Calib.prog = clamp(Calib.prog + (ok ? dt / (full ? 1000 : 2400) : -dt / 900), 0, 1);   // not being fully in view is fine, it just takes a little longer
+  $('#chkSee').classList.toggle('ok', seen); $('#chkMid').classList.toggle('ok', seen && mid); $('#chkBody').classList.toggle('ok', full);
+  $('#calibBar').style.width = (Calib.prog * 100).toFixed(0) + '%';
+  if (msg !== Calib.msg){ Calib.msg = msg; $('#calibMsg').textContent = msg; if (!ok && t - Calib.saidAt > 3500){ Voice.say(msg); Calib.saidAt = t; } }
+  if (t - Calib.t0 > 7500) $('#btnCalibSkip').hidden = false;
+  if (Calib.prog >= 1) calibDone();
+}
+function calibDone(){
+  if (document.body.dataset.screen !== 'calib') return;
+  Sfx.ding(); if (Game.practiced) startGame(); else startPractice();
+}
+
+/* ---------- Shared helpers ---------- */
+function enterPlay(){
+  show('play'); Game.lost = false; Game.userPaused = false; Game.badSince = Game.goodSince = 0;
+  $('#ovLost').hidden = true; $('#ovPause').hidden = true; clearInterval(lostIv); document.body.classList.remove('paused');
+}
+function stepOk(){ const st = Game.step; if (!st) return; Game.step = null; st.timers.forEach(k => Sched.cancel(k)); st.onOk(st); }
+
+// Every detected movement arrives here and is compared with the expected one
+function onAction(name, t){
+  if (name !== 'waveLoose') showSeen(name);
+  const st = Game.step;
+  if (!st || !running() || t < st.readyAt) return;
+  const exp = st.action;
+  if (name === exp || (exp === 'wave' && name === 'waveLoose')) return stepOk();
+  if (name === 'waveLoose' || st.tryMode || st.hinted || st.wrong || CONFUSE[exp].includes(name)) return;
+  st.wrong = { name, at:t };                // a clearly different move: wait a moment before reacting
+}
+function gameTick(t){
+  const st = Game.step; if (!st || t < st.readyAt) return;
+  const a = st.action, need = ACTIONS[a].hold;
+  if (need){                                // held poses: also accept a pose the child is already holding
+    const s = a === 'up' ? (Gest.since.up || Gest.since.upLoose) : Gest.since[a];
+    if (s && t - Math.max(s, st.readyAt) >= need) return stepOk();
+  }
+  if (st.wrong && !st.wrongDone && t - st.wrong.at > 700){ st.wrongDone = true; oops(); }
+}
+
+/* ---------- Tutorial and "new move" intros: teacher shows one move, child tries it ---------- */
+function runTry(moves, opt, done){
+  renderCards(moves, 'show wait');
+  let i = 0;
+  const next = () => {
+    if (i >= moves.length){ Game.step = null; UI.cards.forEach(c => c.classList.remove('now', 'anim')); return done(); }
+    const a = moves[i], A = ACTIONS[a], c = UI.cards[i];
+    UI.cards.forEach(x => x.classList.remove('anim')); markNow(i); c.classList.remove('wait'); c.classList.add('anim');
+    setPose(teacher, a); Sfx.action(a); setBanner(A.ico + ' ' + A.tell); Voice.say(A.tell);
+    const st = Game.step = { action:a, readyAt:now() + 900, tryMode:true, timers:[], onOk(){
+      c.classList.add('done'); Sfx.ding(); burstAt(c, 24); setBanner(A.ico + ' ' + pick(PRAISE), 'go'); i++; Sched.after(1100, next);
+    } };
+    st.timers.push(Sched.after(opt.wait, () => {       // no problem if it was not seen: move on kindly
+      if (Game.step !== st) return; Game.step = null; c.classList.add('skip'); setBanner('💛 Good try!'); Sfx.soft(); i++; Sched.after(1000, next);
+    }));
+  };
+  if (opt.intro){ setPose(teacher, 'up'); setBanner('✨ New move!', 'win'); Voice.say('New move!'); Sfx.cue(); Sched.after(1500, next); }
+  else next();
+}
+function startPractice(){
+  Sched.clear(); Game.mode = 'practice'; Game.step = null; Game.level = 1; Game.stars = 0; Game.streak = 0;
+  enterPlay(); updateHUD(); renderCards([], 'show');
+  setPose(teacher, 'wave'); setBanner("👋 Hi! I'm Bop!"); Voice.say("Hi! I'm Bop! Copy my moves!"); Beat.start();
+  Sched.after(2800, () => runTry(['clap','up','wave','jump'], { wait:9000 }, () => {
+    Game.practiced = true; setPose(teacher, 'dance'); setBanner("🎉 You're ready!", 'win'); Voice.say("Great! Let's play!"); Sfx.fanfare(); burstAt(teacherSlot, 50);
+    Sched.after(2400, startGame);
+  }));
+}
+
+/* ---------- Rounds ---------- */
+function makeSequence(len, must){
+  const pool = POOLS[len];
+  for (let tries = 0; tries < 80; tries++){
+    const seq = [];
+    let guard = 0;
+    while (seq.length < len && guard++ < 200){
+      const a = pick(pool), prev = seq[seq.length - 1];
+      if (a === prev) continue;                                             // no doubles in a row
+      if (a === 'down' && !['up','head','wave'].includes(prev)) continue;   // "hands down" only after hands were raised
+      if (a === 'turn' && seq.includes('turn')) continue;
+      if (a === 'jump' && seq.filter(x => x === 'jump').length >= 2) continue;
+      seq.push(a);
+    }
+    if (seq.length < len) continue;
+    if (must && !must.some(m => seq.includes(m))) continue;
+    if (Game.lastSeq && seq.join() === Game.lastSeq.join()) continue;
+    return seq;
+  }
+  return pool.slice(0, len);
+}
+function startGame(){
+  Sched.clear(); Voice.hush();
+  Object.assign(Game, { mode:'play', round:0, len:2, level:1, goodAtLen:0, stars:0, streak:0, best:0, hits:0, steps:0, step:null, results:[], lastSeq:null, known:new Set(POOLS[2]) });
+  enterPlay(); updateHUD(); renderDots(); renderCards([], 'show'); setPose(teacher, 'idle'); setBanner('🎵 Here we go!'); Beat.start();
+  Sched.after(700, nextRound);
+}
+function nextRound(){
+  renderDots();
+  const fresh = (NEW_AT[Game.len] || []).filter(a => !Game.known.has(a));
+  if (fresh.length){ fresh.forEach(a => Game.known.add(a)); return runTry(fresh, { intro:true, wait:6500 }, () => beginRound(fresh)); }
+  beginRound(null);
+}
+function beginRound(must){
+  Game.seq = makeSequence(Game.len, must); Game.lastSeq = Game.seq; Game.steps += Game.seq.length;
+  showDemo();
+}
+// 1 + 2. Show and demonstrate the sequence, one move every two beats
+function showDemo(){
+  Game.step = null; renderCards(Game.seq, 'empty');
+  setPose(teacher, 'idle'); setBanner('👀 Watch me!'); Voice.say('Watch me!');
+  const gap = Beat.ms() * 2, t0 = 1300 + Beat.untilBeat();
+  Game.seq.forEach((a, i) => Sched.after(t0 + i * gap, () => {
+    const A = ACTIONS[a], c = UI.cards[i];
+    UI.cards.forEach(x => x.classList.remove('now', 'anim'));
+    c.classList.remove('empty'); c.classList.add('show', 'now', 'anim'); rePop(c);
+    setPose(teacher, a); Sfx.action(a); Voice.say(A.say); setBanner(A.ico + ' ' + A.label);
+  }));
+  const end = t0 + Game.seq.length * gap;
+  Sched.after(end, () => { setPose(teacher, 'idle'); UI.cards.forEach(x => x.classList.remove('now', 'anim', 'pop')); });
+  Sched.after(end + 350, startTurn);
+}
+// 3. "Your turn!"
+function startTurn(){
+  Game.idx = 0; Game.helped = 0; Game.skipped = 0;
+  setPose(teacher, 'idle'); setBanner('🎵 Your turn!', 'go'); Voice.say('Your turn!'); Sfx.cue();
+  UI.cards.forEach((c, i) => Sched.after(i * 90, () => { c.classList.add('wait'); if (!Game.easy) c.classList.add('hidden'); }));
+  Sched.after(1100, turnStep);
+}
+// 4. Child repeats the sequence, one step at a time
+function turnStep(){
+  const i = Game.idx;
+  UI.cards.forEach(c => c.classList.remove('anim')); markNow(i); UI.cards[i].classList.remove('wait'); setPose(teacher, 'idle');
+  const st = Game.step = { action:Game.seq[i], readyAt:now() + (i ? 300 : 150), hinted:false, timers:[], onOk:onTurnOk };
+  st.timers.push(Sched.after(Game.easy ? 4200 : 5000, () => giveHint()));   // gentle help if nothing happens
+  st.timers.push(Sched.after(12000, skipStep));                              // and never get stuck
+}
+function giveHint(){
+  const st = Game.step; if (!st || st.hinted) return; st.hinted = true; Game.helped++;
+  const c = UI.cards[Game.idx], A = ACTIONS[st.action];
+  c.classList.remove('hidden'); c.classList.add('anim');
+  setPose(teacher, st.action); setBanner(A.ico + ' ' + A.label + '!'); Voice.say(A.tell); Sfx.cue();
+}
+function oops(){ rePop(UI.cards[Game.idx], 'wobble'); Sfx.oops(); giveHint(); }   // a different move was seen: show the right one, no penalty
+function skipStep(){
+  const st = Game.step; if (!st) return; Game.step = null; st.timers.forEach(k => Sched.cancel(k));
+  const c = UI.cards[Game.idx]; c.classList.remove('hidden', 'now', 'wait', 'anim'); c.classList.add('skip');
+  Game.skipped++; Game.streak = 0; setBanner("💛 Let's keep going!"); Sfx.soft(); setPose(teacher, 'idle'); updateHUD(); advance();
+}
+// 5 + 6. Correct move: star, sound, teacher copies it
+function onTurnOk(st){
+  const c = UI.cards[Game.idx], A = ACTIONS[st.action];
+  Game.hits++; Game.stars++; Game.streak++; Game.best = Math.max(Game.best, Game.streak);
+  c.classList.remove('hidden', 'now', 'wait'); c.classList.add('done', 'anim');
+  setPose(teacher, st.action); Sfx.action(st.action); Sfx.ding(); flyStar(c); burstAt(c, 14);
+  if (Game.streak % 5 === 0) setBanner('🔥 ' + Game.streak + ' in a row!', 'win'); else setBanner(A.ico + ' ' + pick(PRAISE), 'go');
+  updateHUD(); advance();
+}
+function advance(){ Game.idx++; if (Game.idx >= Game.seq.length) Sched.after(650, roundDone); else Sched.after(600, turnStep); }
+
+function roundDone(){
+  Game.step = null;
+  const len = Game.seq.length, perfect = !Game.helped && !Game.skipped, good = Game.skipped * 2 < len, bonus = perfect ? 2 : good ? 1 : 0;
+  Game.stars += bonus; Game.results.push(perfect ? 3 : good ? 2 : 1); Game.round++;
+  let levelUp = false;
+  if (good && ++Game.goodAtLen >= 2 && Game.len < 5){ Game.len++; Game.goodAtLen = 0; levelUp = true; }   // only move on to longer sequences when ready
+  UI.cards.forEach(c => { c.classList.remove('hidden', 'now', 'wait'); c.classList.add('anim'); });
+  const msg = perfect ? pick(['Perfect!','Super star!','Amazing!']) : good ? pick(['Great job!','Well done!','Nice moves!']) : pick(['Good try!','Nice dancing!']);
+  setPose(teacher, 'dance'); setBanner('🎉 ' + msg, 'win'); Voice.say(msg); Sfx.cheer(); burstAt(teacherSlot, 70);   // celebration dance
+  for (let i = 0; i < bonus; i++) flyStar(teacherSlot, 300 + i * 180);
+  updateHUD(); renderDots();
+  Sched.after(3000, () => {
+    if (Game.round >= TOTAL_ROUNDS) return finish();
+    if (levelUp){
+      Game.level = Game.len - 1; updateHUD();
+      setPose(teacher, 'up'); setBanner('🚀 Level ' + Game.level + '!', 'win'); Voice.say('Level ' + Game.level + '!'); Sfx.fanfare(); burstAt(teacherSlot, 50);
+      Sched.after(1900, nextRound);
+    } else nextRound();
+  });
+}
+function finish(){
+  Game.mode = 'idle'; Game.step = null; Sched.clear(); Beat.stop();
+  const ratio = Game.steps ? Game.hits / Game.steps : 0, rating = ratio >= .8 ? 3 : ratio >= .5 ? 2 : 1, total = Game.stars;
+  $('#resTitle').textContent = ['', 'Good job!', 'Great dancing!', 'Superstar!'][rating];
+  $('#resStars').textContent = '0'; $('#resStreak').textContent = Game.best;
+  const bs = $$('#bigStars span'); bs.forEach(s => s.classList.remove('on'));
+  show('result');
+  bs.forEach((s, i) => { if (i < rating) setTimeout(() => { s.classList.add('on'); Sfx.star(); }, 500 + i * 450); });
+  let n = 0; const iv = setInterval(() => { n = Math.min(total, n + Math.max(1, Math.round(total / 25))); $('#resStars').textContent = n; if (n >= total) clearInterval(iv); }, 50);
+  Sfx.jingle(); FX.rain(140);
+  [1500, 3000].forEach(ms => setTimeout(() => { if (document.body.dataset.screen === 'result') FX.rain(100); }, ms));
+  Voice.say('You did it! You got ' + total + ' stars!');
+}
+
+/* ---------- Pause, tracking lost, restart ---------- */
+let lostIv = 0;
+function setLost(v){
+  Game.lost = v; $('#ovLost').hidden = !v; clearInterval(lostIv);
+  if (v){ Beat.stop(); Sfx.soft(); Voice.say(LOST_MSG); lostIv = setInterval(() => { if (!Game.userPaused) Voice.say(LOST_MSG); }, 9000); }
+  else { Sfx.ding(); if (!Game.userPaused) Beat.start(); if (Game.step) Game.step.readyAt = now() + 600; }
+}
+function lostCheck(t){
+  if (Track.hasPose){ Game.badSince = 0; if (Game.lost){ if (!Game.goodSince) Game.goodSince = t; if (t - Game.goodSince > 450) setLost(false); } }
+  else { Game.goodSince = 0; if (!Game.lost){ if (!Game.badSince) Game.badSince = t; if (t - Game.badSince > 1600) setLost(true); } }
+}
+function setPaused(p){
+  if (Game.mode === 'idle') return;
+  Game.userPaused = p; $('#ovPause').hidden = !p; document.body.classList.toggle('paused', p);
+  if (p){ Beat.stop(); Voice.hush(); } else { if (!Game.lost) Beat.start(); if (Game.step) Game.step.readyAt = now() + 500; }
+}
+function restart(){ Sfx.init(); Game.practiced = true; startGame(); }
+function goHome(){
+  Voice.hush(); Sched.clear(); Game.mode = 'idle'; Game.step = null; Game.userPaused = false; Game.lost = false; Beat.stop(); clearInterval(lostIv);
+  $('#ovLost').hidden = true; $('#ovPause').hidden = true; document.body.classList.remove('paused'); show('start');
+}
+
+/* =====================================================================
+   7. MAIN LOOP + CONTROLS
+   ===================================================================== */
+let lastT = 0;
+function loop(){
+  requestAnimationFrame(loop);
+  const t = now(), dt = Math.min(100, t - (lastT || t)); lastT = t;
+  trackFrame(t);
+  const scr = document.body.dataset.screen;
+  if (scr === 'calib'){ calibTick(t, dt); drawCam($camBig, true); }
+  else if (scr === 'play'){
+    if (Game.mode !== 'idle' && !Game.userPaused) lostCheck(t);
+    if (running()){ Sched.tick(dt); gameTick(t); }
+    drawCam($camSmall, false);
+  }
+  FX.tick(dt);
+}
+requestAnimationFrame(loop);
+
+function paintMode(){ const b = $('#btnMode'); b.textContent = '👀 Easy mode: ' + (Game.easy ? 'ON' : 'OFF'); b.setAttribute('aria-pressed', Game.easy); }
+$('#btnStart').addEventListener('click', () => { Sfx.init(); Voice.say("Let's dance!"); boot(); });
+$('#btnMode').addEventListener('click', () => { Sfx.init(); Game.easy = !Game.easy; paintMode(); Sfx.star(); });
+$('#btnRetry').addEventListener('click', () => { Sfx.init(); boot(); });
+$('#btnCalibSkip').addEventListener('click', calibDone);
+$('#btnSkip').addEventListener('click', () => { if (Game.mode === 'practice'){ Game.practiced = true; startGame(); } });
+$('#btnSound').addEventListener('click', () => { const m = !Sfx.muted(); Sfx.setMuted(m); if (m) Voice.hush(); $('#btnSound').textContent = m ? '🔇' : '🔊'; });
+$('#btnPause').addEventListener('click', () => setPaused(true));
+$('#btnResume').addEventListener('click', () => { Sfx.init(); setPaused(false); });
+$('#btnRestart').addEventListener('click', restart);
+$('#btnRestart2').addEventListener('click', restart);
+$('#btnHome').addEventListener('click', goHome);
+$('#btnHome2').addEventListener('click', goHome);
+$('#btnAgain').addEventListener('click', restart);
+addEventListener('keydown', e => { if ((e.key === 'Escape' || e.key === 'p' || e.key === 'P') && document.body.dataset.screen === 'play' && Game.mode !== 'idle') setPaused(!Game.userPaused); });
+document.addEventListener('visibilitychange', () => { if (document.hidden && document.body.dataset.screen === 'play' && Game.mode !== 'idle') setPaused(true); });
+})();
+</script>
+</body>
+</html>

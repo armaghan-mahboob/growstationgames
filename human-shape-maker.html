@@ -1,0 +1,1023 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, viewport-fit=cover">
+<title>Human Shape Maker</title>
+<style>
+/* =====================================================================
+   UI STYLES
+   ===================================================================== */
+:root{
+  --ink:#2b2350; --paper:#ffffff; --soft:#f1efff;
+  --sat:env(safe-area-inset-top,0px); --sar:env(safe-area-inset-right,0px);
+  --sab:env(safe-area-inset-bottom,0px); --sal:env(safe-area-inset-left,0px);
+  --ar:1.3333; /* camera aspect ratio, set from JS */
+}
+*{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+html{font-size:clamp(14px,.9vw + .9vh,24px)}
+html,body{margin:0;width:100%;height:100%;overflow:hidden;overscroll-behavior:none}
+body{
+  font-family:ui-rounded,"SF Pro Rounded","Nunito","Baloo 2","Comic Sans MS","Chalkboard SE","Arial Rounded MT Bold",system-ui,sans-serif;
+  color:var(--ink);background:linear-gradient(#3d9bff,#9fe0ff);
+  -webkit-user-select:none;user-select:none;touch-action:manipulation;
+}
+.hidden{display:none!important}
+#video{position:fixed;left:0;top:0;width:4px;height:4px;opacity:.01;pointer-events:none}
+#stage{position:fixed;left:0;top:0;width:100%;height:100%;display:block;z-index:0}
+
+/* ---------- buttons ---------- */
+.btn{font:inherit;font-weight:900;font-size:1.3rem;color:#fff;border:0;border-radius:999px;cursor:pointer;
+  padding:.6em 1.4em;min-height:48px;min-width:48px;background:linear-gradient(#ffa25f,#ff6b4a);
+  box-shadow:0 .3em 0 #c94a2c,0 .6em 1em rgba(43,35,80,.25);touch-action:manipulation;transition:transform .08s,box-shadow .08s}
+.btn:active{transform:translateY(.2em);box-shadow:0 .1em 0 #c94a2c,0 .3em .6em rgba(43,35,80,.25)}
+.btn.big{font-size:clamp(1.5rem,6vmin,2.6rem);padding:.5em 1.5em}
+.btn.alt{background:linear-gradient(#7d8bff,#5b6cff);box-shadow:0 .3em 0 #3f4cc4,0 .6em 1em rgba(43,35,80,.25)}
+.btn.alt:active{box-shadow:0 .1em 0 #3f4cc4,0 .3em .6em rgba(43,35,80,.25)}
+.btn.small{font-size:1.05rem;padding:.5em 1.1em}
+.icon-btn{font:inherit;font-size:clamp(1.2rem,4.5vmin,1.8rem);line-height:1;padding:0;
+  width:clamp(44px,9vmin,64px);height:clamp(44px,9vmin,64px);border:0;border-radius:50%;background:#fff;cursor:pointer;
+  box-shadow:0 .2em 0 rgba(43,35,80,.2),0 .4em .8em rgba(43,35,80,.2);touch-action:manipulation}
+.icon-btn:active{transform:translateY(.12em)}
+
+/* ---------- top bar: score, prompt, buttons ---------- */
+#top{position:fixed;left:0;top:0;width:100%;z-index:28;pointer-events:none;display:grid;
+  grid-template-columns:1fr auto 1fr;grid-template-areas:"left prompt right";align-items:start;gap:.5rem;
+  padding:calc(.5rem + var(--sat)) calc(.6rem + var(--sar)) 0 calc(.6rem + var(--sal))}
+#hudLeft{grid-area:left;justify-self:start;display:flex;flex-wrap:wrap;gap:.4rem}
+#hudRight{grid-area:right;justify-self:end;display:flex;gap:.4rem;pointer-events:auto}
+.pill{background:#fff;border-radius:999px;padding:.2em .7em;font-weight:900;white-space:nowrap;
+  font-size:clamp(1.1rem,4vmin,2rem);box-shadow:0 .2em 0 rgba(43,35,80,.18),0 .4em .8em rgba(43,35,80,.18)}
+.pill.bump{animation:bump .45s}
+#prompt{grid-area:prompt;justify-self:center;min-width:0;display:flex;align-items:center;gap:.6rem;
+  background:rgba(255,255,255,.96);border-radius:1.5rem;padding:.4rem 1rem .5rem .6rem;
+  box-shadow:0 .25em 0 rgba(43,35,80,.18),0 .5em 1em rgba(43,35,80,.2)}
+#promptIcon{flex:none;width:clamp(2.6rem,10vmin,5rem);height:clamp(2.6rem,10vmin,5rem)}
+#promptSmall{font-size:clamp(.9rem,2.8vmin,1.4rem);font-weight:800;opacity:.7;line-height:1.1}
+#promptName{font-size:clamp(1.7rem,7vmin,3.6rem);font-weight:900;line-height:1;letter-spacing:.02em}
+.meter{height:clamp(.55rem,1.8vmin,1rem);min-width:8rem;border-radius:999px;background:#e8e6f5;overflow:hidden;margin-top:.3rem}
+#meterFill{height:100%;transform-origin:left center;transform:scaleX(0);background:linear-gradient(90deg,#ffd43b,#ff922b 55%,#34d058)}
+.timebar{height:.25rem;border-radius:999px;background:#eeecf8;overflow:hidden;margin-top:.2rem}
+#timeFill{height:100%;transform-origin:left center;background:#b8b3e6}
+
+/* ---------- camera preview ---------- */
+#camBox{position:relative;border-radius:1.2rem;overflow:hidden;border:.25rem solid #fff;background:#1d1a3a;
+  box-shadow:0 .5rem 1.4rem rgba(43,35,80,.3);aspect-ratio:var(--ar)}
+#camBox canvas{width:100%;height:100%;display:block}
+#camBox.small{position:fixed;z-index:40;right:calc(.6rem + var(--sar));bottom:calc(.6rem + var(--sab));
+  width:clamp(92px,16vmin + 5vw,260px);border-radius:.9rem}
+#camBox.big{width:min(86vw,calc(48vh * var(--ar)))}
+
+#btnSkipPractice{position:fixed;z-index:29;left:calc(.6rem + var(--sal));bottom:calc(.8rem + var(--sab))}
+
+/* ---------- screens and cards ---------- */
+.screen{position:fixed;left:0;top:0;width:100%;height:100%;z-index:30;display:flex;align-items:center;justify-content:center;
+  padding:calc(.8rem + var(--sat)) calc(.8rem + var(--sar)) calc(.8rem + var(--sab)) calc(.8rem + var(--sal))}
+.screen.dim{background:rgba(43,35,80,.45)}
+.screen.lost{z-index:26;background:rgba(43,35,80,.35)}
+.card{background:var(--paper);border-radius:2rem;padding:clamp(.9rem,3vmin,2rem);text-align:center;
+  box-shadow:0 .5rem 0 rgba(43,35,80,.15),0 1.2rem 2.4rem rgba(43,35,80,.25);
+  max-width:min(94vw,44rem);max-height:100%;display:flex;flex-direction:column;align-items:center;gap:clamp(.4rem,1.8vmin,1rem)}
+.logo{font-size:clamp(2rem,9vmin,4rem);line-height:1;animation:bob 1.8s ease-in-out infinite}
+.title{margin:0;font-size:clamp(2rem,10vmin,5rem);line-height:1;font-weight:900}
+.title .c1{color:#ff4f8b}.title .c2{color:#2f8cff}.title .c3{color:#18b874}
+.sub{margin:0;font-size:clamp(1.1rem,4vmin,1.8rem);font-weight:800}
+.tiny{margin:0;font-size:.85rem;opacity:.7;max-width:26rem}
+.steps{display:flex;gap:.6rem;justify-content:center}
+.step{background:var(--soft);border-radius:1.2rem;padding:.35rem .8rem;display:flex;flex-direction:column;align-items:center;
+  font-weight:900;font-size:clamp(.9rem,2.8vmin,1.3rem)}
+.step b{font-size:clamp(1.6rem,7vmin,3rem);line-height:1.15}
+.bigmsg{margin:0;font-size:clamp(1.4rem,5.5vmin,2.8rem);line-height:1.12;font-weight:900}
+.emoji{font-size:clamp(2.6rem,12vmin,6rem);line-height:1}
+.row{display:flex;gap:.7rem;flex-wrap:wrap;justify-content:center}
+.dots{display:flex;gap:.6rem}
+.dots i{width:1.1rem;height:1.1rem;border-radius:50%;background:#ff4f8b;animation:hop .9s ease-in-out infinite}
+.dots i:nth-child(2){background:#f2a900;animation-delay:.15s}.dots i:nth-child(3){background:#2f8cff;animation-delay:.3s}
+
+/* calibration */
+.calib{display:flex;flex-direction:column;align-items:center;gap:clamp(.5rem,2vmin,1.2rem);max-width:100%;max-height:100%}
+.calib-side{background:#fff;border-radius:1.6rem;padding:.8rem 1.2rem;display:flex;flex-direction:column;align-items:center;gap:.6rem;
+  max-width:min(92vw,34rem);box-shadow:0 .4rem 0 rgba(43,35,80,.15),0 1rem 2rem rgba(43,35,80,.2)}
+.bar{width:min(64vw,20rem);height:1rem;border-radius:999px;background:#e8e6f5;overflow:hidden}
+#calibFill{height:100%;transform-origin:left center;transform:scaleX(0);background:linear-gradient(90deg,#ffd43b,#34d058)}
+
+/* success banner */
+#banner{position:fixed;left:0;top:0;width:100%;height:100%;z-index:35;pointer-events:none;display:flex;align-items:center;justify-content:center;padding:1rem}
+.banner-card{background:#fff;border-radius:2rem;text-align:center;max-width:94vw;
+  padding:clamp(.6rem,2.5vmin,1.4rem) clamp(1rem,4vmin,2.4rem);
+  box-shadow:0 .5rem 0 rgba(43,35,80,.15),0 1.2rem 2.4rem rgba(43,35,80,.3);animation:pop .5s cubic-bezier(.2,1.4,.4,1) both}
+#bannerText{font-size:clamp(1.8rem,8.5vmin,5rem);font-weight:900;line-height:1.05}
+#bannerStars{font-size:clamp(2rem,9vmin,5rem);line-height:1.15}
+#bannerStars span{display:inline-block;animation:pop .45s both}
+
+/* end screen */
+.stat{background:var(--soft);border-radius:1.2rem;padding:.25rem 1rem;font-weight:900;font-size:clamp(1.3rem,5vmin,2.4rem)}
+#endShapes{display:flex;gap:.35rem;justify-content:center;flex-wrap:wrap}
+.mini{display:inline-block;width:clamp(1.8rem,6.5vmin,3rem);height:clamp(1.8rem,6.5vmin,3rem)}
+.mini.dim{opacity:.22}
+
+@keyframes pop{0%{transform:scale(.3) rotate(-6deg);opacity:0}60%{transform:scale(1.12) rotate(2deg);opacity:1}100%{transform:scale(1) rotate(0);opacity:1}}
+@keyframes bump{0%{transform:scale(1)}40%{transform:scale(1.3)}100%{transform:scale(1)}}
+@keyframes bob{0%,100%{transform:translateY(0)}50%{transform:translateY(-.25em)}}
+@keyframes hop{0%,100%{transform:translateY(0)}50%{transform:translateY(-.7rem)}}
+
+/* ---------- breakpoints ---------- */
+/* phone (and narrow portrait tablets): prompt moves to its own row */
+@media (max-width:640px),(max-width:900px) and (orientation:portrait){
+  #top{grid-template-columns:1fr auto;grid-template-areas:"left right" "prompt prompt"}
+}
+/* short landscape screens (phones on their side) */
+@media (orientation:landscape) and (max-height:600px){
+  .calib{flex-direction:row}
+  .calib-side{max-width:44vw}
+  #camBox.big{width:min(46vw,calc(80vh * var(--ar)))}
+}
+@media (max-height:480px){.logo,.tiny,.trophy{display:none}}
+/* tablet */
+@media (min-width:641px) and (max-width:1024px){.card{max-width:min(90vw,40rem)}}
+/* laptop */
+@media (min-width:1025px) and (max-width:1440px){.card{max-width:42rem}}
+/* desktop */
+@media (min-width:1441px){.card{max-width:48rem}#camBox.small{width:280px}}
+@media (prefers-reduced-motion:reduce){.logo,.trophy,.dots i{animation:none}}
+</style>
+</head>
+<body>
+
+<!-- hidden camera source (drawn mirrored into the preview canvas) -->
+<video id="video" playsinline muted autoplay></video>
+
+<!-- main game stage: background, ghost, child avatar, confetti -->
+<canvas id="stage"></canvas>
+
+<!-- top bar -->
+<header id="top" class="hidden">
+  <div id="hudLeft">
+    <div class="pill" id="pillStars" aria-label="Stars">⭐ <span id="uiStars">0</span></div>
+    <div class="pill" id="pillStreak" aria-label="Streak">🔥 <span id="uiStreak">0</span></div>
+    <div class="pill" id="pillRound">1/7</div>
+  </div>
+  <div id="prompt" aria-live="polite">
+    <div id="promptIcon"></div>
+    <div>
+      <div id="promptSmall">Make a</div>
+      <div id="promptName">TRIANGLE!</div>
+      <div class="meter"><div id="meterFill"></div></div>
+      <div class="timebar"><div id="timeFill"></div></div>
+    </div>
+  </div>
+  <div id="hudRight">
+    <button class="icon-btn" id="btnSound" aria-label="Sound on or off">🔊</button>
+    <button class="icon-btn" id="btnPause" aria-label="Pause">⏸️</button>
+    <button class="icon-btn" id="btnRestart" aria-label="Restart">🔄</button>
+  </div>
+</header>
+
+<!-- live camera preview (big during setup, small corner during play) -->
+<div id="camBox" class="small hidden"><canvas id="cam" width="480" height="360"></canvas></div>
+
+<button id="btnSkipPractice" class="btn small alt hidden">Skip ⏭️</button>
+
+<div id="banner" class="hidden"><div class="banner-card"><div id="bannerText"></div><div id="bannerStars"></div></div></div>
+
+<!-- START -->
+<section id="scrStart" class="screen">
+  <div class="card">
+    <div class="logo" aria-hidden="true">🔺🟡⭐</div>
+    <h1 class="title"><span class="c1">Human</span> <span class="c2">Shape</span> <span class="c3">Maker</span></h1>
+    <p class="sub">Make shapes with your body!</p>
+    <div class="steps">
+      <div class="step"><b>👀</b>Look</div>
+      <div class="step"><b>🙆</b>Copy</div>
+      <div class="step"><b>⭐</b>Win stars</div>
+    </div>
+    <button id="btnStart" class="btn big">▶ Start</button>
+    <p class="tiny">Grown-ups: allow the camera and place the screen so the whole body fits in view.</p>
+  </div>
+</section>
+
+<!-- LOADING -->
+<section id="scrLoading" class="screen hidden">
+  <div class="card">
+    <div class="dots"><i></i><i></i><i></i></div>
+    <p class="bigmsg" id="loadMsg">Getting ready…</p>
+  </div>
+</section>
+
+<!-- ERROR -->
+<section id="scrError" class="screen hidden">
+  <div class="card">
+    <div class="emoji">📷</div>
+    <p class="bigmsg" id="errMsg">I need the camera to see you!</p>
+    <button id="btnRetry" class="btn big">Try again</button>
+  </div>
+</section>
+
+<!-- CALIBRATION -->
+<section id="scrCalib" class="screen hidden">
+  <div class="calib">
+    <div id="camSlot"></div>
+    <div class="calib-side">
+      <h2 class="bigmsg" id="calibMsg" aria-live="polite">Let me see you!</h2>
+      <div class="bar"><div id="calibFill"></div></div>
+      <button id="btnSkipCalib" class="btn small alt">Skip ⏭️</button>
+    </div>
+  </div>
+</section>
+
+<!-- TRACKING LOST -->
+<section id="scrLost" class="screen lost hidden">
+  <div class="card">
+    <div class="emoji">👀</div>
+    <p class="bigmsg">I can’t see you.<br>Step back so I can see you!</p>
+  </div>
+</section>
+
+<!-- PAUSE -->
+<section id="scrPause" class="screen dim hidden">
+  <div class="card">
+    <div class="emoji">⏸️</div>
+    <p class="bigmsg">Paused</p>
+    <div class="row">
+      <button id="btnResume" class="btn big">▶ Play</button>
+      <button id="btnRestart2" class="btn big alt">🔄 Restart</button>
+    </div>
+  </div>
+</section>
+
+<!-- FINAL CELEBRATION -->
+<section id="scrEnd" class="screen hidden">
+  <div class="card">
+    <div class="emoji trophy logo">🏆</div>
+    <h1 class="title" id="endTitle" style="font-size:clamp(1.6rem,7vmin,3.6rem)">Shape Superstar!</h1>
+    <div class="row">
+      <div class="stat">⭐ <span id="endStars">0</span></div>
+      <div class="stat">🔥 <span id="endStreak">0</span></div>
+    </div>
+    <div id="endShapes"></div>
+    <button id="btnAgain" class="btn big">▶ Play again</button>
+  </div>
+</section>
+
+<script>
+(() => {
+'use strict';
+
+/* =====================================================================
+   1. CONFIG AND HELPERS
+   ===================================================================== */
+const MP_VERSION = '0.10.14';
+const CFG = {
+  SOURCES: [
+    { js:`https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@${MP_VERSION}/vision_bundle.mjs`,
+      wasm:`https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@${MP_VERSION}/wasm` },
+    { js:`https://unpkg.com/@mediapipe/tasks-vision@${MP_VERSION}/vision_bundle.mjs`,
+      wasm:`https://unpkg.com/@mediapipe/tasks-vision@${MP_VERSION}/wasm` },
+    { js:'https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.3',
+      wasm:'https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.3/wasm' }
+  ],
+  MODEL:'https://storage.googleapis.com/mediapipe-models/pose_landmarker/pose_landmarker_lite/float16/1/pose_landmarker_lite.task',
+  VIS:0.45,        // minimum landmark visibility
+  STALE_MS:700,    // no body for this long = tracking lost
+  HOLD:0.5,        // seconds the pose must be held
+  ROUND_TIME:30,   // seconds per shape (no penalty when it runs out)
+  INTRO:1.3,       // seconds to look at the ghost before detection starts
+  NEED:0.72,       // match score needed at the start of a round
+  NEED_EASY:0.5    // match score needed after the game has relaxed
+};
+
+const $ = id => document.getElementById(id);
+const clamp = (v,a,b) => Math.max(a, Math.min(b, v));
+const lerp = (a,b,t) => a + (b-a)*t;
+const rad = d => d*Math.PI/180, deg = r => r*180/Math.PI;
+const dist = (a,b) => Math.hypot(a.x-b.x, a.y-b.y);
+const mid = (a,b) => ({x:(a.x+b.x)/2, y:(a.y+b.y)/2});
+// soft thresholds: 1 inside the range, fading to 0 over "soft"
+const smin = (v,lo,soft) => clamp((v-(lo-soft))/soft, 0, 1);
+const smax = (v,hi,soft) => clamp(((hi+soft)-v)/soft, 0, 1);
+const srange = (v,lo,hi,soft) => Math.min(smin(v,lo,soft), smax(v,hi,soft));
+const C_OFF=[108,99,255], C_ON=[46,204,113];
+const mixCol = t => { t=clamp(t,0,1); return `rgb(${Math.round(lerp(C_OFF[0],C_ON[0],t))},${Math.round(lerp(C_OFF[1],C_ON[1],t))},${Math.round(lerp(C_OFF[2],C_ON[2],t))})`; };
+
+/* =====================================================================
+   2. SHAPES (target poses + forgiving rules)
+   Angles: 0 = arm hanging down, 90 = straight out, 180 = straight up.
+   Distances are measured in shoulder widths.
+   ===================================================================== */
+const SHAPES = {
+  TRIANGLE:{ id:'TRIANGLE', label:'TRIANGLE', art:'a', say:'triangle', color:'#ff7a2f',
+    hint:'Arms down and out, like a mountain!',
+    ghost:{a1:45,a2:45,leg:14}, spec:{arm:[25,68,13], out:0.2} },
+  CIRCLE:{ id:'CIRCLE', label:'CIRCLE', art:'a', say:'circle', color:'#ff4f8b',
+    hint:'Hands together over your head, like a big round sun!',
+    ghost:{a1:160,a2:232,leg:4}, spec:{up:0.3, handsMax:1.1, elbowsMin:1.3} },
+  STAR:{ id:'STAR', label:'STAR', art:'a', say:'star', color:'#f2a900',
+    hint:'Arms out and feet apart, like a starfish!',
+    ghost:{a1:102,a2:102,leg:24}, spec:{arm:[70,150,20], out:0.2, legs:'apart'} },
+  LINE:{ id:'LINE', label:'LINE', art:'a', say:'line', color:'#18b874',
+    hint:'Stand tall! Hands up high, close together!',
+    ghost:{a1:190,a2:190,leg:3}, spec:{arm:[150,180,25], handsMax:1.6, elbowsMax:1.5, legs:'together'} },
+  T:{ id:'T', label:'T', art:'a', say:'T', color:'#2f8cff',
+    hint:'Arms out to the sides, like an airplane!',
+    ghost:{a1:90,a2:90,leg:4}, spec:{arm:[65,115,20], out:0.35} },
+  V:{ id:'V', label:'V', art:'a', say:'V', color:'#8b5cf6',
+    hint:'Arms up high and wide, like a big cheer!',
+    ghost:{a1:138,a2:138,leg:4}, spec:{arm:[108,165,20], handsMin:1.6} },
+  X:{ id:'X', label:'X', art:'an', say:'X', color:'#ef4a5f',
+    hint:'Arms up wide and feet apart, like a jumping jack!',
+    ghost:{a1:135,a2:135,leg:26}, spec:{arm:[108,165,20], handsMin:1.6, legs:'apart'} }
+};
+const ALL = ['TRIANGLE','CIRCLE','STAR','LINE','T','V','X'];
+const SIMILAR = [['V','X'],['T','STAR'],['STAR','X'],['LINE','CIRCLE']];
+
+function starPoints(cx,cy,Ro,Ri){
+  const pts=[]; for(let i=0;i<10;i++){ const a=-Math.PI/2+i*Math.PI/5, q=i%2?Ri:Ro; pts.push([cx+Math.cos(a)*q, cy+Math.sin(a)*q]); } return pts;
+}
+function iconSVG(id,color){
+  const line=`fill="none" stroke="${color}" stroke-width="13" stroke-linecap="round" stroke-linejoin="round"`;
+  const fill=`fill="${color}33" stroke="${color}" stroke-width="9" stroke-linejoin="round"`;
+  let s='';
+  if(id==='TRIANGLE') s=`<polygon points="50,12 91,86 9,86" ${fill}/>`;
+  else if(id==='CIRCLE') s=`<circle cx="50" cy="50" r="39" ${fill}/>`;
+  else if(id==='STAR') s=`<polygon points="${starPoints(50,53,44,19).map(p=>p[0].toFixed(1)+','+p[1].toFixed(1)).join(' ')}" ${fill}/>`;
+  else if(id==='LINE') s=`<path d="M50 10V90" ${line}/>`;
+  else if(id==='T') s=`<path d="M14 18H86M50 18V88" ${line}/>`;
+  else if(id==='V') s=`<path d="M14 14L50 86L86 14" ${line}/>`;
+  else if(id==='X') s=`<path d="M16 14L84 86M84 14L16 86" ${line}/>`;
+  return `<svg viewBox="0 0 100 100" width="100%" height="100%" aria-hidden="true">${s}</svg>`;
+}
+
+/* =====================================================================
+   3. AUDIO: sound effects (WebAudio) and voice (speech synthesis)
+   ===================================================================== */
+const Sound = {
+  on:true, ctx:null, voice:null, timer:0,
+  unlock(){
+    try{ this.ctx = this.ctx || new (window.AudioContext||window.webkitAudioContext)(); if(this.ctx.state==='suspended') this.ctx.resume(); }catch(e){}
+    this.pickVoice();
+  },
+  pickVoice(){
+    try{
+      const vs = window.speechSynthesis.getVoices().filter(v => /^en/i.test(v.lang));
+      this.voice = vs.find(v => /samantha|jenny|aria|google us english|zira|female/i.test(v.name)) || vs[0] || null;
+    }catch(e){}
+  },
+  tone(freq,when=0,dur=0.18,type='sine',vol=0.18){
+    if(!this.on || !this.ctx) return;
+    try{
+      const t=this.ctx.currentTime+when, o=this.ctx.createOscillator(), g=this.ctx.createGain();
+      o.type=type; o.frequency.setValueAtTime(freq,t);
+      g.gain.setValueAtTime(0.0001,t); g.gain.exponentialRampToValueAtTime(vol,t+0.02); g.gain.exponentialRampToValueAtTime(0.0001,t+dur);
+      o.connect(g); g.connect(this.ctx.destination); o.start(t); o.stop(t+dur+0.05);
+    }catch(e){}
+  },
+  success(){ [523,659,784,1047].forEach((f,i)=>this.tone(f,i*0.09,0.26,'triangle',0.2)); },
+  star(i){ this.tone(880+i*130, 0.35+i*0.18, 0.2, 'sine', 0.15); },
+  tick(p){ this.tone(440+p*440, 0, 0.07, 'sine', 0.06); },
+  soft(){ this.tone(392,0,0.25,'sine',0.14); this.tone(440,0.2,0.3,'sine',0.14); },
+  ready(){ this.tone(660,0,0.15,'triangle',0.16); this.tone(880,0.12,0.22,'triangle',0.16); },
+  fanfare(){ [523,523,659,784,659,784,1047].forEach((f,i)=>this.tone(f,i*0.14,0.3,'triangle',0.2)); },
+  say(text){
+    if(!this.on || !('speechSynthesis' in window)) return;
+    try{
+      const synth=window.speechSynthesis; synth.cancel();
+      const u=new SpeechSynthesisUtterance(text); u.lang='en-US'; u.rate=0.9; u.pitch=1.25;
+      if(this.voice) u.voice=this.voice;
+      clearTimeout(this.timer); this.timer=setTimeout(()=>{ try{ synth.speak(u); }catch(e){} }, 70);
+    }catch(e){}
+  },
+  hush(){ try{ clearTimeout(this.timer); window.speechSynthesis.cancel(); }catch(e){} }
+};
+if('speechSynthesis' in window){ try{ window.speechSynthesis.onvoiceschanged = () => Sound.pickVoice(); }catch(e){} }
+
+/* =====================================================================
+   4. TRACKING SYSTEM: webcam + MediaPipe Pose Landmarker + smoothing
+   ===================================================================== */
+const video=$('video'), camBox=$('camBox'), camCanvas=$('cam'), camCtx=camCanvas.getContext('2d');
+const BONES=[[11,12],[11,13],[13,15],[12,14],[14,16],[11,23],[12,24],[23,24],[23,25],[25,27],[24,26],[26,28]];
+
+const Tracker = {
+  ready:false, stage:'camera', stream:null, landmarker:null,
+  vw:640, vh:480, lastVideoTime:-1, lastTs:0, lastRawAt:-1e9,
+  pts:null,       // smoothed, mirrored landmarks in video pixels
+  features:null,  // broad body relationships used by the game
+
+  async init(progress){
+    if(this.ready) return;
+    // --- camera ---
+    this.stage='camera';
+    if(!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia){ const e=new Error('no camera api'); e.name='NoCameraAPI'; throw e; }
+    progress('Opening the camera…');
+    if(!this.stream){
+      this.stream = await navigator.mediaDevices.getUserMedia({ audio:false,
+        video:{ facingMode:'user', width:{ideal:640}, height:{ideal:480}, frameRate:{ideal:30} } });
+      video.srcObject = this.stream;
+      try{ await video.play(); }catch(e){}
+      await new Promise(res => { if(video.videoWidth) return res(); video.addEventListener('loadedmetadata',res,{once:true}); setTimeout(res,4000); });
+      video.addEventListener('resize', () => { this.sizeCam(); this.pts=null; });
+    }
+    this.sizeCam();
+    // --- pose model ---
+    this.stage='model';
+    progress('Waking up the shape ghost…');
+    if(!this.landmarker){
+      let lib=null, src=null;
+      for(const s of CFG.SOURCES){
+        try{ const m=await import(s.js); if(m && m.PoseLandmarker && m.FilesetResolver){ lib=m; src=s; break; } }catch(e){}
+      }
+      if(!lib) throw new Error('Could not load MediaPipe');
+      const files = await lib.FilesetResolver.forVisionTasks(src.wasm);
+      const make = delegate => lib.PoseLandmarker.createFromOptions(files, {
+        baseOptions:{ modelAssetPath:CFG.MODEL, delegate }, runningMode:'VIDEO', numPoses:1,
+        minPoseDetectionConfidence:0.5, minPosePresenceConfidence:0.5, minTrackingConfidence:0.5 });
+      try{ this.landmarker = await make('GPU'); }catch(e){ this.landmarker = await make('CPU'); }
+    }
+    this.ready=true;
+  },
+
+  sizeCam(){
+    this.vw = video.videoWidth || 640; this.vh = video.videoHeight || 480;
+    const ar = this.vw/this.vh, w = ar>=1 ? 480 : 360;
+    camCanvas.width = w; camCanvas.height = Math.round(w/ar);
+    document.documentElement.style.setProperty('--ar', ar.toFixed(4));
+  },
+
+  // called every animation frame; runs detection only on new video frames
+  step(now){
+    if(!this.ready || video.readyState < 2) return;
+    if(video.currentTime === this.lastVideoTime){ this.expire(now); return; }
+    this.lastVideoTime = video.currentTime;
+    const ts = Math.max(this.lastTs+1, Math.round(now)); this.lastTs = ts;
+    let res=null; try{ res=this.landmarker.detectForVideo(video, ts); }catch(e){}
+    const lm = res && res.landmarks && res.landmarks[0];
+    if(lm && lm.length >= 29){
+      const vw=this.vw, vh=this.vh, ref=vh*0.08;
+      const vis = p => p.visibility == null ? 1 : p.visibility;
+      if(!this.pts || now-this.lastRawAt > CFG.STALE_MS){
+        this.pts = lm.map(p => ({x:(1-p.x)*vw, y:p.y*vh, v:vis(p)}));   // mirrored
+      }else{
+        // adaptive smoothing: steady when still, quick when moving
+        for(let i=0;i<lm.length;i++){
+          const p=lm[i], s=this.pts[i], tx=(1-p.x)*vw, ty=p.y*vh;
+          const a = clamp(0.3 + Math.hypot(tx-s.x,ty-s.y)/ref*0.5, 0.3, 0.9);
+          s.x += (tx-s.x)*a; s.y += (ty-s.y)*a; s.v += (vis(p)-s.v)*0.5;
+        }
+      }
+      this.lastRawAt = now;
+      this.features = computeFeatures(this.pts, vw, vh);
+    }else this.expire(now);
+  },
+  expire(now){ if(now-this.lastRawAt > CFG.STALE_MS){ this.pts=null; this.features=null; } },
+  visible(){ return !!this.features; }
+};
+
+/* ---- broad relationships between head, shoulders, elbows, hands, hips, feet ---- */
+function computeFeatures(P,vw,vh){
+  const ok = i => { const p=P[i]; return !!p && p.v>CFG.VIS && p.x>-0.06*vw && p.x<1.06*vw && p.y>-0.06*vh && p.y<1.06*vh; };
+  if(!ok(11) || !ok(12)) return null;
+  const Ls=P[11], Rs=P[12], S=mid(Ls,Rs);
+  let sw=dist(Ls,Rs);
+  const hipsOK = ok(23) && ok(24);
+  const T = hipsOK ? Math.max(dist(S, mid(P[23],P[24])), sw*0.8) : sw*1.35;   // torso length = body unit
+  if(!(T>2)) return null;
+  sw = Math.max(sw, T*0.45);
+  const sideL = (Ls.x-S.x) >= 0 ? 1 : -1;
+  const arm = (s,e,w,side) => {
+    const sh=P[s], hasW=ok(w), tip = hasW ? P[w] : (ok(e) ? P[e] : null);
+    if(!tip) return null;
+    const dx=tip.x-sh.x, dy=tip.y-sh.y, k=hasW?1:2;
+    return { ang:deg(Math.atan2(Math.abs(dx),dy)), out:dx*side/T*k, up:-dy/T*k };
+  };
+  const hands  = ok(15)&&ok(16) ? dist(P[15],P[16])/sw : null;
+  const elbows = ok(13)&&ok(14) ? dist(P[13],P[14])/sw : null;
+  let leg=null;   // opening angle between the legs, null when feet and knees are out of view
+  if(hipsOK){
+    const eL = ok(27)?P[27]:(ok(25)?P[25]:null), eR = ok(28)?P[28]:(ok(26)?P[26]:null);
+    if(eL && eR){
+      leg = Math.abs(deg(Math.atan2(eL.x-P[23].x, eL.y-P[23].y) - Math.atan2(eR.x-P[24].x, eR.y-P[24].y)));
+      if(leg>180) leg = 360-leg;
+    }
+  }
+  // joints in body units (origin = shoulder centre) for the on-screen avatar
+  const n = i => ok(i) ? {x:(P[i].x-S.x)/T, y:(P[i].y-S.y)/T} : null;
+  const j = { shL:n(11), shR:n(12), elL:n(13), elR:n(14), wrL:n(15), wrR:n(16),
+    hipL: hipsOK ? n(23) : {x:sideL*0.22,y:1}, hipR: hipsOK ? n(24) : {x:-sideL*0.22,y:1},
+    knL: hipsOK ? n(25) : null, knR: hipsOK ? n(26) : null, anL: hipsOK ? n(27) : null, anR: hipsOK ? n(28) : null,
+    head: n(0) || {x:0,y:-0.5} };
+  return { S, T, sw, hipsOK, feetOK:leg!=null, L:arm(11,13,15,sideL), R:arm(12,14,16,-sideL), hands, elbows, leg, j };
+}
+
+/* ---- forgiving shape classifier: returns 0..1 match, plus per-limb scores ---- */
+function evalShape(spec,f){
+  const armS = a => {
+    if(!a) return 0;
+    let s=1;
+    if(spec.arm) s=Math.min(s, srange(a.ang, spec.arm[0], spec.arm[1], spec.arm[2]));
+    if(spec.out!=null) s=Math.min(s, smin(a.out, spec.out, 0.2));
+    if(spec.up!=null) s=Math.min(s, smin(a.up, spec.up, 0.25));
+    return s;
+  };
+  let aL=armS(f.L), aR=armS(f.R), joint=1;
+  if(spec.handsMin!=null)  joint=Math.min(joint, f.hands==null  ? 0.6 : smin(f.hands, spec.handsMin, 0.5));
+  if(spec.handsMax!=null)  joint=Math.min(joint, f.hands==null  ? 0   : smax(f.hands, spec.handsMax, 0.7));
+  if(spec.elbowsMin!=null) joint=Math.min(joint, f.elbows==null ? 0.8 : smin(f.elbows, spec.elbowsMin, 0.3));
+  if(spec.elbowsMax!=null) joint=Math.min(joint, f.elbows==null ? 0.8 : smax(f.elbows, spec.elbowsMax, 0.4));
+  aL=Math.min(aL,joint); aR=Math.min(aR,joint);
+  let lg=1;   // legs are waived when the camera cannot see them
+  if(f.leg!=null){
+    if(spec.legs==='apart') lg=smin(f.leg,22,10);
+    else if(spec.legs==='together') lg=smax(f.leg,34,16);
+  }
+  return { t:Math.min(aL,aR,lg), aL, aR, lg };
+}
+
+/* =====================================================================
+   5. GAME LOGIC
+   ===================================================================== */
+const IN_GAME = {intro:1, play:1, success:1, miss:1};
+const G = {
+  state:'start', paused:false, lost:false, lostSeen:0, lostSayAt:0,
+  practice:false, rounds:[], idx:-1, shape:null,
+  t:0, phaseT:0, hold:0, score:0, need:CFG.NEED, matching:false, hinted:false, tickAt:0,
+  limb:{aL:0,aR:0,lg:0}, stars:0, streak:0, best:0, made:[],
+  calib:{t:0,good:0,key:'',lastSay:0,ok:false,done:false}
+};
+
+function makeRounds(){
+  let a=ALL.slice();
+  for(let tries=0; tries<60; tries++){
+    for(let i=a.length-1;i>0;i--){ const k=Math.floor(Math.random()*(i+1)); [a[i],a[k]]=[a[k],a[i]]; }
+    const clash = a.some((id,i) => i>0 && SIMILAR.some(p => p.includes(id) && p.includes(a[i-1])));
+    if(!clash && a[0]!=='T') break;   // T is the practice pose, so do not open with it
+  }
+  return a;
+}
+
+async function startFlow(){
+  if(G.state==='loading') return;
+  Sound.unlock();
+  G.state='loading'; showScreen('scrLoading');
+  try{ await Tracker.init(msg => { $('loadMsg').textContent = msg; }); }
+  catch(err){ showError(err); return; }
+  try{ if(navigator.wakeLock) navigator.wakeLock.request('screen').catch(()=>{}); }catch(e){}
+  beginCalibration();
+}
+
+function showError(err){
+  const n=(err && err.name) || '';
+  let msg;
+  if(Tracker.stage==='model') msg="I couldn't load the body tracker. Check the internet and try again.";
+  else if(n==='NotAllowedError'||n==='PermissionDeniedError'||n==='SecurityError') msg='I need the camera to see you! Please allow the camera, then try again.';
+  else if(n==='NotFoundError'||n==='DevicesNotFoundError'||n==='OverconstrainedError') msg="I can't find a camera. Plug one in or try another device.";
+  else if(n==='NotReadableError'||n==='TrackStartError'||n==='AbortError') msg='The camera is busy. Close other apps that use it, then try again.';
+  else if(n==='NoCameraAPI') msg='This browser cannot open the camera here. Open the game with https or localhost.';
+  else msg='Something went wrong with the camera. Please try again.';
+  G.state='error'; $('errMsg').textContent=msg;
+  $('top').classList.add('hidden'); camBox.classList.add('hidden');
+  showScreen('scrError');
+}
+
+/* ---- calibration: is the child visible, centred and far enough back? ---- */
+function beginCalibration(){
+  G.state='calib';
+  G.calib={t:0,good:0,key:'',lastSay:performance.now(),ok:false,done:false};
+  $('camSlot').appendChild(camBox); camBox.className='big';
+  $('top').classList.add('hidden'); $('calibMsg').textContent='Let me see you!';
+  $('calibFill').style.transform='scaleX(0)';
+  showScreen('scrCalib');
+  Sound.say('Let me see you! Stand back so I can see your whole body.');
+}
+function calibStep(dt,now){
+  const C=G.calib; if(C.done) return;
+  C.t+=dt;
+  const f=Tracker.features, vw=Tracker.vw, vh=Tracker.vh;
+  let key, msg, speak, ok=false;
+  if(!f){ key='none'; msg="I can’t see you. Step back so I can see you!"; speak="I can't see you. Step back so I can see you!"; }
+  else{
+    const cx=f.S.x/vw, span=f.sw+2.2*f.T;   // span = room needed for wide arms
+    const tooClose = !f.hipsOK || span>vw*1.04 || (f.S.y-1.15*f.T) < -0.05*vh;
+    if(tooClose){ key='close'; msg='Step back a little!'; speak=msg; }
+    else if(cx<0.3){ key='left'; msg='Move this way ➡️'; speak='Move to the middle!'; }
+    else if(cx>0.7){ key='right'; msg='⬅️ Move this way'; speak='Move to the middle!'; }
+    else if(f.T<vh*0.075){ key='far'; msg='Come a little closer!'; speak=msg; }
+    else if(!f.feetOK && C.t<10){ key='feet'; msg='Step back so I can see your feet!'; speak=msg; }
+    else{ ok=true; key='ok'; msg='Perfect! Hold still…'; speak='Perfect! Hold still!'; }
+  }
+  C.ok=ok;
+  C.good = ok ? C.good+dt : Math.max(0, C.good-dt*0.7);
+  if(key!==C.key){
+    C.key=key; $('calibMsg').textContent=msg;
+    if(now-C.lastSay > (ok?1200:2500)){ Sound.say(speak); C.lastSay=now; }
+  }else if(!ok && now-C.lastSay>7000){ Sound.say(speak); C.lastSay=now; }
+  $('calibFill').style.transform=`scaleX(${clamp(C.good/1.4,0,1).toFixed(3)})`;
+  if(C.good>=1.4){
+    C.done=true; $('calibMsg').textContent='Great! I can see you! 🎉';
+    Sound.ready(); Sound.say('Great! I can see you!');
+    setTimeout(() => { if(G.state==='calib') startGame(true); }, 1300);
+  }
+}
+
+/* ---- rounds ---- */
+function startGame(withPractice){
+  document.body.appendChild(camBox); camBox.className='small';
+  showScreen(null); hideBanner();
+  $('scrPause').classList.add('hidden'); $('scrLost').classList.add('hidden');
+  $('btnPause').textContent='⏸️';
+  $('top').classList.remove('hidden');
+  G.paused=false; G.lost=false;
+  G.stars=0; G.streak=0; G.best=0; G.made=[]; G.idx=-1; G.rounds=makeRounds();
+  updateHud(false);
+  if(withPractice){ G.practice=true; startRound(SHAPES.T); }   // simple pose tutorial
+  else nextRound();
+}
+function startRound(shape){
+  G.shape=shape; G.state='intro'; G.phaseT=0; G.t=0; G.hold=0; G.score=0; G.matching=false; G.hinted=false;
+  G.limb={aL:0,aR:0,lg:0}; G.need=CFG.NEED;
+  setPrompt(); layout();
+  Sound.say(G.practice ? 'Copy the ghost! Stretch your arms out wide!' : `Make ${shape.art} ${shape.say}!`);
+}
+function nextRound(){
+  G.practice=false; G.idx++;
+  if(G.idx>=G.rounds.length){ endGame(); return; }
+  startRound(SHAPES[G.rounds[G.idx]]);
+}
+function playStep(dt,now){
+  G.t+=dt;
+  const f=Tracker.features;
+  const r = f ? evalShape(G.shape.spec,f) : {t:0,aL:0,aR:0,lg:0};
+  const k=Math.min(1,dt*12);                       // smooth the score too
+  G.score+=(r.t-G.score)*k;
+  G.limb.aL+=(r.aL-G.limb.aL)*k; G.limb.aR+=(r.aR-G.limb.aR)*k; G.limb.lg+=(r.lg-G.limb.lg)*k;
+  // the longer a round lasts, the more forgiving it gets
+  G.need = lerp(CFG.NEED, CFG.NEED_EASY, clamp((G.t-8)/12,0,1));
+  G.matching = G.score>=G.need;
+  if(G.matching){
+    G.hold+=dt;
+    if(now-G.tickAt>130){ G.tickAt=now; Sound.tick(G.hold/CFG.HOLD); }
+  }else G.hold=Math.max(0, G.hold-dt*0.6);
+  if(G.hold>=CFG.HOLD){ onSuccess(); return; }
+  if(!G.hinted && G.t>9){ G.hinted=true; Sound.say(G.shape.hint); }
+  if(G.practice){ if(G.t>25){ Sound.say("Let's play!"); nextRound(); } }
+  else if(G.t>CFG.ROUND_TIME) onMiss();
+}
+function onSuccess(){
+  const s=G.shape;
+  G.state='success'; G.phaseT=0; G.hold=CFG.HOLD;
+  if(G.practice){
+    showBanner('YOU DID IT!',0);
+    Sound.say("You did it! Now let's play!");
+  }else{
+    const stars = G.t<8 ? 3 : G.t<16 ? 2 : 1;
+    G.stars+=stars; G.streak++; G.best=Math.max(G.best,G.streak); G.made.push(s.id);
+    showBanner(`YOU MADE ${s.art.toUpperCase()} <span style="color:${s.color}">${s.label}!</span>`, stars);
+    Sound.say(`You made ${s.art} ${s.say}!` + (G.streak>=3 ? ' Super streak!' : ''));
+    for(let i=0;i<stars;i++) Sound.star(i);
+    updateHud(true);
+  }
+  Sound.success();
+  FX.confetti(R.ox, R.oy, 80);
+}
+function onMiss(){
+  // no punishment: a star for trying, and on to the next shape
+  G.state='miss'; G.phaseT=0; G.streak=0; G.stars+=1;
+  showBanner('GOOD TRY!',1);
+  Sound.soft(); Sound.star(0); Sound.say('Good try! Here is a star for trying!');
+  updateHud(true);
+}
+function endGame(){
+  G.state='end'; G.phaseT=0;
+  $('top').classList.add('hidden'); camBox.classList.add('hidden'); $('btnSkipPractice').classList.add('hidden');
+  $('scrLost').classList.add('hidden'); hideBanner();
+  const title = G.stars>=17 ? 'Shape Superstar!' : G.stars>=11 ? 'Shape Champion!' : 'Super Shape Maker!';
+  $('endTitle').textContent=title; $('endStars').textContent=G.stars; $('endStreak').textContent=G.best;
+  $('endShapes').innerHTML = ALL.map(id => `<span class="mini ${G.made.includes(id)?'':'dim'}">${iconSVG(id,SHAPES[id].color)}</span>`).join('');
+  showScreen('scrEnd');
+  Sound.fanfare();
+  Sound.say(`Wow! You got ${G.stars} stars! You are a ${title.replace('!','')}!`);
+  FX.confetti(R.W/2, R.H*0.4, 120);
+}
+function setPaused(p){
+  if(!IN_GAME[G.state]) return;
+  G.paused=p; $('scrPause').classList.toggle('hidden',!p);
+  $('btnPause').textContent = p ? '▶️' : '⏸️';
+  if(p) Sound.hush();
+}
+function restart(){
+  Sound.unlock();
+  if(!Tracker.ready){ startFlow(); return; }
+  startGame(false);
+}
+
+/* ---- one game tick ---- */
+function gameStep(dt,now){
+  if(G.state==='calib'){ calibStep(dt,now); return; }
+  if(G.state==='end'){ G.phaseT+=dt; if(G.phaseT<5 && Math.random()<dt*5) FX.confetti(Math.random()*R.W, -10, 12); return; }
+  if(!IN_GAME[G.state] || G.paused) return;
+  // tracking lost: pause kindly, resume by itself
+  if(G.state==='intro' || G.state==='play'){
+    if(!Tracker.visible()){
+      if(!G.lost){
+        G.lost=true; G.lostSeen=0; G.lostSayAt=now;
+        $('scrLost').classList.remove('hidden');
+        Sound.say("I can't see you. Step back so I can see you!");
+      }else if(now-G.lostSayAt>8000){ G.lostSayAt=now; Sound.say("I can't see you. Step back so I can see you!"); }
+      G.lostSeen=0;
+    }else if(G.lost){
+      G.lostSeen+=dt;
+      if(G.lostSeen>0.4){ G.lost=false; $('scrLost').classList.add('hidden'); Sound.ready(); }
+    }
+  }
+  if(G.lost) return;
+  G.phaseT+=dt;
+  if(G.state==='intro'){ if(G.phaseT>CFG.INTRO){ G.state='play'; G.phaseT=0; } }
+  else if(G.state==='play') playStep(dt,now);
+  else if(G.phaseT > (G.state==='success' ? 3.0 : 2.6)){ hideBanner(); nextRound(); }
+}
+
+/* =====================================================================
+   6. RENDERING: stage canvas (ghost, avatar, effects) + camera preview
+   ===================================================================== */
+const stage=$('stage'), sctx=stage.getContext('2d');
+const R = { W:0, H:0, dpr:1, U:60, ox:0, oy:0, gy:null, ghost:null, ghostJ:null, ghostFor:'',
+  clouds:[{x:.1,y:.16,s:.11,v:.006},{x:.55,y:.1,s:.08,v:.004},{x:.85,y:.24,s:.13,v:.005}] };
+
+function resize(){
+  R.dpr=Math.min(window.devicePixelRatio||1, 2);
+  R.W=window.innerWidth; R.H=window.innerHeight;
+  stage.width=Math.round(R.W*R.dpr); stage.height=Math.round(R.H*R.dpr);
+  layout();
+}
+// work out where the figure stands and how big it is (U = one torso length in pixels)
+function layout(){
+  const topEl=$('top');
+  const tb = topEl.classList.contains('hidden') ? 0 : topEl.getBoundingClientRect().bottom;
+  const top=Math.max(tb, R.H*0.06)+R.H*0.02, bottom=R.H-Math.max(R.H*0.03,8);
+  const availH=Math.max(120, bottom-top);
+  R.U=Math.max(22, Math.min(availH/3.95, R.W*0.94/3.6));
+  R.ox=R.W/2;
+  R.oy=top+(availH-3.95*R.U)/2+1.45*R.U;
+}
+
+// ghost joints from a few angles, in body units
+function ghostJoints(g){
+  const SH=0.36, HP=0.2, UA=0.62, FA=0.6, LEG=1.3, j={};
+  for(const side of [-1,1]){
+    const k = side<0 ? 'L' : 'R';
+    const sh={x:side*SH,y:0}, a1=rad(g.a1), a2=rad(g.a2), lg=rad(g.leg);
+    const el={x:sh.x+side*UA*Math.sin(a1), y:sh.y+UA*Math.cos(a1)};
+    const wr={x:el.x+side*FA*Math.sin(a2), y:el.y+FA*Math.cos(a2)};
+    const hip={x:side*HP,y:1};
+    j['sh'+k]=sh; j['el'+k]=el; j['wr'+k]=wr; j['hip'+k]=hip;
+    j['kn'+k]={x:hip.x+side*LEG/2*Math.sin(lg), y:hip.y+LEG/2*Math.cos(lg)};
+    j['an'+k]={x:hip.x+side*LEG*Math.sin(lg),   y:hip.y+LEG*Math.cos(lg)};
+  }
+  j.head={x:0,y:-0.47};
+  return j;
+}
+
+// cartoon figure used for both the ghost and the child's avatar
+function drawFigure(c,j,o){
+  const U=o.U, X=p=>o.ox+p.x*U, Y=p=>o.oy+p.y*U, W=o.limbW*U;
+  c.lineCap='round'; c.lineJoin='round';
+  const seg=(a,b,col,ex)=>{ if(!a||!b) return; c.strokeStyle=col; c.lineWidth=W+ex; c.beginPath(); c.moveTo(X(a),Y(a)); c.lineTo(X(b),Y(b)); c.stroke(); };
+  const dot=(p,r,col)=>{ if(!p) return; c.fillStyle=col; c.beginPath(); c.arc(X(p),Y(p),r,0,Math.PI*2); c.fill(); };
+  const limb=(a,m,b,col,ex)=>{ if(a&&m&&b){ seg(a,m,col,ex); seg(m,b,col,ex); } else if(a&&b) seg(a,b,col,ex); else if(a&&m) seg(a,m,col,ex); };
+  const pass=outline=>{
+    const ex = outline ? o.outlineW*U : 0, col = k => outline ? o.outline : o.cols[k];
+    limb(j.hipL,j.knL,j.anL,col('legs'),ex); limb(j.hipR,j.knR,j.anR,col('legs'),ex);
+    dot(j.anL,W*0.62+ex/2,col('foot')); dot(j.anR,W*0.62+ex/2,col('foot'));
+    if(j.shL&&j.shR&&j.hipL&&j.hipR){
+      c.fillStyle=col('body'); c.strokeStyle=col('body'); c.lineWidth=W+ex;
+      c.beginPath(); c.moveTo(X(j.shL),Y(j.shL)); c.lineTo(X(j.shR),Y(j.shR)); c.lineTo(X(j.hipR),Y(j.hipR)); c.lineTo(X(j.hipL),Y(j.hipL)); c.closePath(); c.fill(); c.stroke();
+    }
+    limb(j.shL,j.elL,j.wrL,col('armL'),ex); limb(j.shR,j.elR,j.wrR,col('armR'),ex);
+    dot(j.wrL,W*0.62+ex/2,col('hand')); dot(j.wrR,W*0.62+ex/2,col('hand'));
+    if(j.head) dot(j.head,o.headR*U+ex/2,col('head'));
+  };
+  if(o.outline) pass(true);
+  pass(false);
+  if(j.head){   // friendly face
+    const hx=X(j.head), hy=Y(j.head), r=o.headR*U;
+    c.fillStyle=o.face;
+    c.beginPath(); c.arc(hx-r*0.36,hy-r*0.12,r*0.12,0,Math.PI*2); c.fill();
+    c.beginPath(); c.arc(hx+r*0.36,hy-r*0.12,r*0.12,0,Math.PI*2); c.fill();
+    c.strokeStyle=o.face; c.lineWidth=r*0.11;
+    c.beginPath(); c.arc(hx,hy+r*0.1,r*0.45,Math.PI*0.15,Math.PI*0.85); c.stroke();
+  }
+}
+
+// the ghost is drawn once into its own canvas so it can be shown evenly transparent
+function buildGhost(){
+  const U=R.U, d=R.dpr;
+  const cv = R.ghost || (R.ghost=document.createElement('canvas'));
+  cv.width=Math.ceil(3.8*U*d); cv.height=Math.ceil(4.25*U*d);
+  const c=cv.getContext('2d'); c.setTransform(d,0,0,d,0,0); c.clearRect(0,0,3.8*U,4.25*U);
+  R.ghostJ=ghostJoints(G.shape.ghost);
+  const w='#ffffff';
+  drawFigure(c,R.ghostJ,{U, ox:1.9*U, oy:1.65*U, limbW:0.34, headR:0.33, outline:null, outlineW:0,
+    cols:{legs:w,foot:w,body:w,armL:w,armR:w,hand:w,head:w}, face:'#5b6cff'});
+  R.ghostFor=G.shape.id+'|'+U.toFixed(1)+'|'+d;
+}
+
+// dotted outline of the real shape behind the ghost
+function drawHint(c,shape,j){
+  const U=R.U, X=x=>R.ox+x*U, Y=y=>R.oy+y*U;
+  c.strokeStyle=shape.color; c.lineWidth=U*0.09; c.lineCap='round'; c.lineJoin='round'; c.setLineDash([U*0.16,U*0.2]);
+  const path=pts=>{ c.beginPath(); pts.forEach((p,i)=>{ if(i) c.lineTo(X(p[0]),Y(p[1])); else c.moveTo(X(p[0]),Y(p[1])); }); };
+  switch(shape.id){
+    case 'TRIANGLE': path([[0,-1.2],[j.wrR.x+0.35,j.wrR.y+0.3],[j.wrL.x-0.35,j.wrL.y+0.3]]); c.closePath(); break;
+    case 'CIRCLE': c.beginPath(); c.arc(X(0),Y(-0.45),U*0.86,0,Math.PI*2); break;
+    case 'STAR': path(starPoints(0,0.62,1.78,0.74)); c.closePath(); break;
+    case 'LINE': path([[0,-1.42],[0,2.48]]); break;
+    case 'T': path([[-1.7,0],[1.7,0]]); c.stroke(); path([[0,0],[0,2.45]]); break;
+    case 'V': path([[j.wrL.x-0.1,j.wrL.y-0.1],[0,0.9],[j.wrR.x+0.1,j.wrR.y-0.1]]); break;
+    case 'X': path([[j.wrL.x,j.wrL.y],[j.anR.x,j.anR.y]]); c.stroke(); path([[j.wrR.x,j.wrR.y],[j.anL.x,j.anL.y]]); break;
+  }
+  c.stroke(); c.setLineDash([]);
+}
+
+/* ---- particles: confetti and sparkles ---- */
+const PARTY=['#ff4f8b','#f2a900','#2f8cff','#18b874','#8b5cf6','#ff7a2f','#ffffff'];
+const FX = {
+  parts:[],
+  confetti(x,y,n){
+    const U=R.U;
+    for(let i=0;i<n;i++) this.parts.push({x,y,vx:(Math.random()-0.5)*U*9, vy:-Math.random()*U*8-U*2, g:U*12, life:0, max:1.6+Math.random()*1.2,
+      size:U*(0.07+Math.random()*0.08), col:PARTY[Math.floor(Math.random()*PARTY.length)], rot:Math.random()*6, vr:(Math.random()-0.5)*12, kind:0});
+    if(this.parts.length>500) this.parts.splice(0,this.parts.length-500);
+  },
+  spark(x,y){
+    const U=R.U;
+    this.parts.push({x,y,vx:(Math.random()-0.5)*U*2.4, vy:-Math.random()*U*2.2, g:U*1.5, life:0, max:0.5+Math.random()*0.4,
+      size:U*(0.1+Math.random()*0.08), col:'#fff59d', rot:Math.random()*6, vr:4, kind:1});
+  },
+  step(dt){
+    for(let i=this.parts.length-1;i>=0;i--){
+      const p=this.parts[i]; p.life+=dt;
+      if(p.life>p.max || p.y>R.H+40){ this.parts.splice(i,1); continue; }
+      p.vy+=p.g*dt; p.x+=p.vx*dt; p.y+=p.vy*dt; p.rot+=p.vr*dt;
+    }
+  },
+  draw(c){
+    for(const p of this.parts){
+      c.save(); c.globalAlpha=clamp(1-p.life/p.max,0,1)*(p.kind?1:0.95); c.translate(p.x,p.y); c.rotate(p.rot); c.fillStyle=p.col;
+      if(p.kind===0) c.fillRect(-p.size/2,-p.size/3,p.size,p.size*0.66);
+      else{ c.beginPath(); const pts=starPoints(0,0,p.size,p.size*0.45); pts.forEach((q,i)=>{ if(i) c.lineTo(q[0],q[1]); else c.moveTo(q[0],q[1]); }); c.closePath(); c.fill(); }
+      c.restore();
+    }
+  }
+};
+
+function drawBackground(c,dt){
+  const W=R.W, H=R.H;
+  const g=c.createLinearGradient(0,0,0,H); g.addColorStop(0,'#3d9bff'); g.addColorStop(1,'#a8e4ff');
+  c.fillStyle=g; c.fillRect(0,0,W,H);
+  c.fillStyle='rgba(255,255,255,.75)';
+  for(const cl of R.clouds){
+    cl.x+=cl.v*dt; if(cl.x>1.25) cl.x=-0.25;
+    const x=cl.x*W, y=cl.y*H, s=cl.s*Math.min(W,H);
+    c.beginPath(); c.arc(x,y,s*0.5,0,7); c.arc(x+s*0.55,y-s*0.22,s*0.62,0,7); c.arc(x+s*1.15,y,s*0.5,0,7); c.fill();
+  }
+  // soft green hill under the figure's feet
+  const target = IN_GAME[G.state] ? R.oy+2.32*R.U : H*0.8;
+  R.gy = R.gy==null ? target : lerp(R.gy,target,Math.min(1,dt*6));
+  const u=R.U;
+  c.fillStyle='#8fe388';
+  c.beginPath(); c.moveTo(0,H); c.lineTo(0,R.gy+u*0.3); c.quadraticCurveTo(W/2,R.gy-u*0.4,W,R.gy+u*0.3); c.lineTo(W,H); c.closePath(); c.fill();
+}
+
+// mirrored camera preview with the detected skeleton on top
+function drawCam(){
+  if(camBox.classList.contains('hidden')) return;
+  const c=camCtx, w=camCanvas.width, h=camCanvas.height;
+  if(video.readyState>=2){ c.save(); c.translate(w,0); c.scale(-1,1); c.drawImage(video,0,0,w,h); c.restore(); }
+  else{ c.fillStyle='#1d1a3a'; c.fillRect(0,0,w,h); }
+  if(G.state==='calib'){   // "stand here" guide
+    c.strokeStyle = G.calib.ok ? '#34d058' : 'rgba(255,255,255,.9)';
+    c.lineWidth=Math.max(3,w*0.012); c.setLineDash([w*0.03,w*0.025]);
+    c.strokeRect(w*0.22,h*0.05,w*0.56,h*0.9); c.setLineDash([]);
+  }
+  const P=Tracker.pts; if(!P) return;
+  const k=w/Tracker.vw;
+  c.lineCap='round'; c.lineWidth=Math.max(3,w*0.012); c.strokeStyle='rgba(255,255,255,.95)';
+  for(const [a,b] of BONES){
+    if(P[a].v>CFG.VIS && P[b].v>CFG.VIS){ c.beginPath(); c.moveTo(P[a].x*k,P[a].y*k); c.lineTo(P[b].x*k,P[b].y*k); c.stroke(); }
+  }
+  c.fillStyle='#ffd43b';
+  for(const i of [11,12,13,14,15,16,23,24,25,26,27,28]){
+    if(P[i].v>CFG.VIS){ c.beginPath(); c.arc(P[i].x*k,P[i].y*k,Math.max(3,w*0.014),0,7); c.fill(); }
+  }
+  if(P[0].v>CFG.VIS && P[11].v>CFG.VIS && P[12].v>CFG.VIS){
+    c.strokeStyle='#ffd43b'; c.beginPath(); c.arc(P[0].x*k,P[0].y*k,dist(P[11],P[12])*k*0.42,0,7); c.stroke();
+  }
+}
+
+let lastMeter='', lastTime='';
+function render(dt,now){
+  const c=sctx; c.setTransform(R.dpr,0,0,R.dpr,0,0);
+  drawBackground(c,dt);
+
+  if(IN_GAME[G.state] && G.shape){
+    const U=R.U, key=G.shape.id+'|'+U.toFixed(1)+'|'+R.dpr;
+    if(R.ghostFor!==key) buildGhost();
+    const won = G.state==='success';
+    // shape outline + transparent ghost
+    c.save(); c.globalAlpha=0.55; drawHint(c,G.shape,R.ghostJ); c.restore();
+    const pulse=1+0.015*Math.sin(now/350);
+    c.save(); c.globalAlpha = won ? 0.28 : 0.5+0.08*Math.sin(now/450);
+    c.translate(R.ox,R.oy); c.scale(pulse,pulse); c.drawImage(R.ghost,-1.9*U,-1.65*U,3.8*U,4.25*U); c.restore();
+    // hold ring around the ghost's head
+    if(G.state==='play' && G.hold>0){
+      c.strokeStyle='#ffd43b'; c.lineWidth=U*0.1; c.lineCap='round';
+      c.beginPath(); c.arc(R.ox,R.oy-0.47*U,U*0.58,-Math.PI/2,-Math.PI/2+Math.PI*2*clamp(G.hold/CFG.HOLD,0,1)); c.stroke();
+    }
+    // the child's avatar, scaled to sit on top of the ghost
+    const f=Tracker.features;
+    if(f){
+      const L=G.limb, on = won ? 1 : null;
+      drawFigure(c,f.j,{U, ox:R.ox, oy:R.oy, limbW:0.17, headR:0.27, outline:'#2b2350', outlineW:0.07,
+        cols:{ armL:mixCol(on??L.aL), armR:mixCol(on??L.aR), legs:mixCol(on??L.lg), body:'#ffb84d', head:'#ffe29a', hand:'#ffe29a', foot:'#ff6b6b' },
+        face:'#2b2350'});
+      if((G.state==='play' && G.matching) || won){
+        for(const w of [f.j.wrL,f.j.wrR]) if(w && Math.random()<0.5) FX.spark(R.ox+w.x*U, R.oy+w.y*U);
+      }
+    }
+  }
+  FX.step(dt); FX.draw(c);
+  drawCam();
+
+  // meters in the prompt card
+  let m=0, t=1;
+  if(G.state==='play'){ m=clamp(G.score/G.need,0,1)*0.65+clamp(G.hold/CFG.HOLD,0,1)*0.35; t=G.practice?1:clamp(1-G.t/CFG.ROUND_TIME,0,1); }
+  else if(G.state==='success'){ m=1; t=G.practice?1:clamp(1-G.t/CFG.ROUND_TIME,0,1); }
+  else if(G.state==='miss'){ t=0; }
+  const ms=`scaleX(${m.toFixed(3)})`, tsx=`scaleX(${t.toFixed(3)})`;
+  if(ms!==lastMeter){ lastMeter=ms; $('meterFill').style.transform=ms; }
+  if(tsx!==lastTime){ lastTime=tsx; $('timeFill').style.transform=tsx; }
+}
+
+/* =====================================================================
+   7. UI: screens, HUD, banner, buttons
+   ===================================================================== */
+const SCREENS=['scrStart','scrLoading','scrError','scrCalib','scrEnd'];
+function showScreen(id){ SCREENS.forEach(s => $(s).classList.toggle('hidden', s!==id)); }
+
+function setPrompt(){
+  const s=G.shape;
+  $('promptIcon').innerHTML=iconSVG(s.id,s.color);
+  $('promptSmall').textContent = G.practice ? 'Practice! Copy the ghost' : `Make ${s.art}`;
+  const n=$('promptName'); n.textContent=s.label+'!'; n.style.color=s.color;
+  $('pillRound').textContent = G.practice ? '🎈' : `${G.idx+1}/${G.rounds.length}`;
+  $('btnSkipPractice').classList.toggle('hidden', !G.practice);
+}
+function updateHud(bump){
+  $('uiStars').textContent=G.stars; $('uiStreak').textContent=G.streak;
+  if(bump){ for(const id of ['pillStars','pillStreak']){ const el=$(id); el.classList.remove('bump'); void el.offsetWidth; el.classList.add('bump'); } }
+}
+function showBanner(html,stars){
+  $('bannerText').innerHTML=html;
+  $('bannerStars').innerHTML=Array.from({length:stars},(_,i)=>`<span style="animation-delay:${(0.3+i*0.18).toFixed(2)}s">⭐</span>`).join('');
+  const b=$('banner'); b.classList.add('hidden'); void b.offsetWidth; b.classList.remove('hidden');
+}
+function hideBanner(){ $('banner').classList.add('hidden'); }
+
+$('btnStart').addEventListener('click', startFlow);
+$('btnRetry').addEventListener('click', startFlow);
+$('btnSkipCalib').addEventListener('click', () => { if(G.state==='calib') startGame(true); });
+$('btnSkipPractice').addEventListener('click', () => { if(G.practice && IN_GAME[G.state]){ hideBanner(); $('scrLost').classList.add('hidden'); G.lost=false; nextRound(); } });
+$('btnPause').addEventListener('click', () => setPaused(!G.paused));
+$('btnResume').addEventListener('click', () => setPaused(false));
+$('btnRestart').addEventListener('click', restart);
+$('btnRestart2').addEventListener('click', restart);
+$('btnAgain').addEventListener('click', restart);
+$('btnSound').addEventListener('click', () => {
+  Sound.on=!Sound.on; $('btnSound').textContent = Sound.on ? '🔊' : '🔇';
+  if(Sound.on) Sound.unlock(); else Sound.hush();
+});
+
+window.addEventListener('resize', resize);
+window.addEventListener('orientationchange', () => setTimeout(resize,250));
+if('ResizeObserver' in window) new ResizeObserver(layout).observe($('top'));
+document.addEventListener('visibilitychange', () => {
+  if(document.hidden){ if(IN_GAME[G.state]) setPaused(true); }
+  else{
+    if(Tracker.stream) video.play().catch(()=>{});
+    try{ if(Tracker.ready && navigator.wakeLock) navigator.wakeLock.request('screen').catch(()=>{}); }catch(e){}
+  }
+});
+
+/* =====================================================================
+   8. MAIN LOOP
+   ===================================================================== */
+let last=performance.now();
+function frame(now){
+  requestAnimationFrame(frame);
+  const dt=Math.min(0.1, Math.max(0,(now-last)/1000)); last=now;
+  try{ Tracker.step(now); gameStep(dt,now); render(dt,now); }catch(e){ console.error(e); }
+}
+resize();
+requestAnimationFrame(frame);
+})();
+</script>
+</body>
+</html>

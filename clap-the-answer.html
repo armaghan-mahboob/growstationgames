@@ -1,0 +1,1452 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#7FD6F0">
+<title>Clap the Answer!</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Fredoka:wght@500;600;700&display=swap" rel="stylesheet">
+
+<!--
+  CLAP THE ANSWER
+  A counting game for 3 to 5 year olds. The child counts the objects and claps the answer.
+
+  File layout
+    1. CSS ................ design tokens, scenery, screens, camera box, buddy, overlays
+    2. HTML ............... start, loading, error, calibration, game, result, overlays
+    3. JS  CONFIG ......... every tunable number lives in CFG
+       JS  AUDIO + VOICE .. WebAudio sound effects and speech synthesis
+       JS  TRACKING ....... webcam + MediaPipe Hand Landmarker + smoothing
+       JS  CLAP DETECTOR .. turns the distance between two hands into clap events
+       JS  UI ............. all DOM and canvas drawing
+       JS  GAME LOGIC ..... calibration, rounds, hints, scoring, pause, tracking lost
+       JS  WIRING ......... buttons, keyboard, main loop
+-->
+
+<style>
+/* =====================================================================
+   1. DESIGN TOKENS
+   ===================================================================== */
+:root{
+  --ink:#2A2356;        /* outlines and text */
+  --paper:#FFFFFF;
+  --cream:#FFF6DD;
+  --sun:#FFD23F;
+  --coral:#FF6F59;
+  --mint:#2FCB8B;
+  --violet:#7B61FF;
+  --pink:#FF9EC4;
+
+  --vh:1vh;
+  --pad:clamp(8px,1.8vmin,20px);
+  --stroke:clamp(3px,.55vmin,5px);
+  --drop:clamp(4px,.9vmin,8px);
+  --safe-t:env(safe-area-inset-top,0px);
+  --safe-r:env(safe-area-inset-right,0px);
+  --safe-b:env(safe-area-inset-bottom,0px);
+  --safe-l:env(safe-area-inset-left,0px);
+
+  --cam-ar:1.3333;                                   /* set from the real video size in JS */
+  --pip-h:min(calc(var(--vh) * 24), 21vw);           /* small camera preview */
+  --pip-w:calc(var(--pip-h) * var(--cam-ar));
+  --cam-big-h:min(calc(var(--vh) * 46), calc(90vw / var(--cam-ar)));
+  --buddy:clamp(96px,21vmin,200px);
+  --choice:clamp(58px,13vmin,118px);
+  --chip:clamp(20px,4.4vmin,40px);
+
+  font-family:'Fredoka',ui-rounded,'Arial Rounded MT Bold','Nunito','Trebuchet MS',system-ui,sans-serif;
+  font-weight:600;
+  color:var(--ink);
+}
+@supports (height:1dvh){ :root{ --vh:1dvh; } }
+@media (orientation:portrait){
+  :root{ --pip-h:min(calc(var(--vh) * 19), 34vw); --buddy:min(calc(var(--vh) * 19), 36vw); }
+}
+
+*{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+html,body{height:100%;margin:0;overflow:hidden;overscroll-behavior:none;touch-action:manipulation;
+  -webkit-user-select:none;user-select:none;background:#7FD6F0}
+button{font:inherit;color:inherit}
+.emo{font-family:'Apple Color Emoji','Segoe UI Emoji','Noto Color Emoji',sans-serif;font-weight:400}
+[hidden]{display:none !important}
+
+/* =====================================================================
+   SCENERY (quiet background so the stickers on top stand out)
+   ===================================================================== */
+.scene{position:fixed;inset:0;z-index:0;overflow:hidden;
+  background:linear-gradient(180deg,#7FD6F0 0%,#BDEBFA 55%,#E6F9EC 100%)}
+.sun{position:absolute;top:-8vmin;right:-8vmin;width:36vmin;height:36vmin;border-radius:50%;
+  background:radial-gradient(circle,#FFE680 0 54%,rgba(255,230,128,.45) 55% 72%,rgba(255,230,128,0) 73%)}
+.cloud{position:absolute;left:-34vmin;width:26vmin;height:8vmin;background:#fff;border-radius:999px;opacity:.9;
+  animation:drift 70s linear infinite}
+.cloud::before,.cloud::after{content:'';position:absolute;background:#fff;border-radius:50%}
+.cloud::before{width:11vmin;height:11vmin;left:4vmin;top:-5vmin}
+.cloud::after{width:14vmin;height:14vmin;right:4vmin;top:-7vmin}
+.cloud.c1{top:14%}
+.cloud.c2{top:34%;scale:.7;animation-duration:95s;animation-delay:-40s}
+.cloud.c3{top:6%;scale:.55;animation-duration:120s;animation-delay:-80s}
+.hill{position:absolute;border-radius:50%;width:130vmax;height:54vmin}
+.hill.h1{left:-45vmax;bottom:-36vmin;background:#7ED67A}
+.hill.h2{right:-55vmax;bottom:-40vmin;background:#5FC777}
+@keyframes drift{to{translate:calc(100vw + 70vmin) 0}}
+
+/* =====================================================================
+   SHARED PIECES: screens, buttons, cards
+   ===================================================================== */
+.screen{position:fixed;inset:0;z-index:2;display:none;
+  padding:calc(var(--pad) + var(--safe-t)) calc(var(--pad) + var(--safe-r))
+          calc(var(--pad) + var(--safe-b)) calc(var(--pad) + var(--safe-l))}
+.screen.active{display:flex}
+.screen.center{align-items:center;justify-content:center;overflow:auto}
+
+.btn{font-weight:700;background:var(--sun);border:var(--stroke) solid var(--ink);border-radius:999px;
+  padding:.4em 1.1em;font-size:clamp(22px,4.6vmin,40px);line-height:1.1;cursor:pointer;
+  box-shadow:0 var(--drop) 0 var(--ink);transition:transform .08s,box-shadow .08s}
+.btn:active{transform:translateY(var(--drop));box-shadow:0 0 0 var(--ink)}
+.btn.big{font-size:clamp(32px,7.5vmin,68px);padding:.3em 1.2em}
+.btn.go{background:var(--mint)}
+.btn.plain{background:var(--paper)}
+.btn.small{font-size:clamp(16px,3vmin,24px);box-shadow:0 calc(var(--drop) * .6) 0 var(--ink)}
+.btn:focus-visible,.ibtn:focus-visible,.lvl:focus-visible{outline:4px solid var(--violet);outline-offset:4px}
+
+.card{background:var(--paper);border:var(--stroke) solid var(--ink);border-radius:clamp(22px,5vmin,44px);
+  box-shadow:0 var(--drop) 0 var(--ink);padding:clamp(16px,4vmin,40px);text-align:center;
+  display:flex;flex-direction:column;align-items:center;gap:clamp(10px,2.4vmin,24px);max-width:min(92vw,720px);margin:auto}
+.card h2{margin:0;font-size:clamp(34px,8vmin,76px);line-height:1}
+.card p{margin:0;font-size:clamp(20px,4.2vmin,36px);line-height:1.2}
+.card .huge{font-size:clamp(56px,15vmin,130px);line-height:1}
+.row{display:flex;flex-wrap:wrap;gap:clamp(10px,2.4vmin,22px);justify-content:center;align-items:center}
+
+/* =====================================================================
+   START SCREEN
+   ===================================================================== */
+.start-wrap{display:flex;flex-direction:column;align-items:center;text-align:center;
+  gap:clamp(8px,2.2vmin,22px);margin:auto}
+.title{margin:0;font-weight:700;line-height:.92;font-size:clamp(46px,13vmin,140px);color:var(--sun);
+  letter-spacing:.01em;
+  text-shadow:.045em 0 0 var(--ink),-.045em 0 0 var(--ink),0 .045em 0 var(--ink),0 -.045em 0 var(--ink),
+    .032em .032em 0 var(--ink),-.032em .032em 0 var(--ink),.032em -.032em 0 var(--ink),-.032em -.032em 0 var(--ink),
+    0 .11em 0 var(--ink)}
+.title span{display:block}
+.lead{margin:0;font-size:clamp(24px,5.2vmin,48px)}
+.levels{display:flex;gap:clamp(10px,2.4vmin,22px)}
+.lvl{font-weight:700;font-size:clamp(22px,4.6vmin,40px);padding:.25em .8em;border-radius:999px;cursor:pointer;
+  background:var(--paper);border:var(--stroke) solid var(--ink);box-shadow:0 calc(var(--drop) * .6) 0 var(--ink);opacity:.72}
+.lvl.on{background:var(--sun);opacity:1;transform:scale(1.06)}
+.note{margin:0;max-width:34em;font-weight:500;font-size:clamp(13px,2.1vmin,18px);opacity:.8}
+
+/* =====================================================================
+   BUDDY: the mascot. Its paws copy the distance between the child's hands.
+   --gap goes from 0 (paws together) to 1 (paws wide apart)
+   ===================================================================== */
+.buddy{--gap:.62;position:fixed;z-index:16;right:calc(var(--pad) + var(--safe-r));bottom:calc(var(--pad) + var(--safe-b));
+  width:var(--buddy);height:var(--buddy);padding:0;border:0;background:none;cursor:pointer;touch-action:manipulation}
+.buddy.static{position:relative;right:auto;bottom:auto;cursor:default;--buddy:clamp(110px,26vmin,230px);
+  animation:bob 2.6s ease-in-out infinite}
+.buddy.hide{display:none}
+.buddy i{position:absolute;display:block}
+.buddy .ear{top:3%;width:26%;height:26%;border-radius:50%;background:var(--sun);border:var(--stroke) solid var(--ink)}
+.buddy .ear.l{left:16%}.buddy .ear.r{right:16%}
+.buddy .body{position:absolute;left:13%;top:8%;width:74%;height:74%;border-radius:50%;background:var(--sun);
+  border:var(--stroke) solid var(--ink);box-shadow:0 var(--drop) 0 var(--ink);transition:transform .12s}
+.buddy .eye{top:36%;width:11%;height:15%;border-radius:50%;background:var(--ink);transition:transform .15s}
+.buddy .eye.l{left:28%}.buddy .eye.r{right:28%}
+.buddy .cheek{top:52%;width:15%;height:11%;border-radius:50%;background:var(--pink)}
+.buddy .cheek.l{left:12%}.buddy .cheek.r{right:12%}
+.buddy .mouth{left:37%;top:53%;width:26%;height:15%;border:var(--stroke) solid var(--ink);border-top:0;
+  border-radius:0 0 999px 999px;background:var(--coral)}
+.buddy .hand{left:35%;bottom:1%;width:30%;height:32%;border-radius:48%;background:var(--coral);
+  border:var(--stroke) solid var(--ink);
+  transform:translateX(calc(var(--dir) * (47% + var(--gap) * 82%))) rotate(calc(var(--dir) * (var(--gap) * 22deg - 6deg)))}
+.buddy .hand::after{content:'';position:absolute;inset:26%;border-radius:50%;background:var(--cream);opacity:.85}
+.buddy .hand.l{--dir:-1}.buddy .hand.r{--dir:1}
+.buddy .spark{left:50%;bottom:20%;font-style:normal;font-size:calc(var(--buddy) * .36);transform:translate(-50%,0) scale(.2);opacity:0;pointer-events:none}
+.buddy.clap .spark{animation:spark .38s ease-out}
+.buddy.clap .body{transform:scale(1.06,.95)}
+.buddy.clap .eye{transform:scaleY(.25)}
+.buddy.searching .hand{opacity:.45}
+.buddy.searching .eye{transform:translateX(35%)}
+.buddy .tip{display:none;position:absolute;right:0;top:-20%;white-space:nowrap;transform-origin:100% 100%;
+  background:var(--paper);border:var(--stroke) solid var(--ink);border-radius:999px;padding:.05em .6em;
+  font-size:clamp(16px,3.2vmin,26px);font-weight:700}
+body.tap .buddy:not(.static) .tip{display:block;animation:pulse 1.2s ease-in-out infinite}
+@keyframes spark{0%{transform:translate(-50%,0) scale(.2);opacity:1}100%{transform:translate(-50%,-70%) scale(1.5);opacity:0}}
+@keyframes bob{50%{transform:translateY(-4%)}}
+
+/* =====================================================================
+   CAMERA BOX: one element. Big during calibration, small corner preview in the game.
+   JS copies the rectangle of .slot-big or .slot-pip onto it.
+   ===================================================================== */
+.cam{position:fixed;z-index:16;left:0;top:0;width:10px;height:10px;overflow:hidden;background:#1d1940;
+  border:var(--stroke) solid var(--ink);border-radius:clamp(14px,3vmin,28px);box-shadow:0 var(--drop) 0 var(--ink);
+  transition:left .55s cubic-bezier(.3,1,.4,1),top .55s cubic-bezier(.3,1,.4,1),width .55s cubic-bezier(.3,1,.4,1),
+    height .55s cubic-bezier(.3,1,.4,1),border-color .2s}
+.cam.hide{visibility:hidden;opacity:0;pointer-events:none}
+.cam-mirror{position:absolute;inset:0;transform:scaleX(-1)}           /* mirror video and drawing together */
+.cam video,.cam canvas{position:absolute;inset:0;width:100%;height:100%;object-fit:cover}
+.cam-guide{position:absolute;inset:9% 14%;border:4px dashed rgba(255,255,255,.85);border-radius:26px;display:none}
+.cam.big .cam-guide{display:block}
+.cam.ok{border-color:var(--mint)} .cam.ok .cam-guide{border-color:var(--mint)}
+.cam.warn{border-color:var(--sun)}
+.cam.flash{animation:camflash .3s}
+@keyframes camflash{0%{box-shadow:0 0 0 0 var(--mint),0 var(--drop) 0 var(--ink)}100%{box-shadow:0 0 0 18px rgba(47,203,139,0),0 var(--drop) 0 var(--ink)}}
+.slot-pip{position:fixed;left:calc(var(--pad) + var(--safe-l));bottom:calc(var(--pad) + var(--safe-b) + var(--drop));
+  width:var(--pip-w);height:var(--pip-h);visibility:hidden;pointer-events:none}
+
+/* =====================================================================
+   CALIBRATION SCREEN
+   ===================================================================== */
+.calib.active{flex-direction:column;align-items:center;justify-content:center;gap:clamp(8px,2vmin,20px)}
+.slot-big{flex:none;width:calc(var(--cam-big-h) * var(--cam-ar));height:var(--cam-big-h)}
+.calib-side{display:flex;flex-direction:column;align-items:center;gap:clamp(8px,2vmin,18px)}
+.bubble{display:flex;align-items:center;gap:.4em;background:var(--paper);border:var(--stroke) solid var(--ink);
+  border-radius:999px;box-shadow:0 var(--drop) 0 var(--ink);padding:.2em .8em;
+  font-size:clamp(26px,6vmin,58px);font-weight:700;line-height:1.1;text-align:center}
+.steps{display:flex;gap:clamp(8px,2vmin,18px);list-style:none;margin:0;padding:0}
+.steps li{display:flex;align-items:center;justify-content:center;width:clamp(48px,10vmin,84px);aspect-ratio:1;border-radius:50%;
+  background:var(--paper);border:var(--stroke) solid var(--ink);font-size:clamp(24px,5vmin,44px);opacity:.55;position:relative}
+.steps li.now{opacity:1;animation:pulse 1.1s ease-in-out infinite}
+.steps li.done{opacity:1;background:var(--mint)}
+.steps li.done::after{content:'✓';position:absolute;right:-12%;bottom:-12%;width:46%;height:46%;border-radius:50%;
+  background:var(--paper);border:3px solid var(--ink);font-size:.5em;font-weight:700;display:grid;place-items:center}
+@media (orientation:landscape) and (max-height:560px){
+  :root{ --cam-big-h:min(calc(var(--vh) * 74), calc(46vw / var(--cam-ar))); }
+  .calib.active{flex-direction:row;gap:4vw}
+}
+
+/* =====================================================================
+   GAME SCREEN
+   ===================================================================== */
+.game.active{display:grid;grid-template-rows:auto auto minmax(0,1fr) auto auto;justify-items:center;
+  gap:clamp(4px,1.3vmin,14px)}
+.hud{display:grid;grid-template-columns:auto 1fr auto;align-items:center;gap:var(--pad);width:100%}
+.hud-btns,.score{display:flex;gap:clamp(6px,1.4vmin,14px);align-items:center}
+.ibtn{width:clamp(46px,8.5vmin,70px);aspect-ratio:1;display:grid;place-items:center;padding:0;cursor:pointer;
+  background:var(--paper);border:var(--stroke) solid var(--ink);border-radius:32%;box-shadow:0 calc(var(--drop) * .6) 0 var(--ink)}
+.ibtn:active{transform:translateY(3px);box-shadow:0 0 0 var(--ink)}
+.ibtn svg{width:56%;height:56%}
+.progress{list-style:none;display:flex;gap:clamp(4px,1.1vmin,12px);justify-content:center;margin:0;padding:0}
+.progress li{width:clamp(16px,3.4vmin,30px);aspect-ratio:1;border-radius:50%;background:var(--paper);
+  border:var(--stroke) solid var(--ink);transition:transform .25s,background .25s}
+.progress li.done{background:var(--sun)}
+.progress li.now{background:var(--coral);transform:scale(1.3)}
+.pill{display:inline-flex;align-items:center;gap:.25em;background:var(--paper);border:var(--stroke) solid var(--ink);
+  border-radius:999px;padding:.05em .6em;font-weight:700;font-size:clamp(22px,4.6vmin,40px);line-height:1.25;
+  box-shadow:0 calc(var(--drop) * .6) 0 var(--ink)}
+.pill.off{display:none}
+.pill.bump{animation:bump .45s}
+@media (max-width:620px){
+  .hud{grid-template-columns:auto auto;justify-content:space-between}
+  .progress{grid-column:1 / -1;grid-row:2}
+}
+
+.question{margin:0;text-align:center;font-weight:700;line-height:1.05;font-size:clamp(30px,7.2vmin,76px)}
+.question.yes{color:#0E8A57}
+
+.board{position:relative;width:100%;height:100%;min-height:0;container-type:size;display:grid;place-items:center}
+.items{--cols:3;--rows:1;display:flex;flex-direction:column;align-items:center;gap:.05em;line-height:1;
+  font-size:min(14vmin,9rem);
+  font-size:min(calc(100cqw / (var(--cols) * 1.42)), calc(100cqh / (var(--rows) * 1.4)), 9.5rem)}
+.items .line{display:flex;gap:.12em}
+.item{position:relative;width:1.28em;height:1.28em;display:grid;place-items:center;
+  animation:popIn .45s cubic-bezier(.3,1.5,.5,1) both;animation-delay:calc(var(--i) * 110ms)}
+.item::before{content:'';position:absolute;inset:2%;border-radius:50%;background:var(--paper);
+  border:var(--stroke) solid var(--ink);opacity:0;transform:scale(.3);
+  transition:transform .25s cubic-bezier(.3,1.6,.5,1),opacity .12s}
+.item.counted::before{opacity:1;transform:scale(1)}
+.item .emo{position:relative;font-size:.8em}
+.item .badge{position:absolute;right:-4%;bottom:-4%;min-width:1.5em;height:1.5em;padding:0 .2em;font-size:.3em;font-weight:700;
+  display:grid;place-items:center;border-radius:999px;background:var(--mint);border:var(--stroke) solid var(--ink);
+  opacity:0;transform:scale(.3);transition:transform .2s cubic-bezier(.3,1.6,.5,1),opacity .12s}
+.item.counted .badge,.item.peek .badge{opacity:1;transform:scale(1)}
+.item.counted .emo{animation:hop .5s}
+.item.peek .emo{animation:wiggle .6s}
+.items.party .item .emo{animation:dance .5s ease-in-out infinite alternate;animation-delay:calc(var(--i) * 70ms)}
+
+.reward{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;gap:.08em;pointer-events:none;
+  font-size:clamp(54px,16vmin,150px);opacity:0}
+.reward.show{animation:reward 1.9s ease-out both}
+.reward span{animation:popIn .4s cubic-bezier(.3,1.7,.5,1) both;animation-delay:calc(var(--i) * 160ms)}
+
+.choices{display:flex;justify-content:center;gap:clamp(10px,3vmin,34px);min-height:calc(var(--choice) + var(--drop))}
+.choice{width:var(--choice);height:var(--choice);border-radius:50%;display:grid;place-items:center;
+  font-size:calc(var(--choice) * .54);font-weight:700;line-height:1;background:var(--paper);
+  border:var(--stroke) solid var(--ink);box-shadow:0 var(--drop) 0 var(--ink);
+  animation:popIn .4s cubic-bezier(.3,1.5,.5,1) both;animation-delay:calc(var(--i) * 130ms);transition:scale .2s,background .2s,opacity .3s}
+.choice.lit{background:var(--sun);scale:1.12}
+.choice.nudge{background:var(--sun);animation:pulse .9s ease-in-out infinite}
+.choice.correct{background:var(--mint);scale:1.2;animation:cheer .6s ease-in-out 3}
+.choice.dim{opacity:.3}
+
+.claprow{display:flex;flex-wrap:wrap;justify-content:center;align-items:center;gap:clamp(4px,1.1vmin,12px);
+  min-height:calc(var(--chip) * 2);font-size:var(--chip);width:100%}
+.chip{display:inline-flex;align-items:center;gap:.12em;padding:.08em .5em .08em .3em;background:var(--paper);
+  border:var(--stroke) solid var(--ink);border-radius:999px;font-weight:700;line-height:1.3;
+  box-shadow:0 calc(var(--drop) * .6) 0 var(--ink)}
+.chip.new{animation:popIn .35s cubic-bezier(.3,1.8,.5,1)}
+.chip.ghost{background:transparent;border-style:dashed;box-shadow:none;opacity:.5}
+.prompt{font-size:clamp(24px,5.4vmin,52px);font-weight:700;line-height:1.15;padding:.12em .8em;border-radius:999px;
+  border:var(--stroke) solid var(--ink);background:var(--paper);box-shadow:0 calc(var(--drop) * .6) 0 var(--ink)}
+.prompt.go{background:var(--violet);color:#fff;animation:pulse 1s ease-in-out infinite}
+
+/* landscape: camera sits bottom left, buddy bottom right, so keep the bottom rows between them */
+@media (orientation:landscape){
+  .choices,.claprow{padding-inline:calc(var(--pip-w) + var(--pad))}
+}
+/* short landscape (a phone on its side): shrink the chrome so the objects keep their room */
+@media (orientation:landscape) and (max-height:480px){
+  :root{ --choice:46px; --chip:15px; }
+  .question{font-size:clamp(22px,7vmin,34px)}
+  .claprow{min-height:calc(var(--chip) * 1.9)}
+  .prompt{font-size:20px}
+  .title{font-size:15vmin}.title span{display:inline}
+  .buddy.static{--buddy:22vmin}
+  .note{display:none}
+}
+/* portrait: camera and buddy share a dock under the game */
+@media (orientation:portrait){
+  .game.active{padding-bottom:calc(var(--pip-h) + var(--pad) * 2.4 + var(--safe-b) + var(--drop))}
+}
+
+/* =====================================================================
+   OVERLAYS: pause, tracking lost
+   ===================================================================== */
+.overlay{position:fixed;inset:0;z-index:20;display:none;align-items:center;justify-content:center;padding:var(--pad);
+  background:rgba(42,35,86,.55)}
+.overlay.show{display:flex}
+.lost{position:fixed;inset:0;z-index:15;display:none;align-items:center;justify-content:center;padding:var(--pad);
+  pointer-events:none;background:rgba(255,255,255,.55)}
+.lost.show{display:flex}
+.lost .card{animation:popIn .4s cubic-bezier(.3,1.5,.5,1)}
+.lost .eyes{font-size:clamp(60px,16vmin,140px);line-height:1;animation:look 2s ease-in-out infinite}
+.lost .big{font-size:clamp(34px,8vmin,76px);font-weight:700;line-height:1.05}
+#fx{position:fixed;inset:0;width:100%;height:100%;z-index:50;pointer-events:none}
+
+/* =====================================================================
+   RESULT SCREEN
+   ===================================================================== */
+.bigstars{display:flex;align-items:center;gap:.15em;font-size:clamp(64px,18vmin,170px);font-weight:700;line-height:1}
+.bigstars .emo{animation:cheer 1.2s ease-in-out infinite}
+.stats{display:flex;flex-wrap:wrap;gap:clamp(8px,2vmin,18px);justify-content:center}
+.recap{display:flex;flex-wrap:wrap;gap:6px 10px;justify-content:center;font-size:clamp(16px,3vmin,26px)}
+.recap span{background:var(--cream);border-radius:999px;padding:.05em .6em;white-space:nowrap}
+
+/* =====================================================================
+   KEYFRAMES
+   ===================================================================== */
+@keyframes popIn{0%{transform:scale(.2);opacity:0}100%{transform:scale(1);opacity:1}}
+@keyframes hop{0%,100%{transform:translateY(0) scale(1)}40%{transform:translateY(-28%) scale(1.15)}}
+@keyframes wiggle{0%,100%{transform:rotate(0)}25%{transform:rotate(-14deg) scale(1.15)}75%{transform:rotate(14deg) scale(1.15)}}
+@keyframes dance{from{transform:translateY(0) rotate(-8deg)}to{transform:translateY(-14%) rotate(8deg)}}
+@keyframes cheer{0%,100%{transform:rotate(0)}30%{transform:rotate(-10deg)}70%{transform:rotate(10deg)}}
+@keyframes pulse{0%,100%{transform:scale(1)}50%{transform:scale(1.07)}}
+@keyframes bump{0%,100%{transform:scale(1)}40%{transform:scale(1.25)}}
+@keyframes look{0%,100%{transform:translateX(-8%)}50%{transform:translateX(8%)}}
+@keyframes reward{0%{opacity:1;transform:scale(.6)}15%{opacity:1;transform:scale(1)}70%{opacity:1;transform:scale(1)}100%{opacity:0;transform:translateY(-30%) scale(1.1)}}
+@keyframes spin{to{transform:rotate(360deg)}}
+.loading-hand{font-size:clamp(70px,18vmin,160px);animation:hop 1s ease-in-out infinite}
+
+@media (prefers-reduced-motion:reduce){
+  .cloud,.buddy.static,.prompt.go,.steps li.now,.bigstars .emo,.lost .eyes,.loading-hand{animation:none}
+  .cam{transition:none}
+}
+</style>
+</head>
+
+<body data-screen="start">
+
+<!-- ================= SCENERY ================= -->
+<div class="scene" aria-hidden="true">
+  <div class="sun"></div>
+  <div class="cloud c1"></div><div class="cloud c2"></div><div class="cloud c3"></div>
+  <div class="hill h1"></div><div class="hill h2"></div>
+</div>
+
+<!-- ================= START SCREEN ================= -->
+<section id="scrStart" class="screen center active">
+  <div class="start-wrap">
+    <div class="buddy static" aria-hidden="true">
+      <i class="ear l"></i><i class="ear r"></i>
+      <div class="body"><i class="eye l"></i><i class="eye r"></i><i class="cheek l"></i><i class="cheek r"></i><i class="mouth"></i></div>
+      <i class="hand l"></i><i class="hand r"></i>
+    </div>
+    <h1 class="title"><span>Clap the</span><span>Answer!</span></h1>
+    <p class="lead">Count them. Then clap! <span class="emo">👏</span></p>
+    <div class="levels" role="group" aria-label="Which numbers?">
+      <button class="lvl" data-level="5" aria-pressed="false"><span class="emo">🐣</span> 1–5</button>
+      <button class="lvl on" data-level="10" aria-pressed="true"><span class="emo">🦁</span> 1–10</button>
+    </div>
+    <button id="btnPlay" class="btn big go">▶ Play</button>
+    <p class="note">For grown-ups: the camera is used to see claps. The picture never leaves this device. Prop the screen up and let your child stand about one big step back.</p>
+  </div>
+</section>
+
+<!-- ================= LOADING SCREEN ================= -->
+<section id="scrLoading" class="screen center">
+  <div class="card">
+    <div class="loading-hand emo">👏</div>
+    <h2>Getting ready…</h2>
+    <p id="loadingTip">Say yes to the camera <span class="emo">📷</span></p>
+  </div>
+</section>
+
+<!-- ================= ERROR SCREEN ================= -->
+<section id="scrError" class="screen center">
+  <div class="card">
+    <div class="huge emo" id="errIcon">📷</div>
+    <h2 id="errTitle">I need the camera</h2>
+    <p id="errText">Please allow the camera, then try again.</p>
+    <div class="row">
+      <button id="btnRetry" class="btn go">Try again</button>
+      <button id="btnTapMode" class="btn plain">Play with taps <span class="emo">👆</span></button>
+    </div>
+  </div>
+</section>
+
+<!-- ================= CALIBRATION SCREEN ================= -->
+<section id="scrCalib" class="screen calib">
+  <div id="slotBig" class="slot-big"></div>
+  <div class="calib-side">
+    <div class="bubble" aria-live="polite"><span id="calibEmo" class="emo">🙌</span><span id="calibText">Show me two hands!</span></div>
+    <ol class="steps" id="calibSteps" aria-hidden="true">
+      <li class="emo">🙌</li><li class="emo">🎯</li><li class="emo">👏</li>
+    </ol>
+    <button id="btnSkip" class="btn small plain">Skip</button>
+  </div>
+</section>
+
+<!-- ================= GAME SCREEN ================= -->
+<section id="scrGame" class="screen game">
+  <header class="hud">
+    <div class="hud-btns">
+      <button id="btnPause" class="ibtn" aria-label="Pause">
+        <svg viewBox="0 0 24 24" fill="currentColor"><rect x="5" y="4" width="5" height="16" rx="2"/><rect x="14" y="4" width="5" height="16" rx="2"/></svg>
+      </button>
+      <button id="btnRestart" class="ibtn" aria-label="Restart">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M4.5 12a7.5 7.5 0 1 0 2.4-5.5"/><path d="M4.5 3.5v4.6h4.6"/></svg>
+      </button>
+      <button id="btnSound" class="ibtn" aria-label="Sound on or off"></button>
+    </div>
+    <ol id="progress" class="progress" aria-label="Rounds"></ol>
+    <div class="score">
+      <span id="streakPill" class="pill off" aria-label="In a row"><span class="emo">🔥</span><b id="streakCount">0</b></span>
+      <span id="starPill" class="pill" aria-label="Stars"><span class="emo">⭐</span><b id="starCount">0</b></span>
+    </div>
+  </header>
+  <h2 id="question" class="question" aria-live="polite"></h2>
+  <div class="board">
+    <div id="items" class="items"></div>
+    <div id="reward" class="reward emo"></div>
+  </div>
+  <div id="choices" class="choices"></div>
+  <div id="clapRow" class="claprow" aria-live="polite"></div>
+</section>
+
+<!-- ================= RESULT SCREEN ================= -->
+<section id="scrResult" class="screen center">
+  <div class="card">
+    <h2 id="resTitle">You did it!</h2>
+    <div class="bigstars"><span class="emo">⭐</span><b id="resStars">0</b></div>
+    <div class="stats">
+      <span class="pill"><span class="emo">👏</span><b id="resClaps">0</b>&nbsp;claps</span>
+      <span class="pill"><span class="emo">🔥</span><b id="resStreak">0</b>&nbsp;in a row</span>
+    </div>
+    <div id="resRecap" class="recap"></div>
+    <div class="row">
+      <button id="btnAgain" class="btn big go">Play again</button>
+      <button id="btnHome" class="btn plain">Home</button>
+    </div>
+  </div>
+</section>
+
+<!-- ================= CAMERA BOX + BUDDY (shared by calibration and game) ================= -->
+<div id="slotPip" class="slot-pip"></div>
+<div id="camBox" class="cam hide">
+  <div class="cam-mirror">
+    <video id="cam" playsinline muted autoplay></video>
+    <canvas id="camOverlay"></canvas>
+  </div>
+  <div class="cam-guide"></div>
+</div>
+
+<button id="buddy" class="buddy hide" aria-label="Tap to clap">
+  <span class="tip">Tap me!</span>
+  <i class="ear l"></i><i class="ear r"></i>
+  <div class="body"><i class="eye l"></i><i class="eye r"></i><i class="cheek l"></i><i class="cheek r"></i><i class="mouth"></i></div>
+  <i class="hand l"></i><i class="hand r"></i>
+  <i class="spark emo">✨</i>
+</button>
+
+<!-- ================= OVERLAYS ================= -->
+<div id="ovLost" class="lost" role="status">
+  <div class="card">
+    <div class="eyes emo">👀</div>
+    <div class="big">I can’t see you.</div>
+    <p>Step back so I can see you!</p>
+  </div>
+</div>
+
+<div id="ovPause" class="overlay" role="dialog" aria-label="Paused">
+  <div class="card">
+    <h2>Paused</h2>
+    <button id="btnResume" class="btn big go">▶ Play</button>
+    <div class="row">
+      <button id="btnRestart2" class="btn plain">Start again</button>
+      <button id="btnCamCheck" class="btn plain">Camera check</button>
+    </div>
+  </div>
+</div>
+
+<canvas id="fx" aria-hidden="true"></canvas>
+
+<script>
+(() => {
+'use strict';
+
+/* #####################################################################
+   CONFIG  (all tunable numbers in one place)
+   ##################################################################### */
+const CFG = {
+  ROUNDS: 8,
+  VISION_URL: 'https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.14',
+  MODEL_URL: 'https://storage.googleapis.com/mediapipe-models/hand_landmarker/hand_landmarker/float16/1/hand_landmarker.task',
+
+  THINK_MS: 2600,        // quiet time after the numbers appear, before "Clap the answer!"
+  CELEBRATE_MS: 3300,    // party time after a round
+  HINT1_MS: 7000,        // no clap for this long: first gentle help
+  HINT2_MS: 9000,        // still stuck: show the answer
+  GIVEUP_MS: 10000,      // still stuck: finish the round kindly and move on
+  COUNT_STEP_MS: 750,    // speed of "let's count together"
+  LOST_MS: 5000,         // no hands seen for this long while clapping: pause with a friendly message
+
+  POS_SMOOTH: 0.5,       // landmark smoothing (0 = frozen, 1 = raw)
+
+  /* Clap detector. All distances are measured in "hand lengths"
+     (wrist to middle knuckle), so they work at any distance from the camera. */
+  CLAP: {
+    CLOSE: 1.3,          // palms closer than this = together
+    OPEN: 1.75,          // palms must open at least this far before the next clap can count
+    MIN_SWING: 0.8,      // hands must travel at least this much, so tiny wiggles never count
+    COOLDOWN: 260,       // ms between two claps
+    SMOOTH_IN: 0.75,     // distance smoothing while closing (fast, claps are quick)
+    SMOOTH_OUT: 0.5,     // distance smoothing while opening
+    SCALE_SMOOTH: 0.1,   // hand size changes slowly
+    STALE: 250,          // ms without two hands before the distance is considered fresh again
+    // near miss: a fast, big closing movement counts even if the palms do not quite touch
+    FAST_MAX: 2.6, FAST_RATIO: 0.55, FAST_DROP: 0.8, FAST_WINDOW: 300,
+    // merge: when hands touch, the tracker often loses one of them. That counts as a clap
+    // if the two hands were close and closing just before.
+    // Extra proof: the one hand that is still visible sits in the middle of where the two hands were.
+    MERGE_WINDOW: 380, MERGE_NEAR: 3.2, MERGE_SURE: 1.9, MERGE_DROP: 0.35, MERGE_FAR: 5, MERGE_MID: 0.3,
+    DUPLICATE: 0.35      // two detections on top of each other = really one blob
+  }
+};
+
+const WORDS = ['zero','one','two','three','four','five','six','seven','eight','nine','ten'];
+const PRAISE = ['Great clapping!','Super!','You did it!','Wonderful!','Amazing counting!','Hooray!'];
+const ITEMS = [
+  {e:'🍎',one:'apple',many:'apples'},   {e:'🍌',one:'banana',many:'bananas'},
+  {e:'⭐',one:'star',many:'stars'},      {e:'⚽',one:'ball',many:'balls'},
+  {e:'🦆',one:'duck',many:'ducks'},     {e:'🎈',one:'balloon',many:'balloons'},
+  {e:'🐟',one:'fish',many:'fish'},      {e:'🌸',one:'flower',many:'flowers'},
+  {e:'🚗',one:'car',many:'cars'},       {e:'🍪',one:'cookie',many:'cookies'},
+  {e:'🐸',one:'frog',many:'frogs'},     {e:'🧁',one:'cupcake',many:'cupcakes'}
+];
+const LOST_SAY = "I can't see you. Step back so I can see you!";
+
+/* ---------- small helpers ---------- */
+const $ = (s, r = document) => r.querySelector(s);
+const $$ = (s, r = document) => Array.from(r.querySelectorAll(s));
+const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
+const randInt = (a, b) => a + Math.floor(Math.random() * (b - a + 1));
+const pick = arr => arr[Math.floor(Math.random() * arr.length)];
+const shuffle = arr => { for (let i = arr.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [arr[i], arr[j]] = [arr[j], arr[i]]; } return arr; };
+
+/* ---------- shared game state (read by UI and game logic) ---------- */
+const G = {
+  screen: 'start', mode: 'camera', level: 10,
+  rounds: [], round: 0, phase: 'idle',
+  claps: 0, hint: 0, hintToken: 0, idle: 0,
+  noHand: 0, seenMs: 0, lostNag: 0,
+  paused: false, lost: false,
+  stars: 0, streak: 0, best: 0, totalClaps: 0
+};
+
+
+/* #####################################################################
+   AUDIO + VOICE
+   ##################################################################### */
+const Sound = (() => {
+  let ctx = null, master = null, on = true, voice = null, speakTimer = 0;
+  const hasSpeech = 'speechSynthesis' in window && 'SpeechSynthesisUtterance' in window;
+  const SCALE = [523.25, 587.33, 659.25, 783.99, 880, 1046.5, 1174.66, 1318.51, 1567.98, 1760];
+
+  function pickVoice() {
+    if (!hasSpeech) return;
+    const vs = speechSynthesis.getVoices().filter(v => /^en/i.test(v.lang));
+    if (!vs.length) return;
+    const fav = ['Samantha', 'Google US English', 'Microsoft Aria', 'Microsoft Jenny', 'Karen', 'Google UK English Female'];
+    voice = vs.find(v => fav.some(f => v.name.includes(f))) || vs.find(v => /en[-_]US/i.test(v.lang)) || vs[0];
+  }
+  if (hasSpeech) { pickVoice(); try { speechSynthesis.addEventListener('voiceschanged', pickVoice); } catch (e) {} }
+
+  /* must be called from a tap/click so mobile browsers allow sound and speech */
+  function unlock() {
+    try {
+      if (!ctx) {
+        const AC = window.AudioContext || window.webkitAudioContext;
+        if (AC) { ctx = new AC(); master = ctx.createGain(); master.gain.value = 0.5; master.connect(ctx.destination); }
+      }
+      if (ctx && ctx.state === 'suspended') ctx.resume();
+      if (hasSpeech) { const u = new SpeechSynthesisUtterance(' '); u.volume = 0; speechSynthesis.speak(u); }
+    } catch (e) {}
+  }
+
+  function tone(freq, t0, dur, type = 'triangle', vol = 0.3, slideTo = 0) {
+    const o = ctx.createOscillator(), g = ctx.createGain();
+    o.type = type; o.frequency.setValueAtTime(freq, t0);
+    if (slideTo) o.frequency.exponentialRampToValueAtTime(slideTo, t0 + dur);
+    g.gain.setValueAtTime(0.0001, t0);
+    g.gain.exponentialRampToValueAtTime(vol, t0 + 0.012);
+    g.gain.exponentialRampToValueAtTime(0.0001, t0 + dur);
+    o.connect(g); g.connect(master); o.start(t0); o.stop(t0 + dur + 0.03);
+  }
+  function noise(t0, dur, vol) {
+    const n = Math.floor(ctx.sampleRate * dur), buf = ctx.createBuffer(1, n, ctx.sampleRate), d = buf.getChannelData(0);
+    for (let i = 0; i < n; i++) d[i] = (Math.random() * 2 - 1) * Math.pow(1 - i / n, 2.2);
+    const src = ctx.createBufferSource(); src.buffer = buf;
+    const bp = ctx.createBiquadFilter(); bp.type = 'bandpass'; bp.frequency.value = 1500; bp.Q.value = 0.8;
+    const g = ctx.createGain(); g.gain.value = vol;
+    src.connect(bp); bp.connect(g); g.connect(master); src.start(t0);
+  }
+  const ok = () => on && ctx && ctx.state === 'running';
+  const play = fn => { if (!ok()) return; try { fn(ctx.currentTime); } catch (e) {} };
+
+  return {
+    unlock,
+    get on() { return on; },
+    setOn(v) { on = v; if (!v) this.hush(); },
+    /* counted clap: a soft pop plus a note that climbs with every clap */
+    clap(n) { play(t => { noise(t, 0.07, 0.5); tone(SCALE[(n - 1) % SCALE.length], t, 0.3, 'triangle', 0.4); }); },
+    pat() { play(t => noise(t, 0.06, 0.3)); },
+    click() { play(t => tone(660, t, 0.08, 'sine', 0.2)); },
+    ready() { play(t => { tone(659, t, 0.14, 'sine', 0.25); tone(988, t + 0.13, 0.2, 'sine', 0.25); }); },
+    hint() { play(t => { tone(784, t, 0.2, 'sine', 0.22); tone(659, t + 0.18, 0.28, 'sine', 0.22); }); },
+    tick() { play(t => tone(880, t, 0.1, 'sine', 0.18)); },
+    win() { play(t => { [523, 659, 784, 1047].forEach((f, i) => tone(f, t + i * 0.1, 0.28, 'triangle', 0.35)); tone(1568, t + 0.42, 0.5, 'sine', 0.2); }); },
+    fanfare() { play(t => { [523, 523, 659, 784, 659, 784, 1047].forEach((f, i) => tone(f, t + i * 0.16, 0.3, 'triangle', 0.35)); tone(1319, t + 1.15, 0.9, 'sine', 0.22); }); },
+    /* speak a short line. New lines interrupt old ones so the voice never lags behind the game */
+    say(text, opts = {}) {
+      if (!on || !hasSpeech) return;
+      try {
+        clearTimeout(speakTimer);
+        const u = new SpeechSynthesisUtterance(text);
+        u.lang = 'en-US'; if (voice) u.voice = voice;
+        u.rate = opts.rate || 0.92; u.pitch = 1.15; u.volume = 1;
+        speechSynthesis.cancel();
+        speakTimer = setTimeout(() => { try { speechSynthesis.speak(u); } catch (e) {} }, 40);
+      } catch (e) {}
+    },
+    hush() { clearTimeout(speakTimer); if (hasSpeech) { try { speechSynthesis.cancel(); } catch (e) {} } }
+  };
+})();
+
+
+/* #####################################################################
+   TRACKING SYSTEM  (webcam + MediaPipe Hand Landmarker + smoothing)
+   ##################################################################### */
+const Tracker = (() => {
+  const video = $('#cam');
+  let landmarker = null, vision = null, fileset = null, modelPromise = null;
+  let stream = null, lastVideoTime = -1, lastTs = 0, failCount = 0, rebuilding = false;
+  const slots = [null, null];                    // smoothed landmarks for up to two hands
+  const T = {
+    ready: false, hands: [], count: 0, aspect: 4 / 3, fresh: false,
+    lastFrameT: -1e9, lastAnyT: -1e9, lastTwoT: -1e9,
+    onEnded: null, onResize: null
+  };
+
+  /* ---- webcam ---- */
+  async function startCamera() {
+    if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+      const e = new Error('no camera api'); e.name = window.isSecureContext === false ? 'InsecureContext' : 'NotSupportedError'; throw e;
+    }
+    stopCamera();
+    stream = await navigator.mediaDevices.getUserMedia({
+      audio: false,
+      video: { facingMode: 'user', width: { ideal: 640 }, height: { ideal: 480 }, frameRate: { ideal: 30 } }
+    });
+    video.srcObject = stream;
+    video.setAttribute('playsinline', ''); video.muted = true;
+    await video.play();
+    if (!video.videoWidth) await new Promise(res => video.addEventListener('loadeddata', res, { once: true }));
+    syncAspect();
+    const track = stream.getVideoTracks()[0];
+    if (track) track.addEventListener('ended', () => { T.ready = false; if (T.onEnded) T.onEnded(); });
+  }
+  function stopCamera() { if (stream) { stream.getTracks().forEach(t => t.stop()); stream = null; } }
+  function syncAspect() {
+    if (!video.videoWidth) return;
+    T.aspect = video.videoWidth / video.videoHeight;
+    document.documentElement.style.setProperty('--cam-ar', T.aspect.toFixed(4));
+    if (T.onResize) T.onResize();
+  }
+  video.addEventListener('resize', syncAspect);   // phones swap width and height when rotated
+
+  /* ---- model ---- */
+  function options(delegate) {
+    return {
+      baseOptions: { modelAssetPath: CFG.MODEL_URL, delegate },
+      runningMode: 'VIDEO', numHands: 2,
+      minHandDetectionConfidence: 0.35, minHandPresenceConfidence: 0.35, minTrackingConfidence: 0.35
+    };
+  }
+  function loadModel() {
+    if (!modelPromise) {
+      modelPromise = (async () => {
+        vision = await import(CFG.VISION_URL + '/vision_bundle.mjs');
+        fileset = await vision.FilesetResolver.forVisionTasks(CFG.VISION_URL + '/wasm');
+        try { landmarker = await vision.HandLandmarker.createFromOptions(fileset, options('GPU')); }
+        catch (e) { landmarker = await vision.HandLandmarker.createFromOptions(fileset, options('CPU')); }
+      })().catch(err => { modelPromise = null; const e = new Error('model'); e.name = 'ModelLoadError'; e.cause = err; throw e; });
+    }
+    return modelPromise;
+  }
+  async function rebuildOnCpu() {                 // safety net if the GPU path keeps throwing
+    if (rebuilding || !vision) return; rebuilding = true;
+    try { if (landmarker && landmarker.close) landmarker.close(); landmarker = await vision.HandLandmarker.createFromOptions(fileset, options('CPU')); failCount = 0; }
+    catch (e) {} finally { rebuilding = false; }
+  }
+
+  async function init() {
+    const cam = startCamera();                    // ask for the camera first, inside the tap
+    const mdl = loadModel(); mdl.catch(() => {});
+    await cam; await mdl;
+    T.ready = true;
+  }
+
+  /* ---- per hand measurements ---- */
+  function measure(lm, ar) {
+    let x = 0, y = 0;
+    for (const i of [0, 5, 9, 13, 17]) { x += lm[i].x; y += lm[i].y; }
+    const d = (a, b) => Math.hypot((lm[a].x - lm[b].x) * ar, lm[a].y - lm[b].y);
+    // hand length in "frame heights". Take the longest of a few bones so a tilted hand still measures well
+    const scale = Math.max(d(0, 9), d(0, 5), d(0, 17), d(5, 17) * 1.15);
+    return { raw: lm, x: x / 5, y: y / 5, scale, slot: 0, lm: null, sx: 0, sy: 0 };
+  }
+
+  /* ---- keep each hand in the same slot from frame to frame, then smooth its landmarks ---- */
+  function assignSlots(hands) {
+    const d = (h, s) => Math.hypot(h.x - s.cx, h.y - s.cy);
+    if (hands.length >= 2) {
+      const [a, b] = hands;
+      if (slots[0] && slots[1]) {
+        const keep = d(a, slots[0]) + d(b, slots[1]), swap = d(a, slots[1]) + d(b, slots[0]);
+        a.slot = keep <= swap ? 0 : 1;
+      } else if (slots[0] || slots[1]) {
+        const k = slots[0] ? 0 : 1;
+        a.slot = d(a, slots[k]) <= d(b, slots[k]) ? k : 1 - k;
+      } else a.slot = a.x <= b.x ? 0 : 1;
+      b.slot = 1 - a.slot;
+    } else if (hands.length === 1) {
+      const h = hands[0];
+      if (slots[0] && slots[1]) h.slot = d(h, slots[0]) <= d(h, slots[1]) ? 0 : 1;
+      else h.slot = slots[1] && !slots[0] ? 1 : 0;
+    }
+    const used = [false, false], A = CFG.POS_SMOOTH;
+    for (const h of hands) {
+      const k = h.slot; used[k] = true;
+      let s = slots[k];
+      if (!s) s = slots[k] = { lm: h.raw.map(p => ({ x: p.x, y: p.y })), cx: h.x, cy: h.y };
+      else {
+        for (let i = 0; i < 21; i++) { s.lm[i].x += (h.raw[i].x - s.lm[i].x) * A; s.lm[i].y += (h.raw[i].y - s.lm[i].y) * A; }
+        s.cx += (h.x - s.cx) * A; s.cy += (h.y - s.cy) * A;
+      }
+      h.lm = s.lm; h.sx = s.cx; h.sy = s.cy;
+    }
+    if (!used[0]) slots[0] = null;
+    if (!used[1]) slots[1] = null;
+  }
+
+  /* ---- called once per animation frame ---- */
+  function step(now) {
+    T.fresh = false;
+    if (!T.ready || !landmarker || rebuilding) return;
+    if (video.readyState < 2 || video.currentTime === lastVideoTime) return;   // no new camera frame yet
+    lastVideoTime = video.currentTime;
+    const ts = Math.max(now, lastTs + 1); lastTs = ts;
+    let res;
+    try { res = landmarker.detectForVideo(video, ts); failCount = 0; }
+    catch (e) { if (++failCount >= 5) rebuildOnCpu(); return; }
+    const hands = (res && res.landmarks ? res.landmarks : []).slice(0, 2).map(lm => measure(lm, T.aspect));
+    assignSlots(hands);
+    T.hands = hands; T.count = hands.length; T.fresh = true; T.lastFrameT = now;
+    if (hands.length) T.lastAnyT = now;
+    if (hands.length >= 2) T.lastTwoT = now;
+  }
+
+  return { T, init, step, video };
+})();
+
+
+/* #####################################################################
+   CLAP DETECTOR
+   Input : two hand positions per frame.
+   Output: a clap event when the hands go  open -> together.
+   Uses  : smoothed distance, previous frame distance, minimum distance,
+           hysteresis (must open again), minimum swing and a cooldown.
+   ##################################################################### */
+const Clap = (() => {
+  const C = CFG.CLAP;
+  let s, handler = () => {};
+  function reset() {
+    s = { nd: null, prev: null, armed: false, peak: 0, low: 0, ref: null,
+          lastTwoT: -1e9, lastClapT: -1e9, hist: [], merged: false, mid: null, sep: 0 };
+  }
+  reset();
+
+  /* how much the hands closed during the last moments */
+  function recentDrop() {
+    if (s.nd == null || !s.hist.length) return 0;
+    let m = -Infinity; for (const h of s.hist) if (h.nd > m) m = h.nd;
+    return m - s.nd;
+  }
+
+  function fire(t, kind, touching) {
+    s.armed = false; s.lastClapT = t; s.peak = 0; s.hist.length = 0;
+    // "low" is the closest point of this clap. The hands must open again from there before the next one.
+    s.low = touching ? Math.min(s.nd, 1) : s.nd;
+    s.merged = kind === 'merge';
+    handler(kind);
+  }
+
+  function update(t, hands, aspect) {
+    let two = hands.length >= 2, collapsed = false, raw = 0;
+    if (two) {
+      const a = hands[0], b = hands[1];
+      const sc = (a.scale + b.scale) / 2;
+      s.ref = s.ref == null ? sc : s.ref + (sc - s.ref) * C.SCALE_SMOOTH;       // slow, stable hand size
+      raw = Math.hypot((a.x - b.x) * aspect, a.y - b.y) / clamp(s.ref, 0.03, 0.6);
+      if (raw < C.DUPLICATE) { two = false; collapsed = true; }                  // both detections on one blob
+      else { s.mid = { x: (a.x + b.x) / 2, y: (a.y + b.y) / 2 }; s.sep = Math.hypot((a.x - b.x) * aspect, a.y - b.y); }
+    }
+    const canFire = t - s.lastClapT > C.COOLDOWN;
+
+    if (two) {
+      const fresh = s.nd == null || t - s.lastTwoT > C.STALE;
+      s.prev = fresh ? null : s.nd;                                              // previous frame distance
+      if (fresh) { s.nd = raw; s.hist.length = 0; if (s.armed) s.peak = raw; }
+      else {
+        // smoothing is tuned for 30 frames a second. On slow devices each frame counts for more.
+        const frames = clamp((t - s.lastTwoT) / 33, 1, 6);
+        const a = 1 - Math.pow(1 - (raw < s.prev ? C.SMOOTH_IN : C.SMOOTH_OUT), frames);
+        s.nd = s.prev + (raw - s.prev) * a;
+      }
+      s.lastTwoT = t; s.merged = false;
+      s.hist.push({ t, nd: s.nd });
+      while (s.hist.length && t - s.hist[0].t > C.FAST_WINDOW) s.hist.shift();
+
+      if (!s.armed) {
+        // waiting for the hands to open again after the last clap
+        s.low = Math.min(s.low, s.nd);
+        if (s.nd >= Math.max(C.OPEN, s.low + C.MIN_SWING)) { s.armed = true; s.peak = s.nd; }
+      } else {
+        s.peak = Math.max(s.peak, s.nd);
+        if (canFire) {
+          const closing = s.prev != null && s.nd < s.prev;
+          const touch = s.nd < C.CLOSE && s.peak - s.nd >= C.MIN_SWING;
+          const fast = closing && s.nd < C.FAST_MAX && s.nd <= s.peak * C.FAST_RATIO && recentDrop() >= C.FAST_DROP;
+          if (touch) fire(t, 'touch'); else if (fast) fire(t, 'fast');
+        }
+      }
+    } else {
+      // fewer than two hands. If they were close together a moment ago, they are probably touching.
+      let inMiddle = false;
+      if (hands.length === 1 && s.mid) {
+        const h = hands[0];
+        inMiddle = Math.hypot((h.x - s.mid.x) * aspect, h.y - s.mid.y) < s.sep * C.MERGE_MID;
+      }
+      const recent = s.nd != null && t - s.lastTwoT < C.MERGE_WINDOW;
+      const near = recent && (s.nd < C.MERGE_NEAR || (inMiddle && s.nd < C.MERGE_FAR));
+      if (near) {
+        const drop = recentDrop();
+        const sure = collapsed || inMiddle || drop >= C.MERGE_DROP || (s.nd < C.MERGE_SURE && drop >= 0.12);
+        if (s.armed && canFire && sure) fire(t, 'merge', collapsed || inMiddle);
+        else if (!s.armed) { s.low = Math.min(s.low, 1); s.merged = true; }
+      }
+    }
+  }
+
+  /* what the buddy and the camera overlay should show right now */
+  function meter(now) {
+    const T = Tracker.T;
+    if (now - T.lastFrameT > 600) return { state: 'none' };
+    if (s.nd != null && now - s.lastTwoT < 180) return { state: 'two', nd: s.nd };
+    if (s.merged && now - s.lastTwoT < 700) return { state: 'merged', nd: 0 };
+    return { state: T.count >= 1 ? 'one' : 'none' };
+  }
+
+  return { update, reset, meter, onClap(fn) { handler = fn; } };
+})();
+
+
+/* #####################################################################
+   UI  (DOM, camera overlay drawing, buddy, confetti)
+   ##################################################################### */
+const Confetti = (() => {
+  const cv = $('#fx'), c = cv.getContext('2d');
+  const COLORS = ['#FFD23F', '#FF6F59', '#2FCB8B', '#7B61FF', '#FF9EC4', '#FFFFFF'];
+  let parts = [], W = 0, H = 0, dpr = 1, dirty = false;
+  function resize() {
+    dpr = Math.min(1.5, window.devicePixelRatio || 1);
+    W = window.innerWidth; H = window.innerHeight;
+    cv.width = Math.round(W * dpr); cv.height = Math.round(H * dpr);
+  }
+  function add(x, y, vx, vy) {
+    if (parts.length > 320) return;
+    parts.push({ x, y, vx, vy, r: 5 + Math.random() * 7, rot: Math.random() * 6.3, vr: (Math.random() - 0.5) * 0.4,
+      col: pick(COLORS), round: Math.random() < 0.4, life: 1 });
+  }
+  function burst(n = 70) {
+    const cx = W / 2, cy = H * 0.42, sp = Math.min(W, H) * 0.022;
+    for (let i = 0; i < n; i++) { const a = Math.random() * Math.PI * 2, v = sp * (0.4 + Math.random()); add(cx, cy, Math.cos(a) * v, Math.sin(a) * v - sp * 0.6); }
+  }
+  function rain(n = 140) {
+    for (let i = 0; i < n; i++) add(Math.random() * W, -20 - Math.random() * H * 0.8, (Math.random() - 0.5) * 2, 2 + Math.random() * 3);
+  }
+  function tick(dt) {
+    if (!parts.length) { if (dirty) { c.clearRect(0, 0, cv.width, cv.height); dirty = false; } return; }
+    const k = dt / 16.7;
+    c.setTransform(dpr, 0, 0, dpr, 0, 0); c.clearRect(0, 0, W, H); dirty = true;
+    for (const p of parts) {
+      p.vy += 0.28 * k; p.vx *= 0.99; p.x += p.vx * k; p.y += p.vy * k; p.rot += p.vr * k;
+      if (p.y > H * 0.75) p.life -= 0.03 * k;
+      c.globalAlpha = clamp(p.life, 0, 1); c.fillStyle = p.col;
+      c.save(); c.translate(p.x, p.y); c.rotate(p.rot);
+      if (p.round) { c.beginPath(); c.arc(0, 0, p.r * 0.6, 0, 6.3); c.fill(); } else c.fillRect(-p.r, -p.r * 0.5, p.r * 2, p.r);
+      c.restore();
+    }
+    c.globalAlpha = 1;
+    parts = parts.filter(p => p.life > 0 && p.y < H + 40);
+  }
+  resize();
+  return { resize, burst, rain, tick, clear() { parts = []; } };
+})();
+
+const UI = (() => {
+  const el = {
+    camBox: $('#camBox'), overlay: $('#camOverlay'), slotBig: $('#slotBig'), slotPip: $('#slotPip'),
+    buddy: $('#buddy'), question: $('#question'), items: $('#items'), reward: $('#reward'),
+    choices: $('#choices'), clapRow: $('#clapRow'), progress: $('#progress'),
+    starCount: $('#starCount'), starPill: $('#starPill'), streakCount: $('#streakCount'), streakPill: $('#streakPill'),
+    ovPause: $('#ovPause'), ovLost: $('#ovLost'), btnSound: $('#btnSound'), btnCamCheck: $('#btnCamCheck'),
+    calibEmo: $('#calibEmo'), calibText: $('#calibText'), calibSteps: $('#calibSteps')
+  };
+  const camCtx = el.overlay.getContext('2d');
+  const SCREENS = { start: '#scrStart', loading: '#scrLoading', error: '#scrError', calib: '#scrCalib', game: '#scrGame', result: '#scrResult' };
+  const BONES = [[0,1],[1,2],[2,3],[3,4],[0,5],[5,6],[6,7],[7,8],[5,9],[9,10],[10,11],[11,12],[9,13],[13,14],[14,15],[15,16],[13,17],[17,18],[18,19],[19,20],[0,17]];
+  const HAND_COLORS = ['#FF6F59', '#7B61FF'];
+  const ICON_ON = '<svg viewBox="0 0 24 24" fill="currentColor" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M4 9.5v5h3.5l4.5 4v-13l-4.5 4H4z"/><path d="M16 9a4.5 4.5 0 0 1 0 6" fill="none"/><path d="M18.6 6.4a8 8 0 0 1 0 11.2" fill="none"/></svg>';
+  const ICON_OFF = '<svg viewBox="0 0 24 24" fill="currentColor" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M4 9.5v5h3.5l4.5 4v-13l-4.5 4H4z"/><path d="M16.5 9.5l5 5M21.5 9.5l-5 5" fill="none"/></svg>';
+  let buddyGap = 0.62, buddyGapSet = -1, buddyClapUntil = 0, buddyTimer = 0;
+
+  /* ---------- screens ---------- */
+  function show(name) {
+    G.screen = name; document.body.dataset.screen = name;
+    for (const k in SCREENS) $(SCREENS[k]).classList.toggle('active', k === name);
+    document.body.classList.toggle('tap', G.mode === 'tap');
+    el.buddy.classList.toggle('hide', name !== 'game');
+    syncCam();
+  }
+  function syncCam() {
+    const camOn = G.mode === 'camera' && Tracker.T.ready && (G.screen === 'calib' || G.screen === 'game');
+    el.camBox.classList.toggle('hide', !camOn);
+    el.camBox.classList.toggle('big', G.screen === 'calib');
+    if (G.screen !== 'calib') el.camBox.classList.remove('ok', 'warn');
+    requestAnimationFrame(placeCam);
+  }
+  /* move the camera box onto the big slot (calibration) or the corner slot (game) */
+  function placeCam() {
+    const r = (G.screen === 'calib' ? el.slotBig : el.slotPip).getBoundingClientRect();
+    if (!r.width || !r.height) return;
+    const st = el.camBox.style;
+    st.left = r.left + 'px'; st.top = r.top + 'px'; st.width = r.width + 'px'; st.height = r.height + 'px';
+  }
+
+  /* ---------- camera overlay: hand skeletons + the line between the palms ---------- */
+  function drawCamera(now) {
+    const v = Tracker.video, cv = el.overlay;
+    if (!v.videoWidth) return;
+    if (cv.width !== v.videoWidth || cv.height !== v.videoHeight) { cv.width = v.videoWidth; cv.height = v.videoHeight; }
+    const W = cv.width, H = cv.height, c = camCtx;
+    c.clearRect(0, 0, W, H);
+    const k = W / Math.max(1, cv.clientWidth);            // video pixels per screen pixel
+    const hs = Tracker.T.hands, m = Clap.meter(now);
+    c.lineCap = 'round'; c.lineJoin = 'round';
+    if (hs.length >= 2) {
+      const near = m.state === 'two' && m.nd < CFG.CLAP.OPEN;
+      c.setLineDash([6 * k, 8 * k]); c.lineWidth = 3.5 * k; c.strokeStyle = near ? '#2FCB8B' : '#FFFFFF';
+      c.beginPath(); c.moveTo(hs[0].sx * W, hs[0].sy * H); c.lineTo(hs[1].sx * W, hs[1].sy * H); c.stroke();
+      c.setLineDash([]);
+    }
+    for (const h of hs) {
+      const col = HAND_COLORS[h.slot] || HAND_COLORS[0];
+      const path = () => { c.beginPath(); for (const [a, b] of BONES) { c.moveTo(h.lm[a].x * W, h.lm[a].y * H); c.lineTo(h.lm[b].x * W, h.lm[b].y * H); } };
+      c.strokeStyle = '#FFFFFF'; c.lineWidth = 5.5 * k; path(); c.stroke();
+      c.strokeStyle = col; c.lineWidth = 3 * k; path(); c.stroke();
+      c.beginPath(); c.arc(h.sx * W, h.sy * H, Math.max(7 * k, h.scale * H * 0.33), 0, 6.3);
+      c.globalAlpha = 0.85; c.fillStyle = col; c.fill(); c.globalAlpha = 1;
+      c.lineWidth = 2.5 * k; c.strokeStyle = '#FFFFFF'; c.stroke();
+    }
+  }
+  function clearCamera() { camCtx.clearRect(0, 0, el.overlay.width, el.overlay.height); }
+  function camFlash() { const b = el.camBox; b.classList.remove('flash'); void b.offsetWidth; b.classList.add('flash'); }
+  function camState(state) { el.camBox.classList.toggle('ok', state === 'ok'); el.camBox.classList.toggle('warn', state === 'warn'); }
+
+  /* ---------- buddy: paws follow the child's hands ---------- */
+  function buddyClap() {
+    buddyClapUntil = performance.now() + 170;
+    el.buddy.classList.remove('clap'); void el.buddy.offsetWidth; el.buddy.classList.add('clap');
+    clearTimeout(buddyTimer); buddyTimer = setTimeout(() => el.buddy.classList.remove('clap'), 380);
+  }
+  function updateBuddy(now) {
+    if (G.screen !== 'game') return;
+    let target = 0.62, searching = false;
+    if (now < buddyClapUntil) target = 0;
+    else if (G.mode === 'camera' && Tracker.T.ready) {
+      const m = Clap.meter(now);
+      if (m.state === 'two') target = clamp((m.nd - 1) / 3.4, 0.04, 1);
+      else if (m.state === 'merged') target = 0;
+      else searching = m.state === 'none';
+    }
+    buddyGap += (target - buddyGap) * 0.4;
+    if (Math.abs(buddyGap - buddyGapSet) > 0.004) { el.buddy.style.setProperty('--gap', buddyGap.toFixed(3)); buddyGapSet = buddyGap; }
+    el.buddy.classList.toggle('searching', searching);
+  }
+
+  /* ---------- HUD ---------- */
+  function buildProgress() { el.progress.innerHTML = '<li></li>'.repeat(CFG.ROUNDS); }
+  function setProgress() {
+    $$('li', el.progress).forEach((li, i) => { li.classList.toggle('done', i < G.round); li.classList.toggle('now', i === G.round && G.phase !== 'done'); });
+  }
+  function updateHud(bump) {
+    el.starCount.textContent = G.stars; el.streakCount.textContent = G.streak;
+    el.streakPill.classList.toggle('off', G.streak < 2);
+    if (bump) { el.starPill.classList.remove('bump'); void el.starPill.offsetWidth; el.starPill.classList.add('bump'); }
+  }
+  function setSoundIcon() { el.btnSound.innerHTML = Sound.on ? ICON_ON : ICON_OFF; }
+
+  /* ---------- round ---------- */
+  function renderRound(r) {
+    el.question.textContent = `How many ${r.item.many}?`;
+    el.question.classList.remove('yes');
+    const first = r.n <= 5 ? r.n : Math.ceil(r.n / 2);
+    el.items.style.setProperty('--cols', Math.max(first, 2));
+    el.items.style.setProperty('--rows', r.n <= 5 ? 1 : 2);
+    el.items.className = 'items';
+    let html = '<div class="line">';
+    for (let i = 0; i < r.n; i++) {
+      if (i === first) html += '</div><div class="line">';
+      html += `<span class="item" style="--i:${i}"><span class="emo">${r.item.e}</span><b class="badge">${i + 1}</b></span>`;
+    }
+    el.items.innerHTML = html + '</div>';
+    el.choices.innerHTML = ''; el.clapRow.innerHTML = '';
+    el.reward.className = 'reward emo'; el.reward.innerHTML = '';
+  }
+  function showChoices(r) {
+    el.choices.innerHTML = r.choices.map((n, i) => `<div class="choice" data-n="${n}" style="--i:${i}">${n}</div>`).join('');
+  }
+  /* the row under the numbers: a prompt first, then  👏1 👏2 👏3  as the child claps */
+  function renderClapRow(isNew) {
+    const r = G.rounds[G.round]; if (!r) return;
+    const live = G.phase === 'think' || G.phase === 'clap';
+    let html = '';
+    if (G.claps === 0 && G.hint === 0) {
+      if (G.phase === 'think') html = '<span class="prompt">Count them… <span class="emo">🤔</span></span>';
+      else if (G.phase === 'clap') html = '<span class="prompt go">Clap the answer! <span class="emo">👏</span></span>';
+    } else {
+      for (let i = 1; i <= G.claps; i++) html += `<span class="chip${isNew && i === G.claps ? ' new' : ''}"><span class="emo">👏</span><b>${i}</b></span>`;
+      if (G.hint > 0 && live) for (let i = G.claps + 1; i <= r.n; i++) html += `<span class="chip ghost"><span class="emo">👏</span><b>${i}</b></span>`;
+    }
+    el.clapRow.innerHTML = html;
+  }
+  function countItem(i) { const it = $$('.item', el.items)[i]; if (it) it.classList.add('counted'); }
+  function peekItem(i) { const it = $$('.item', el.items)[i]; if (!it) return; it.classList.add('peek'); setTimeout(() => it.classList.remove('peek'), 650); }
+  function lightChoice(n) { $$('.choice', el.choices).forEach(c => c.classList.toggle('lit', +c.dataset.n === n)); }
+  function nudgeChoice(n) { $$('.choice', el.choices).forEach(c => c.classList.toggle('nudge', +c.dataset.n === n)); }
+  function celebrate(r, stars, label) {
+    el.question.textContent = stars >= 2 ? `Yes! ${label}!` : `${label}!`;
+    el.question.classList.add('yes');
+    $$('.item', el.items).forEach(it => it.classList.add('counted'));
+    if (stars >= 2) el.items.classList.add('party');
+    $$('.choice', el.choices).forEach(c => { c.classList.remove('lit', 'nudge'); c.classList.add(+c.dataset.n === r.n ? 'correct' : 'dim'); });
+    renderClapRow(false);
+    el.reward.innerHTML = Array.from({ length: stars }, (_, i) => `<span style="--i:${i}">⭐</span>`).join('');
+    el.reward.classList.remove('show'); void el.reward.offsetWidth; el.reward.classList.add('show');
+  }
+
+  /* ---------- overlays, calibration text, error and result ---------- */
+  function togglePause(v) { el.ovPause.classList.toggle('show', v); el.btnCamCheck.hidden = G.mode !== 'camera'; }
+  function toggleLost(v) { el.ovLost.classList.toggle('show', v); }
+  function calibMsg(emo, text) { el.calibEmo.textContent = emo; el.calibText.textContent = text; }
+  function calibSteps(done) { $$('li', el.calibSteps).forEach((li, i) => { li.classList.toggle('done', i < done); li.classList.toggle('now', i === done); }); }
+  function showError(icon, title, text) { $('#errIcon').textContent = icon; $('#errTitle').textContent = title; $('#errText').textContent = text; show('error'); }
+  function showResult() {
+    const max = CFG.ROUNDS * 3;
+    $('#resTitle').textContent = G.stars >= max * 0.8 ? 'Clap champion!' : G.stars >= max * 0.55 ? 'Super counter!' : 'Great clapping!';
+    $('#resClaps').textContent = G.totalClaps; $('#resStreak').textContent = G.best;
+    $('#resRecap').innerHTML = G.rounds.map(r => `<span><span class="emo">${r.item.e}</span> ${r.n} <span class="emo">${'⭐'.repeat(r.stars || 1)}</span></span>`).join('');
+    const out = $('#resStars'); let shown = 0; out.textContent = '0';
+    const timer = setInterval(() => { shown = Math.min(G.stars, shown + 1); out.textContent = shown; if (shown >= G.stars) clearInterval(timer); }, 70);
+    show('result');
+  }
+
+  window.addEventListener('resize', () => { Confetti.resize(); placeCam(); });
+  window.addEventListener('orientationchange', () => setTimeout(() => { Confetti.resize(); placeCam(); }, 300));
+  Tracker.T.onResize = () => requestAnimationFrame(placeCam);
+
+  return { el, show, syncCam, placeCam, drawCamera, clearCamera, camFlash, camState, buddyClap, updateBuddy,
+    buildProgress, setProgress, updateHud, setSoundIcon, renderRound, showChoices, renderClapRow, countItem, peekItem,
+    lightChoice, nudgeChoice, celebrate, togglePause, toggleLost, calibMsg, calibSteps, showError, showResult };
+})();
+
+
+/* #####################################################################
+   GAME LOGIC
+   ##################################################################### */
+
+/* ---------- game clock: timers that stop while the game is paused ---------- */
+const Clock = {
+  t: 0, gen: 0, q: [],
+  after(ms, fn) { this.q.push({ at: this.t + ms, fn, gen: this.gen }); },
+  clear() { this.q.length = 0; this.gen++; },
+  tick(dt) {
+    this.t += dt;
+    if (!this.q.length) return;
+    const due = this.q.filter(x => x.at <= this.t);
+    if (!due.length) return;
+    this.q = this.q.filter(x => x.at > this.t);
+    due.sort((a, b) => a.at - b.at).forEach(x => { if (x.gen === this.gen) x.fn(); });
+  }
+};
+
+/* ---------- calibration: hands visible -> centred -> one test clap ---------- */
+const Calib = (() => {
+  let active = false, step = 0, hold = 0, stuck = 0, nag = 0, gone = 0, issue = '', done = null;
+
+  function start(cb) {
+    active = true; done = cb; step = 0; hold = stuck = nag = gone = 0; issue = '';
+    UI.calibSteps(0); UI.camState(''); UI.calibMsg('🙌', 'Show me two hands!');
+    Sound.say('Stand back and show me your two hands!');
+  }
+  function finish() { if (!active) return; active = false; const cb = done; done = null; UI.camState(''); if (cb) cb(); }
+
+  function tick(dt, now) {
+    if (!active || step > 2) return;
+    const T = Tracker.T, two = now - T.lastFrameT < 500 && T.count >= 2;
+    nag += dt;
+
+    if (step === 0) {                                   // 1. can I see two hands?
+      hold = two ? hold + dt : Math.max(0, hold - dt);
+      if (hold > 450) { step = 1; hold = stuck = gone = 0; issue = ''; UI.calibSteps(1); UI.calibMsg('🎯', 'Good! Stay there!'); }
+      else if (nag > 9000) { nag = 0; Sound.say('Show me your two hands!'); }
+      return;
+    }
+    if (step === 1) {                                   // 2. is the child centred and not too close?
+      if (!two) {
+        gone += dt;
+        if (gone > 1800) { step = 0; hold = nag = 0; UI.calibSteps(0); UI.camState(''); UI.calibMsg('🙌', 'Show me two hands!'); Sound.say('Show me your two hands!'); }
+        return;
+      }
+      gone = 0;
+      const a = T.hands[0], b = T.hands[1];
+      const mid = 1 - (a.x + b.x) / 2;                  // mirrored: where the child appears on screen
+      const size = (a.scale + b.scale) / 2;
+      const atEdge = h => h.x < 0.05 || h.x > 0.95 || h.y < 0.04 || h.y > 0.97;
+      let problem = '';
+      if (size > 0.34 || atEdge(a) || atEdge(b)) problem = 'back';
+      else if (mid < 0.2 || mid > 0.8) problem = mid < 0.5 ? 'right' : 'left';
+      if (problem) {
+        hold = 0; stuck += dt;
+        if (problem !== issue) {
+          issue = problem;
+          if (problem === 'back') { UI.calibMsg('🚶', 'Step back a little!'); Sound.say('Step back a little!'); }
+          else { UI.calibMsg(problem === 'right' ? '➡️' : '⬅️', 'Move to the middle!'); Sound.say('Move to the middle!'); }
+        }
+      } else {
+        hold += dt;
+        if (issue) { issue = ''; UI.calibMsg('🎯', 'Good! Stay there!'); }
+      }
+      UI.camState(problem ? 'warn' : 'ok');
+      if (hold > 550 || stuck > 7000) {                 // forgiving: after a while "good enough" is fine
+        step = 2; nag = 0; UI.calibSteps(2); UI.camState('ok');
+        UI.calibMsg('👏', 'Now clap one time!'); Sound.say('Great! Now clap one time!');
+      }
+      return;
+    }
+    if (nag > 8000) { nag = 0; UI.calibMsg('👏', 'Open wide, then clap!'); Sound.say('Open your hands wide, then clap!'); }   // 3. test clap
+  }
+
+  function onClap() {
+    if (!active || step !== 2) return;
+    step = 3; UI.calibSteps(3); UI.calibMsg('🎉', "Perfect! Let's play!");
+    Sound.win(); Sound.say("Perfect! Let's play!"); Confetti.burst(40);
+    setTimeout(finish, 1400);
+  }
+  return { start, tick, onClap, skip: finish, get active() { return active; } };
+})();
+
+/* ---------- rounds ---------- */
+function makeChoices(n) {                               // three numbers in a row that include the answer, e.g. 2 3 4
+  const sets = [];
+  for (let s = n - 2; s <= n; s++) if (s >= 1 && s + 2 <= 10) sets.push([s, s + 1, s + 2]);
+  return pick(sets);
+}
+function buildRounds(maxN) {                            // small numbers first, bigger ones later
+  const ramp = maxN <= 5
+    ? [[1, 2], [2, 3], [1, 3], [2, 4], [3, 5], [2, 5], [3, 5], [4, 5]]
+    : [[1, 3], [2, 4], [3, 5], [2, 6], [4, 7], [5, 8], [6, 9], [7, 10]];
+  const items = shuffle(ITEMS.slice());
+  let prev = 0;
+  return ramp.slice(0, CFG.ROUNDS).map(([a, b], i) => {
+    let n, guard = 0;
+    do { n = randInt(a, b); } while (n === prev && ++guard < 20);
+    prev = n;
+    return { n, item: items[i % items.length], choices: makeChoices(n), stars: 0 };
+  });
+}
+
+function newGame() {
+  Clock.clear(); Sound.hush(); Confetti.clear();
+  Object.assign(G, { round: 0, phase: 'idle', claps: 0, hint: 0, idle: 0, noHand: 0, paused: false, lost: false,
+    stars: 0, streak: 0, best: 0, totalClaps: 0 });
+  G.rounds = buildRounds(G.level);
+  UI.togglePause(false); UI.toggleLost(false);
+  UI.buildProgress(); UI.updateHud(false);
+  UI.el.items.innerHTML = ''; UI.el.choices.innerHTML = ''; UI.el.clapRow.innerHTML = ''; UI.el.question.textContent = '';
+  UI.show('game');
+  Clock.after(400, startRound);
+}
+
+function startRound() {
+  const r = G.rounds[G.round];
+  G.phase = 'intro'; G.claps = 0; G.hint = 0; G.idle = 0; G.noHand = 0; G.hintToken++;
+  UI.renderRound(r); UI.setProgress();
+  Sound.say(`How many ${r.item.many}?`);
+  const showAt = 1500 + r.n * 110;
+  Clock.after(showAt, () => { G.phase = 'think'; UI.showChoices(r); UI.renderClapRow(false); });   // early claps already count from here
+  Clock.after(showAt + CFG.THINK_MS, () => {
+    if (G.phase !== 'think') return;
+    G.phase = 'clap'; G.idle = 0; G.noHand = 0;
+    UI.renderClapRow(false); Sound.ready();
+    if (G.claps === 0) Sound.say('Clap the answer!');
+  });
+}
+
+/* every clap from the camera, a tap on the buddy or the space bar lands here */
+function handleClap() {
+  UI.buddyClap(); UI.camFlash();
+  if (G.screen === 'calib') { Calib.onClap(); return; }
+  if (G.screen !== 'game' || G.paused || G.lost) return;
+  if (G.phase !== 'think' && G.phase !== 'clap') { Sound.pat(); return; }
+  const r = G.rounds[G.round];
+  G.claps++; G.totalClaps++; G.idle = 0; G.hintToken++;        // a clap also stops any "count together" help
+  Sound.clap(G.claps);
+  UI.countItem(G.claps - 1); UI.renderClapRow(true); UI.lightChoice(G.claps);
+  if (G.claps >= r.n) complete(G.hint === 0 ? 3 : 2);
+  else Sound.say(WORDS[G.claps], { rate: 1.05 });
+}
+
+/* ---------- gentle help when the child is stuck. Nothing is ever taken away. ---------- */
+function countTogether() {
+  const r = G.rounds[G.round], token = ++G.hintToken;
+  G.idle = -(1300 + r.n * CFG.COUNT_STEP_MS);                  // do not start the next timer until the counting is over
+  Sound.say("Let's count together!");
+  for (let i = 0; i < r.n; i++) {
+    Clock.after(1300 + i * CFG.COUNT_STEP_MS, () => {
+      if (token !== G.hintToken) return;
+      UI.peekItem(i); Sound.tick(); Sound.say(WORDS[i + 1], { rate: 1 });
+    });
+  }
+  Clock.after(1300 + r.n * CFG.COUNT_STEP_MS + 150, () => {
+    if (token !== G.hintToken) return;
+    Sound.say(`${WORDS[r.n]}! Now clap ${r.n === 1 ? 'one time' : WORDS[r.n] + ' times'}!`);
+  });
+}
+function hintOne() {
+  G.hint = 1; G.idle = 0; Sound.hint(); UI.renderClapRow(false);       // shows empty clap slots up to the answer
+  if (G.claps === 0) countTogether(); else Sound.say('Keep going! Clap some more!');
+}
+function hintTwo() {
+  const r = G.rounds[G.round];
+  G.hint = 2; G.idle = 0; Sound.hint(); UI.nudgeChoice(r.n);
+  Sound.say(G.claps === 0 ? `It is ${WORDS[r.n]}! Clap ${r.n === 1 ? 'one time' : WORDS[r.n] + ' times'}!` : 'Almost there! Clap again!');
+}
+
+function complete(stars) {
+  const r = G.rounds[G.round];
+  r.stars = stars; G.phase = 'celebrate'; G.hintToken++;
+  G.stars += stars;
+  if (stars === 3) { G.streak++; G.best = Math.max(G.best, G.streak); } else G.streak = 0;
+  const name = r.n === 1 ? r.item.one : r.item.many;
+  UI.celebrate(r, stars, `${r.n} ${name}`); UI.updateHud(true);
+  if (stars >= 2) { Sound.win(); Confetti.burst(70); Sound.say(`Yes! ${WORDS[r.n]} ${name}! ${pick(PRAISE)}`); }
+  else { Sound.hint(); Sound.say(`It is ${WORDS[r.n]} ${name}. Good try!`); }
+  Clock.after(CFG.CELEBRATE_MS, nextRound);
+}
+function nextRound() {
+  G.round++;
+  if (G.round >= G.rounds.length) finishGame(); else startRound();
+}
+function finishGame() {
+  G.phase = 'done'; Clock.clear();
+  UI.showResult(); Sound.fanfare(); Confetti.rain(150);
+  setTimeout(() => { if (G.screen === 'result') Confetti.rain(90); }, 900);
+  Sound.say(`Hooray! You got ${G.stars} stars!`);
+}
+
+/* ---------- pause and tracking lost ---------- */
+function setPaused(v) {
+  if (G.screen !== 'game' || G.phase === 'done') return;
+  G.paused = v; UI.togglePause(v);
+  if (v) Sound.hush();
+  else if (G.phase === 'clap' && G.claps === 0) Sound.say('Clap the answer!');
+}
+function setLost(v) {
+  G.lost = v; G.seenMs = 0; G.lostNag = 0; G.noHand = 0;
+  UI.toggleLost(v);
+  Sound.say(v ? LOST_SAY : 'There you are!');
+}
+
+/* ---------- called every frame ---------- */
+function gameTick(now, dt) {
+  if (G.screen === 'calib') { Calib.tick(dt, now); return; }
+  if (G.screen !== 'game' || G.paused) return;
+
+  if (G.mode === 'camera') {
+    const seeing = now - Tracker.T.lastAnyT < 350;
+    if (G.lost) {                                        // game is frozen until the child is back
+      if (seeing) { G.seenMs += dt; if (G.seenMs > 250) setLost(false); }
+      else { G.seenMs = 0; G.lostNag += dt; if (G.lostNag > 9000) { G.lostNag = 0; Sound.say(LOST_SAY); } }
+      return;
+    }
+    if (G.phase === 'clap') {                            // only matters while we wait for claps
+      G.noHand = seeing ? 0 : G.noHand + dt;
+      if (G.noHand > CFG.LOST_MS) { setLost(true); return; }
+    }
+  }
+
+  Clock.tick(dt);
+
+  if (G.phase === 'clap') {
+    G.idle += dt;
+    if (G.hint === 0 && G.idle > CFG.HINT1_MS) hintOne();
+    else if (G.hint === 1 && G.idle > CFG.HINT2_MS) hintTwo();
+    else if (G.hint === 2 && G.idle > CFG.GIVEUP_MS) complete(1);     // kind ending: show the answer, one star, move on
+  }
+}
+
+
+/* #####################################################################
+   WIRING  (start flow, errors, buttons, keyboard, main loop)
+   ##################################################################### */
+let wakeLock = null;
+async function keepAwake() {                             // the child stands away from the screen, so do not let it sleep
+  try { if ('wakeLock' in navigator && !document.hidden) wakeLock = await navigator.wakeLock.request('screen'); } catch (e) {}
+}
+
+function explainError(err) {
+  const n = err && err.name;
+  if (n === 'NotAllowedError' || n === 'SecurityError' || n === 'PermissionDeniedError')
+    return ['🙈', 'I need the camera', 'Allow the camera for this page, then try again.'];
+  if (n === 'NotFoundError' || n === 'OverconstrainedError' || n === 'DevicesNotFoundError')
+    return ['📷', 'No camera found', 'Plug in a camera and try again. Or play with taps.'];
+  if (n === 'NotReadableError' || n === 'AbortError' || n === 'TrackStartError')
+    return ['📷', 'The camera is busy', 'Close other apps that use the camera, then try again.'];
+  if (n === 'InsecureContext' || n === 'NotSupportedError')
+    return ['🔒', 'The camera is blocked here', 'Open this page with https or from localhost. Or play with taps.'];
+  if (n === 'ModelLoadError')
+    return ['🌐', 'I could not load my eyes', 'The hand tracker needs the internet the first time. Check the connection and try again.'];
+  return ['🤔', 'Something went wrong', 'Try again. Or play with taps.'];
+}
+
+function beginCalibration(onDone) {
+  Clap.reset();
+  UI.show('calib');
+  Calib.start(onDone);
+}
+
+async function play() {
+  Sound.unlock(); Sound.click();
+  G.mode = 'camera';
+  if (Tracker.T.ready) { beginCalibration(newGame); return; }
+  UI.show('loading');
+  const slow = setTimeout(() => { $('#loadingTip').textContent = 'Still loading… this can take a moment the first time.'; }, 9000);
+  try { await Tracker.init(); }
+  catch (err) { clearTimeout(slow); console.warn('Clap the Answer: start failed', err); UI.showError(...explainError(err)); return; }
+  clearTimeout(slow);
+  keepAwake();
+  beginCalibration(newGame);
+}
+
+Tracker.T.onEnded = () => {                              // camera unplugged or taken by another app
+  Clock.clear(); Sound.hush(); UI.togglePause(false); UI.toggleLost(false);
+  UI.showError('📷', 'The camera stopped', 'Try again to turn it back on. Or play with taps.');
+};
+Clap.onClap(handleClap);
+
+const tapOff = btn => { btn.blur(); Sound.click(); };
+$$('.lvl').forEach(b => b.addEventListener('click', () => {
+  G.level = +b.dataset.level; Sound.unlock(); Sound.click();
+  $$('.lvl').forEach(x => { const on = x === b; x.classList.toggle('on', on); x.setAttribute('aria-pressed', on); });
+}));
+$('#btnPlay').addEventListener('click', play);
+$('#btnRetry').addEventListener('click', play);
+$('#btnTapMode').addEventListener('click', () => { Sound.unlock(); G.mode = 'tap'; newGame(); });
+$('#btnSkip').addEventListener('click', e => { tapOff(e.currentTarget); Calib.skip(); });
+$('#btnPause').addEventListener('click', e => { tapOff(e.currentTarget); setPaused(true); });
+$('#btnResume').addEventListener('click', e => { tapOff(e.currentTarget); setPaused(false); });
+$('#btnRestart').addEventListener('click', e => { tapOff(e.currentTarget); newGame(); });
+$('#btnRestart2').addEventListener('click', e => { tapOff(e.currentTarget); newGame(); });
+$('#btnAgain').addEventListener('click', e => { tapOff(e.currentTarget); newGame(); });
+$('#btnHome').addEventListener('click', e => { tapOff(e.currentTarget); Sound.hush(); Confetti.clear(); UI.show('start'); });
+$('#btnSound').addEventListener('click', e => { e.currentTarget.blur(); Sound.setOn(!Sound.on); UI.setSoundIcon(); Sound.click(); });
+$('#btnCamCheck').addEventListener('click', e => {       // re-run calibration, then continue the same game
+  tapOff(e.currentTarget); UI.togglePause(false); UI.toggleLost(false); G.lost = false;
+  beginCalibration(() => { UI.show('game'); G.paused = false; G.noHand = 0; });
+});
+/* grown-up helper and no-camera mode: tapping the buddy or pressing space counts as one clap */
+$('#buddy').addEventListener('pointerdown', e => { e.preventDefault(); Sound.unlock(); handleClap(); });
+window.addEventListener('keydown', e => {
+  if (e.repeat) return;
+  if (e.code === 'Space' && (G.screen === 'game' || G.screen === 'calib')) { e.preventDefault(); handleClap(); }
+  else if ((e.key === 'p' || e.key === 'P' || e.key === 'Escape') && G.screen === 'game') setPaused(!G.paused);
+});
+document.addEventListener('visibilitychange', () => {
+  if (document.hidden) { if (G.screen === 'game' && !G.paused) setPaused(true); }
+  else if (G.mode === 'camera' && Tracker.T.ready) keepAwake();
+});
+
+UI.setSoundIcon();
+
+/* ---------- main loop: track -> detect claps -> game -> draw ---------- */
+let lastT = performance.now();
+function frame(now) {
+  requestAnimationFrame(frame);
+  const dt = Math.min(100, Math.max(0, now - lastT)); lastT = now;
+  if (G.mode === 'camera' && Tracker.T.ready) {
+    Tracker.step(now);
+    if (Tracker.T.fresh) { Clap.update(now, Tracker.T.hands, Tracker.T.aspect); UI.drawCamera(now); }
+  }
+  gameTick(now, dt);
+  UI.updateBuddy(now);
+  Confetti.tick(dt);
+}
+requestAnimationFrame(frame);
+
+})();
+</script>
+</body>
+</html>

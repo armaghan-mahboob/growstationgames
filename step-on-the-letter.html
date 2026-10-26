@@ -1,0 +1,1193 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Step on the Letter</title>
+<style>
+/* ==========================================================================
+   UI: STYLES
+   ========================================================================== */
+:root{
+  --ink:#2f2a5a;
+  --font: ui-rounded,"SF Pro Rounded","Nunito","Baloo 2","Fredoka","Comic Sans MS","Chalkboard SE","Trebuchet MS",system-ui,sans-serif;
+}
+*{box-sizing:border-box;margin:0;padding:0}
+html,body{height:100%;overflow:hidden}
+body{font-family:var(--font);color:var(--ink);background:#8fd3ff;user-select:none;-webkit-user-select:none}
+#app{position:fixed;inset:0;overflow:hidden;background:linear-gradient(#79c6ff 0%,#bfe9ff 55%,#eafcff 100%)}
+button{font:inherit;color:inherit;border:none;background:none;cursor:pointer}
+button:focus-visible{outline:.6vmin solid #fff;outline-offset:.4vmin}
+[hidden]{display:none !important}
+
+/* ---------- background scenery ---------- */
+.scenery{position:absolute;inset:0;z-index:0;pointer-events:none}
+.sun{position:absolute;right:6vw;top:36vh;width:13vmin;height:13vmin;border-radius:50%;
+  background:radial-gradient(circle at 35% 35%,#fff9c2,#ffd43b);
+  box-shadow:0 0 0 2.5vmin rgba(255,224,102,.35),0 0 0 5vmin rgba(255,224,102,.18)}
+.cloud{position:absolute;width:20vmin;height:6.5vmin;background:#fff;border-radius:6vmin;opacity:.92;animation:drift 70s linear infinite}
+.cloud::before,.cloud::after{content:"";position:absolute;background:#fff;border-radius:50%}
+.cloud::before{width:9vmin;height:9vmin;left:3vmin;top:-4.5vmin}
+.cloud::after{width:7vmin;height:7vmin;left:10vmin;top:-3vmin}
+.c1{left:8vw;top:30vh}
+.c2{left:55vw;top:44vh;transform:scale(.7);animation-duration:95s}
+.c3{left:30vw;top:50vh;transform:scale(.5);animation-duration:120s}
+.hill{position:absolute;border-radius:50%;background:#93e36f}
+.h1{left:-15vw;bottom:8vh;width:75vw;height:44vh}
+.h2{right:-20vw;bottom:6vh;width:80vw;height:40vh;background:#84da60}
+.ground{position:absolute;left:0;right:0;bottom:0;height:32vh;background:linear-gradient(#78d458,#59bd42)}
+
+/* ---------- shared pieces ---------- */
+.screen{position:absolute;inset:0;z-index:10;display:none}
+.screen.active{display:block}
+.screen.center.active{display:flex;align-items:center;justify-content:center}
+.card{background:#fff;border-radius:6vmin;padding:4vmin 6vmin;text-align:center;
+  box-shadow:0 1.4vmin 0 rgba(47,42,90,.14),0 3vmin 6vmin rgba(47,42,90,.2);
+  display:flex;flex-direction:column;align-items:center;gap:2.4vmin;max-width:92vw}
+h1{font-size:clamp(40px,8.5vmin,100px);line-height:1;font-weight:900}
+h2{font-size:clamp(30px,6vmin,68px);line-height:1.1;font-weight:900}
+.btn{font-weight:900;border-radius:999px;padding:.45em 1.3em;font-size:clamp(24px,4.6vmin,50px);color:#fff;
+  background:#ff7a45;box-shadow:0 .22em 0 #c9521f,0 .5em .8em rgba(0,0,0,.18);transition:transform .08s,box-shadow .08s}
+.btn:active{transform:translateY(.15em);box-shadow:0 .07em 0 #c9521f}
+.btn.green{background:#37c871;box-shadow:0 .22em 0 #1f9450,0 .5em .8em rgba(0,0,0,.18)}
+.btn.green:active{box-shadow:0 .07em 0 #1f9450}
+.btn.blue{background:#4dabf7;box-shadow:0 .22em 0 #2b7fc4,0 .5em .8em rgba(0,0,0,.18)}
+.btn.blue:active{box-shadow:0 .07em 0 #2b7fc4}
+.btn.huge{font-size:clamp(34px,7vmin,80px)}
+.btn.small{font-size:clamp(18px,3vmin,30px)}
+.btn.ghost{background:#fff;color:var(--ink);box-shadow:0 .22em 0 rgba(47,42,90,.2)}
+.row{display:flex;gap:3vmin;flex-wrap:wrap;justify-content:center}
+.big-emoji{font-size:clamp(60px,13vmin,150px);line-height:1}
+
+/* ---------- start screen ---------- */
+.logo-tiles{display:flex;gap:1.6vmin}
+.logo-tiles span{width:11vmin;height:11vmin;border-radius:2.6vmin;background:var(--c);color:#fff;font-weight:900;
+  font-size:8vmin;display:grid;place-items:center;box-shadow:0 1vmin 0 var(--cd);animation:bob 2s ease-in-out infinite}
+.logo-tiles span:nth-child(2){animation-delay:.2s}.logo-tiles span:nth-child(3){animation-delay:.4s}.logo-tiles span:nth-child(4){animation-delay:.6s}
+.how{display:flex;gap:4vmin;font-weight:800;font-size:clamp(18px,3.2vmin,34px)}
+.how div{display:flex;flex-direction:column;align-items:center}
+.how span{font-size:clamp(36px,7vmin,76px);line-height:1.1}
+.modes{display:flex;gap:1.6vmin;background:#eef1ff;border-radius:999px;padding:1vmin}
+.mode{font-weight:900;font-size:clamp(20px,3.6vmin,38px);padding:.3em 1em;border-radius:999px}
+.mode.on{background:#7c5cff;color:#fff;box-shadow:0 .18em 0 #5a3fd1}
+.grownups{font-size:clamp(13px,1.9vmin,19px);max-width:70vmin;opacity:.75;line-height:1.35}
+
+/* ---------- loading ---------- */
+.loader{display:flex;gap:2vmin}
+.loader span{width:10vmin;height:10vmin;border-radius:2.4vmin;background:var(--c);color:#fff;font-weight:900;font-size:7vmin;
+  display:grid;place-items:center;animation:hop .9s ease-in-out infinite}
+.loader span:nth-child(2){animation-delay:.15s}.loader span:nth-child(3){animation-delay:.3s}
+
+/* ---------- camera box (big in calibration, small corner preview in game) ---------- */
+#video{position:absolute;width:2px;height:2px;opacity:0;pointer-events:none}
+#camBox{position:absolute;z-index:70;display:none;--ar:1.3333;--w:20vw;width:var(--w);aspect-ratio:var(--ar);
+  border-radius:2.6vmin;overflow:hidden;border:.8vmin solid #fff;background:#2f2a5a;
+  box-shadow:0 1vmin 3vmin rgba(47,42,90,.3);
+  transition:left .6s cubic-bezier(.3,1.1,.4,1),top .6s cubic-bezier(.3,1.1,.4,1),width .6s cubic-bezier(.3,1.1,.4,1)}
+#camBox.show{display:block}
+#camBox.big{--w:min(58vw,calc(52vh * var(--ar)));left:calc(50% - var(--w) / 2);top:calc(51% - var(--w) / var(--ar) / 2)}
+#camBox.small{--w:clamp(150px,17vw,260px);left:calc(100% - var(--w) - 1.6vmin);top:1.6vmin}
+#camBox.small.medium{--w:clamp(240px,32vw,480px)}
+#camCanvas{width:100%;height:100%;display:block}
+.cam-tag{position:absolute;left:.8vmin;top:.4vmin;font-size:clamp(14px,2.4vmin,24px)}
+
+/* ---------- calibration screen ---------- */
+.cal-top{position:absolute;left:4vw;right:4vw;top:2.5vh;height:20vh;display:flex;align-items:center;justify-content:center;gap:2vmin;text-align:center}
+.cal-emoji{font-size:clamp(50px,11vmin,120px);line-height:1;animation:bob 1.6s ease-in-out infinite}
+.cal-arrow{position:absolute;top:44%;font-size:clamp(70px,15vmin,160px);line-height:1;display:none}
+.cal-arrow.show{display:block}
+.cal-arrow.left{left:5vw;animation:nudgeL .8s ease-in-out infinite}
+.cal-arrow.right{right:5vw;animation:nudgeR .8s ease-in-out infinite}
+.cal-bottom{position:absolute;left:0;right:0;bottom:2.5vh;display:flex;flex-direction:column;align-items:center;gap:1.6vh}
+.chips{display:flex;gap:1.6vmin}
+.chip{background:rgba(255,255,255,.75);border-radius:999px;padding:.25em .9em;font-weight:900;font-size:clamp(18px,3vmin,32px);opacity:.6;transition:all .2s}
+.chip.ok{background:#37c871;color:#fff;opacity:1;transform:scale(1.06)}
+.bar{width:min(60vw,720px);height:3.4vh;background:rgba(255,255,255,.75);border-radius:999px;overflow:hidden;border:.5vmin solid #fff}
+#calBar{height:100%;width:0;background:linear-gradient(90deg,#ffd43b,#37c871);border-radius:999px}
+.cal-dots{display:flex;gap:1.4vmin}
+.cal-dots span{width:2.6vmin;height:2.6vmin;border-radius:50%;background:rgba(255,255,255,.7)}
+.cal-dots span.now{background:#ffd43b;animation:pulse 1s infinite}
+.cal-dots span.done{background:#37c871}
+#btnSkipCal{position:absolute;right:2vmin;bottom:2.5vh}
+
+/* ---------- game HUD ---------- */
+.hud{position:absolute;left:1.6vmin;top:1.6vmin;z-index:20;display:flex;flex-direction:column;gap:1.3vmin}
+.hud-row{display:flex;gap:1.2vmin;align-items:center}
+.icon-btn{width:clamp(56px,9vmin,90px);height:clamp(56px,9vmin,90px);border-radius:50%;background:#fff;
+  font-size:clamp(26px,4.6vmin,46px);display:grid;place-items:center;box-shadow:0 .6vmin 0 rgba(47,42,90,.18);transition:transform .08s}
+.icon-btn:active{transform:translateY(.4vmin)}
+.pill{display:inline-flex;align-items:center;gap:.25em;background:#fff;border-radius:999px;padding:.12em .7em;font-weight:900;
+  font-size:clamp(26px,5vmin,54px);box-shadow:0 .6vmin 0 rgba(47,42,90,.14)}
+.pill.pop{animation:pop .4s}
+.pill.streak{background:#fff1d6}
+.dot{width:clamp(20px,3.3vmin,36px);height:clamp(20px,3.3vmin,36px);border-radius:50%;background:rgba(255,255,255,.65);
+  border:.4vmin solid #fff;display:grid;place-items:center;font-size:clamp(12px,2vmin,22px);line-height:1}
+.dot.now{background:#ffd43b;animation:pulse 1s infinite}
+.dot.done{background:#fff7d1}
+
+/* ---------- teacher + speech bubble ---------- */
+#teacher{position:absolute;left:50%;top:2.5vh;transform:translateX(-50%);z-index:15;display:flex;align-items:center;gap:3vmin;max-width:58vw}
+.owl{font-size:clamp(70px,16vmin,170px);line-height:1;filter:drop-shadow(0 1vmin 0 rgba(47,42,90,.14));animation:bob 2.4s ease-in-out infinite}
+.bubble{position:relative;background:#fff;border-radius:5vmin;padding:1.4vmin 4.5vmin;min-width:36vmin;height:25vmin;
+  display:flex;align-items:center;justify-content:center;gap:2.6vmin;font-weight:900;font-size:clamp(34px,7vmin,78px);
+  box-shadow:0 1vmin 0 rgba(47,42,90,.14);white-space:nowrap}
+.bubble::before{content:"";position:absolute;left:-3.6vmin;top:50%;transform:translateY(-50%);border:2.2vmin solid transparent;border-right-color:#fff}
+.bubble::after{content:"🔊";position:absolute;right:1.4vmin;bottom:.8vmin;font-size:clamp(16px,2.8vmin,28px);opacity:.6}
+.bigL{font-size:clamp(90px,21vmin,220px);line-height:1}
+.bubble .pic{font-size:clamp(70px,16vmin,170px);line-height:1}
+.bubble .word{letter-spacing:.04em;font-size:clamp(50px,11vmin,120px)}
+.slot{display:inline-block;min-width:.8em;text-align:center;color:#b6b3d6;border-bottom:.08em solid #b6b3d6}
+.reveal{animation:pop .5s;border-bottom-color:transparent}
+
+/* ---------- playfield: floor tiles + avatar ---------- */
+#playfield{position:absolute;left:3vw;right:3vw;bottom:3.5vh;height:35vh;z-index:12}
+#floor{position:absolute;inset:0;display:flex}
+.tile{flex:1;margin:0 .8vw;position:relative;border-radius:4vmin;background:linear-gradient(180deg,var(--cl),var(--c));
+  box-shadow:0 1.6vh 0 var(--cd),0 3vh 2.4vh rgba(0,0,0,.2);display:flex;align-items:center;justify-content:center;
+  transition:transform .12s,opacity .3s,filter .3s}
+.tile.pop{animation:tileIn .5s cubic-bezier(.3,1.5,.5,1) backwards}
+.tile:nth-child(2).pop{animation-delay:.08s}.tile:nth-child(3).pop{animation-delay:.16s}.tile:nth-child(4).pop{animation-delay:.24s}
+.tile .inner{position:absolute;inset:0;border-radius:inherit;overflow:hidden}
+.tile .fill{position:absolute;left:0;right:0;bottom:0;height:calc(var(--fill,0) * 100%);background:rgba(255,255,255,.4)}
+.tile .letter{position:relative;font-weight:900;font-size:clamp(90px,25vh,270px);line-height:1;color:#fff;text-shadow:0 .06em 0 var(--cd);padding-top:3vh}
+.tile.on{transform:translateY(.8vh);box-shadow:0 .8vh 0 var(--cd),0 1.6vh 1.6vh rgba(0,0,0,.2);filter:brightness(1.08)}
+.tile.thump .letter{animation:thump .2s}
+.tile.tried{opacity:.45;filter:saturate(.4)}
+.tile.oops{animation:wobble .5s}
+.tile.hint{animation:glow 1s ease-in-out infinite}
+.tile .arrow{position:absolute;left:50%;top:-12vh;margin-left:-4.5vh;font-size:9vh;line-height:1;display:none;animation:bounce .7s ease-in-out infinite;z-index:3}
+.tile.hint .arrow{display:block}
+.tile.correct{animation:win .7s;filter:brightness(1.15);
+  box-shadow:0 1.6vh 0 var(--cd),0 0 0 1.2vmin #fff3a3,0 0 8vmin 3vmin #ffe066}
+.tile.correct .arrow{display:none}
+.tile .tpic{position:absolute;right:5%;top:-5vh;font-size:10vh;line-height:1;transform:scale(0);transition:transform .45s cubic-bezier(.3,1.7,.5,1);z-index:3}
+.tile.correct .tpic{transform:scale(1) rotate(8deg)}
+
+#avatarLayer{position:absolute;left:0;right:0;top:0;height:0;z-index:13;pointer-events:none}
+#avatar{position:absolute;left:50%;bottom:-5.5vh;width:15vh;transform:translateX(-50%);transform-origin:50% 100%}
+.av-inner{animation:idle 1.6s ease-in-out infinite;transform-origin:50% 100%}
+#avatar.jump .av-inner{animation:jump .6s ease-out 2}
+#avatar svg{display:block;width:100%;overflow:visible}
+.foot{transition:transform .12s}
+#avatar.sl .footL{transform:translateY(-18px)}
+#avatar.sr .footR{transform:translateY(-18px)}
+
+/* ---------- overlays ---------- */
+.overlay{position:absolute;inset:0;z-index:60;display:none;align-items:center;justify-content:center;background:rgba(47,42,90,.55)}
+.overlay.show{display:flex}
+#overlayLost{justify-content:flex-start;padding-left:6vw}
+#overlayLost .card{max-width:54vw}
+#overlayLost .big-emoji{animation:bob 1.2s ease-in-out infinite}
+
+/* ---------- result ---------- */
+.res-stars{display:flex;gap:2vmin;font-size:clamp(60px,13vmin,140px);line-height:1}
+.rs{filter:grayscale(1);opacity:.25}
+.rs.got{filter:none;opacity:1;animation:starIn .6s cubic-bezier(.3,1.7,.5,1) backwards}
+.res-score{font-weight:900;font-size:clamp(24px,4.6vmin,50px)}
+.res-letters{display:flex;gap:2vmin}
+.mini{background:var(--c);color:#fff;border-radius:2.4vmin;padding:.8vmin 2vmin;box-shadow:0 .8vmin 0 var(--cd);
+  display:flex;align-items:center;gap:1vmin;font-weight:900}
+.mini b{font-size:clamp(30px,6vmin,64px);line-height:1}
+.mini span{font-size:clamp(26px,5vmin,54px);line-height:1}
+.mini small{font-size:clamp(14px,2.4vmin,26px)}
+
+#fx{position:absolute;inset:0;z-index:80;pointer-events:none;width:100%;height:100%}
+
+/* ---------- animations ---------- */
+@keyframes bob{0%,100%{transform:translateY(0)}50%{transform:translateY(-1.2vmin)}}
+@keyframes hop{0%,100%{transform:translateY(0)}40%{transform:translateY(-4vmin)}}
+@keyframes drift{from{margin-left:0}to{margin-left:60vw}}
+@keyframes pulse{0%,100%{transform:scale(1)}50%{transform:scale(1.22)}}
+@keyframes pop{0%{transform:scale(.6)}60%{transform:scale(1.25)}100%{transform:scale(1)}}
+@keyframes wobble{0%,100%{transform:rotate(0)}25%{transform:rotate(-3deg)}75%{transform:rotate(3deg)}}
+@keyframes glow{0%,100%{box-shadow:0 1.6vh 0 var(--cd),0 0 0 .6vmin #fff3a3,0 0 3vmin 1vmin #ffe066}
+  50%{box-shadow:0 1.6vh 0 var(--cd),0 0 0 1.4vmin #fff3a3,0 0 8vmin 3vmin #ffe066}}
+@keyframes bounce{0%,100%{transform:translateY(0)}50%{transform:translateY(2.5vh)}}
+@keyframes win{0%{transform:scale(1)}35%{transform:scale(1.09) rotate(-2deg)}70%{transform:scale(.98) rotate(1deg)}100%{transform:scale(1)}}
+@keyframes thump{0%{transform:scale(1)}50%{transform:scale(1.08,.92)}100%{transform:scale(1)}}
+@keyframes tileIn{from{transform:translateY(40vh) rotate(8deg)}to{transform:none}}
+@keyframes idle{0%,100%{transform:scale(1,1)}50%{transform:scale(1.03,.97)}}
+@keyframes jump{0%,100%{transform:translateY(0) scale(1,1)}15%{transform:translateY(0) scale(1.1,.85)}50%{transform:translateY(-9vh) scale(.95,1.08)}}
+@keyframes starIn{from{transform:scale(0) rotate(-140deg)}to{transform:scale(1) rotate(0)}}
+@keyframes nudgeL{0%,100%{transform:translateX(0)}50%{transform:translateX(-2.5vmin)}}
+@keyframes nudgeR{0%,100%{transform:translateX(0)}50%{transform:translateX(2.5vmin)}}
+/* ---------- mobile / portrait phone layout (only applies to narrow portrait screens) ---------- */
+@media (orientation:portrait) and (max-width:700px){
+  /* shared */
+  .card{padding:3vh 5vw;gap:2vh;max-width:94vw;max-height:94vh;overflow-y:auto}
+  h1{font-size:clamp(30px,9.5vw,60px)}
+  h2{font-size:clamp(22px,6.4vw,40px)}
+  .btn{font-size:clamp(20px,5.6vw,34px)}
+  .btn.huge{font-size:clamp(28px,8vw,48px)}
+  .btn.small{font-size:clamp(16px,4.2vw,24px)}
+  .big-emoji{font-size:clamp(48px,16vw,96px)}
+
+  /* start screen */
+  .logo-tiles{gap:2vw}
+  .logo-tiles span{width:13vw;height:13vw;font-size:9vw;border-radius:3vw}
+  .how{gap:4vw;font-size:clamp(14px,3.8vw,22px)}
+  .how span{font-size:clamp(30px,9vw,52px)}
+  .modes{gap:2vw;padding:1vw}
+  .mode{font-size:clamp(17px,4.8vw,28px)}
+  .grownups{font-size:clamp(12px,3.3vw,16px);max-width:80vw}
+  .loader{gap:3vw}
+  .loader span{width:14vw;height:14vw;font-size:9vw;border-radius:3vw}
+
+  /* camera preview */
+  #camBox{border-width:.8vw;border-radius:3vw}
+  #camBox.big{--w:min(84vw,calc(40vh * var(--ar)));top:calc(44% - var(--w) / var(--ar) / 2)}
+  #camBox.small{--w:clamp(110px,30vw,170px);left:calc(100% - var(--w) - 2vw);top:2vw}
+  #camBox.small.medium{--w:clamp(200px,60vw,300px)}
+
+  /* calibration screen */
+  .cal-top{top:2vh;height:auto;min-height:10vh;left:4vw;right:4vw;gap:2vw}
+  .cal-emoji{font-size:clamp(36px,12vw,64px)}
+  .cal-arrow{top:64%;font-size:clamp(48px,13vw,80px)}
+  .cal-arrow.left{left:8vw}
+  .cal-arrow.right{right:8vw}
+  .cal-bottom{bottom:11vh;gap:1.4vh;padding:0 3vw}
+  .chips{gap:1.5vw;flex-wrap:wrap;justify-content:center}
+  .chip{font-size:clamp(13px,3.6vw,20px);padding:.25em .7em;white-space:nowrap}
+  .bar{width:80vw;height:2.4vh}
+  .cal-dots{gap:2.4vw}
+  .cal-dots span{width:3vw;height:3vw}
+  #btnSkipCal{left:0;right:0;bottom:2vh;margin:0 auto;width:max-content}
+
+  /* game HUD (left) + camera preview (right) share the top band */
+  .hud{left:2vw;top:2vw;gap:1.2vw}
+  .hud-row{gap:1.6vw}
+  .icon-btn{width:clamp(44px,12vw,60px);height:clamp(44px,12vw,60px);font-size:clamp(22px,6vw,30px)}
+  .pill{font-size:clamp(20px,6vw,30px)}
+  .dot{width:clamp(14px,3.8vw,20px);height:clamp(14px,3.8vw,20px);font-size:clamp(9px,2.4vw,13px)}
+
+  /* teacher + speech bubble sit below the top band */
+  #teacher{top:19vh;max-width:96vw;gap:3vw}
+  .owl{font-size:clamp(48px,16vw,80px)}
+  .bubble{height:auto;min-height:15vh;min-width:0;padding:1vh 4vw;border-radius:5vw;gap:2.4vw;font-size:clamp(22px,6.4vw,38px)}
+  .bubble::before{left:-3.4vw;border-width:2.4vw}
+  .bubble::after{right:1.2vw;bottom:.6vh;font-size:clamp(12px,3.2vw,18px)}
+  .bigL{font-size:clamp(56px,18vw,100px)}
+  .bubble .pic{font-size:clamp(46px,15vw,84px)}
+  .bubble .word{font-size:clamp(34px,10.5vw,60px)}
+
+  /* floor tiles: let them shrink so all 4 fit the screen width */
+  #playfield{left:2vw;right:2vw;height:38vh;bottom:3vh}
+  .tile{min-width:0;margin:0 .8vw;border-radius:4vw}
+  .tile .letter{font-size:clamp(40px,17vw,100px);padding-top:2vh}
+  .tile .arrow{top:-9vh;font-size:7vh;margin-left:-3.5vh}
+  .tile .tpic{font-size:min(7vh,14vw);top:-3.5vh}
+  #avatar{width:min(15vh,24vw)}
+
+  /* overlays + result */
+  #overlayLost{justify-content:center;padding:0 4vw}
+  #overlayLost .card{max-width:90vw}
+  .res-stars{gap:2vw;font-size:clamp(44px,15vw,90px)}
+  .res-score{font-size:clamp(20px,5.6vw,34px)}
+  .res-letters{gap:2vw;flex-wrap:wrap;justify-content:center}
+  .mini{padding:1vw 2.4vw;border-radius:3vw;gap:1.4vw}
+  .mini b{font-size:clamp(22px,7vw,40px)}
+  .mini span{font-size:clamp(20px,6vw,36px)}
+  .mini small{font-size:clamp(11px,3vw,16px)}
+}
+@media (prefers-reduced-motion:reduce){.cloud,.owl,.logo-tiles span,.cal-emoji{animation:none}}
+</style>
+</head>
+<body>
+<!-- ==========================================================================
+     UI: MARKUP
+     ========================================================================== -->
+<div id="app">
+  <div class="scenery" aria-hidden="true">
+    <div class="sun"></div>
+    <div class="cloud c1"></div><div class="cloud c2"></div><div class="cloud c3"></div>
+    <div class="hill h1"></div><div class="hill h2"></div>
+    <div class="ground"></div>
+  </div>
+
+  <!-- hidden camera source; the mirrored picture is drawn onto #camCanvas -->
+  <video id="video" playsinline muted></video>
+  <div id="camBox" class="small"><canvas id="camCanvas" width="480" height="360"></canvas><span class="cam-tag">📷</span></div>
+
+  <!-- START -->
+  <section id="screenStart" class="screen center active">
+    <div class="card">
+      <div class="logo-tiles" aria-hidden="true">
+        <span style="--c:#ff6b6b;--cd:#d64545">A</span><span style="--c:#4dabf7;--cd:#2b7fc4">B</span>
+        <span style="--c:#40c463;--cd:#249a45">C</span><span style="--c:#ffa53b;--cd:#d97a10">D</span>
+      </div>
+      <h1>Step on the Letter</h1>
+      <div class="how" aria-hidden="true">
+        <div><span>👂</span>Listen</div><div><span>🚶</span>Walk</div><div><span>👣</span>Step</div><div><span>⭐</span>Stars</div>
+      </div>
+      <div class="modes" role="group" aria-label="Level">
+        <button class="mode on" data-mode="easy">🐣 Easy</button>
+        <button class="mode" data-mode="tricky">🦊 Tricky</button>
+      </div>
+      <button id="btnStart" class="btn green huge">▶ Start</button>
+      <p class="grownups">Grown-ups: clear the floor, stand your child 2 to 3 metres from the camera so the whole body is visible, and remind them to walk, not run. The video is processed on this computer only.</p>
+    </div>
+  </section>
+
+  <!-- LOADING -->
+  <section id="screenLoading" class="screen center">
+    <div class="card">
+      <div class="loader" aria-hidden="true">
+        <span style="--c:#ff6b6b">A</span><span style="--c:#4dabf7">B</span><span style="--c:#40c463">C</span>
+      </div>
+      <h2 id="loadText">Getting ready…</h2>
+    </div>
+  </section>
+
+  <!-- CALIBRATION -->
+  <section id="screenCalib" class="screen">
+    <div class="cal-top"><div id="calEmoji" class="cal-emoji">🧍</div><h2 id="calTitle">Stand in the middle!</h2></div>
+    <div id="calArrowL" class="cal-arrow left" aria-hidden="true">⬅️</div>
+    <div id="calArrowR" class="cal-arrow right" aria-hidden="true">➡️</div>
+    <div class="cal-bottom">
+      <div class="chips">
+        <span id="chipSee" class="chip">👀 I see you</span>
+        <span id="chipMid" class="chip">🎯 Middle</span>
+        <span id="chipFeet" class="chip">👟 Feet</span>
+      </div>
+      <div class="bar"><div id="calBar"></div></div>
+      <div class="cal-dots" id="calDots"><span></span><span></span><span></span></div>
+    </div>
+    <button id="btnSkipCal" class="btn small ghost">Skip ⏭</button>
+  </section>
+
+  <!-- GAME -->
+  <section id="screenGame" class="screen">
+    <div class="hud">
+      <div class="hud-row">
+        <button id="btnPause" class="icon-btn" aria-label="Pause">⏸️</button>
+        <button id="btnRestart" class="icon-btn" aria-label="Restart">🔄</button>
+      </div>
+      <div class="hud-row">
+        <div class="pill" id="scorePill">⭐ <b id="scoreNum">0</b></div>
+        <div class="pill streak" id="streakPill" hidden>🔥 <b id="streakNum">0</b></div>
+      </div>
+      <div class="hud-row" id="progress"></div>
+    </div>
+    <div id="teacher">
+      <div class="owl" aria-hidden="true">🦉</div>
+      <button id="bubble" class="bubble" aria-label="Say it again"></button>
+    </div>
+    <div id="playfield">
+      <div id="floor"></div>
+      <div id="avatarLayer">
+        <div id="avatar"><div class="av-inner">
+          <svg viewBox="0 0 120 150" aria-hidden="true">
+            <ellipse cx="60" cy="142" rx="40" ry="6" fill="rgba(0,0,0,.18)"/>
+            <g class="foot footL"><ellipse cx="40" cy="133" rx="18" ry="10" fill="#ff5d8f"/><ellipse cx="34" cy="130" rx="7" ry="3" fill="#fff" opacity=".6"/></g>
+            <g class="foot footR"><ellipse cx="80" cy="133" rx="18" ry="10" fill="#ff5d8f"/><ellipse cx="86" cy="130" rx="7" ry="3" fill="#fff" opacity=".6"/></g>
+            <path d="M60 10C92 10 108 40 106 76c-2 32-18 50-46 50S16 108 14 76C12 40 28 10 60 10Z" fill="#8f6bff"/>
+            <ellipse cx="60" cy="96" rx="27" ry="20" fill="#c3b2ff"/>
+            <circle cx="43" cy="54" r="14" fill="#fff"/><circle cx="77" cy="54" r="14" fill="#fff"/>
+            <circle cx="45" cy="56" r="7" fill="#2f2a5a"/><circle cx="79" cy="56" r="7" fill="#2f2a5a"/>
+            <circle cx="47" cy="53" r="2.5" fill="#fff"/><circle cx="81" cy="53" r="2.5" fill="#fff"/>
+            <ellipse cx="28" cy="74" rx="7" ry="4.5" fill="#ff9ecb" opacity=".85"/><ellipse cx="92" cy="74" rx="7" ry="4.5" fill="#ff9ecb" opacity=".85"/>
+            <path d="M46 74q14 14 28 0" fill="none" stroke="#2f2a5a" stroke-width="4" stroke-linecap="round"/>
+          </svg>
+        </div></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- RESULT -->
+  <section id="screenResult" class="screen center">
+    <div class="card">
+      <div class="big-emoji">🎉</div>
+      <h1 id="resTitle">You did it!</h1>
+      <div id="resStars" class="res-stars"></div>
+      <p class="res-score">You collected <b id="resScore">0</b> stars!</p>
+      <div id="resLetters" class="res-letters"></div>
+      <div class="row">
+        <button id="btnAgain" class="btn green">🔁 Play Again</button>
+        <button id="btnNew" class="btn blue">🔤 New Letters</button>
+      </div>
+    </div>
+  </section>
+
+  <!-- ERROR -->
+  <section id="screenError" class="screen center">
+    <div class="card">
+      <div class="big-emoji">📷</div>
+      <h2 id="errTitle">I need the camera to play</h2>
+      <p id="errMsg" class="grownups" style="font-size:clamp(16px,2.6vmin,26px);opacity:1"></p>
+      <button id="btnRetry" class="btn green">Try Again</button>
+    </div>
+  </section>
+
+  <!-- PAUSE OVERLAY -->
+  <div id="overlayPause" class="overlay">
+    <div class="card">
+      <div class="big-emoji">😴</div>
+      <h1>Paused</h1>
+      <div class="row">
+        <button id="btnResume" class="btn green huge">▶ Play</button>
+      </div>
+      <div class="row">
+        <button id="btnRestart2" class="btn blue small">🔄 Restart</button>
+        <button id="btnRecal" class="btn ghost small">🎯 Set up again</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- TRACKING LOST OVERLAY -->
+  <div id="overlayLost" class="overlay">
+    <div class="card">
+      <div class="big-emoji">👀</div>
+      <h2>I can’t see you.</h2>
+      <h2>Step back so I can see you!</h2>
+    </div>
+  </div>
+
+  <canvas id="fx"></canvas>
+</div>
+
+<script>
+(() => {
+'use strict';
+
+/* ==========================================================================
+   CONFIG (tune these numbers if detection feels too easy or too strict)
+   ========================================================================== */
+const CFG = {
+  MP_BASE: 'https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.14',
+  MODEL: 'https://storage.googleapis.com/mediapipe-models/pose_landmarker/pose_landmarker_lite/float16/1/pose_landmarker_lite.task',
+  SMOOTH_TAU: 0.12,      // seconds, smoothing of the body position (higher = calmer, slower)
+  LOST_MS: 1000,         // no body for this long = tracking lost
+  FOUND_MS: 350,         // body must be back this long before the game resumes
+  DWELL: 1.3,            // seconds standing on a tile to choose it
+  STEP_BOOST: 0.45,      // each stomp on a tile adds this many seconds
+  STILL_SPEED: 0.8,      // tiles per second; slower than this counts as "standing"
+  HYST: 0.14,            // extra distance (in tiles) needed to leave the current tile
+  CENTER_TOL: 0.17,      // how far from the middle of the picture still counts as centred
+  CAL_HOLD: 1.3,         // seconds to hold the centre pose
+  CAL_SIDE_HOLD: 0.8,    // seconds to hold each side step
+  CAL_MIN_STEP: 0.09,    // minimum sideways move (fraction of picture width)
+  CAL_TIMEOUT: 12,       // seconds before a side step is accepted anyway
+  ROUND_TYPES: ['L','L','P','L','P','L','P','P'],   // L = letter name, P = phonics word
+  SHUFFLE_AT: 4          // tiles swap places before this round (0-based)
+};
+
+const LETTER_SETS = [
+  [{l:'A',word:'Apple',emoji:'🍎'},{l:'B',word:'Ball',emoji:'⚽'},{l:'C',word:'Cat',emoji:'🐱'},{l:'D',word:'Dog',emoji:'🐶'}],
+  [{l:'E',word:'Egg',emoji:'🥚'},{l:'F',word:'Fish',emoji:'🐟'},{l:'G',word:'Goat',emoji:'🐐'},{l:'H',word:'Hat',emoji:'🎩'}],
+  [{l:'M',word:'Moon',emoji:'🌙'},{l:'P',word:'Pig',emoji:'🐷'},{l:'S',word:'Sun',emoji:'🌞'},{l:'T',word:'Tiger',emoji:'🐯'}]
+];
+const TILE_COLORS = [
+  {c:'#ff6b6b',l:'#ff9a8f',d:'#d64545'},
+  {c:'#4dabf7',l:'#86c8ff',d:'#2b7fc4'},
+  {c:'#40c463',l:'#7fe096',d:'#249a45'},
+  {c:'#ffa53b',l:'#ffc978',d:'#d97a10'}
+];
+const PRAISE = ['Yes!','Great stepping!','You found it!','Super!','Wow!','Hooray!'];
+const TRY_AGAIN = ['Try again!','Keep looking!','So close!'];
+const LOST_TEXT = "I can't see you. Step back so I can see you!";
+
+/* ---------- small helpers ---------- */
+const $ = id => document.getElementById(id);
+const clamp = (v,a,b) => Math.max(a, Math.min(b, v));
+const pick = arr => arr[Math.floor(Math.random()*arr.length)];
+function shuffled(arr){
+  const a = arr.slice();
+  for(let i=a.length-1;i>0;i--){ const j=Math.floor(Math.random()*(i+1)); [a[i],a[j]]=[a[j],a[i]]; }
+  return a;
+}
+function setText(el, text){ if(el._t !== text){ el._t = text; el.textContent = text; } }
+function setClass(el, name, on){ const k='_c_'+name; if(el[k] !== on){ el[k] = on; el.classList.toggle(name, on); } }
+
+const video = $('video'), camBox = $('camBox'), cam = $('camCanvas'), camCtx = cam.getContext('2d');
+const App = { screen:'start', mode:'easy', setIndex:0 };
+
+/* ==========================================================================
+   AUDIO: sound effects (Web Audio) and voice (speech synthesis)
+   ========================================================================== */
+const Sfx = (() => {
+  let ctx = null;
+  function ensure(){
+    if(!ctx){ const AC = window.AudioContext || window.webkitAudioContext; if(AC) ctx = new AC(); }
+    if(ctx && ctx.state === 'suspended') ctx.resume();
+    return ctx;
+  }
+  function tone(freq, start, dur, type, vol, slideTo){
+    const o = ctx.createOscillator(), g = ctx.createGain();
+    o.type = type || 'sine';
+    o.frequency.setValueAtTime(freq, start);
+    if(slideTo) o.frequency.exponentialRampToValueAtTime(slideTo, start + dur);
+    g.gain.setValueAtTime(0.0001, start);
+    g.gain.exponentialRampToValueAtTime(vol || 0.2, start + 0.02);
+    g.gain.exponentialRampToValueAtTime(0.0001, start + dur);
+    o.connect(g); g.connect(ctx.destination);
+    o.start(start); o.stop(start + dur + 0.05);
+  }
+  function play(fn){ const c = ensure(); if(!c) return; try{ fn(c.currentTime); }catch(e){} }
+  return {
+    unlock: ensure,
+    correct(){ play(t => { [523.25,659.25,783.99,1046.5].forEach((f,i)=>tone(f,t+i*0.09,0.3,'triangle',0.22)); tone(1318.5,t+0.36,0.5,'sine',0.15); }); },
+    oops(){ play(t => { tone(392,t,0.16,'sine',0.13); tone(330,t+0.15,0.26,'sine',0.13); }); },   // soft, not a buzzer
+    step(){ play(t => tone(150,t,0.09,'sine',0.2,90)); },
+    star(){ play(t => { tone(880,t,0.12,'triangle',0.18); tone(1320,t+0.08,0.24,'triangle',0.18); }); },
+    pop(){ play(t => tone(500,t,0.12,'sine',0.15,900)); },
+    whoosh(){ play(t => tone(250,t,0.4,'triangle',0.12,800)); },
+    fanfare(){ play(t => { [[523.25,0],[523.25,.14],[523.25,.28],[659.25,.42],[783.99,.62],[1046.5,.86]].forEach(n=>tone(n[0],t+n[1],n[1]>.8?0.8:0.22,'triangle',0.22)); }); }
+  };
+})();
+
+const Voice = (() => {
+  const ok = 'speechSynthesis' in window && typeof SpeechSynthesisUtterance !== 'undefined';
+  let voice = null, cur = null, busyUntil = 0;
+  function choose(){
+    const en = speechSynthesis.getVoices().filter(v => /^en/i.test(v.lang));
+    if(!en.length) return;
+    const prefs = [/Samantha/i,/Google US English/i,/Aria/i,/Jenny/i,/Zira/i,/Karen/i,/Female/i];
+    for(const re of prefs){ const v = en.find(x => re.test(x.name)); if(v){ voice = v; return; } }
+    voice = en.find(v => /en[-_]US/i.test(v.lang)) || en[0];
+  }
+  if(ok){ choose(); if(speechSynthesis.addEventListener) speechSynthesis.addEventListener('voiceschanged', choose); }
+  function say(text){
+    if(!ok) return;
+    try{
+      speechSynthesis.cancel();
+      const u = new SpeechSynthesisUtterance(text);
+      if(voice) u.voice = voice;
+      u.lang = (voice && voice.lang) || 'en-US';
+      u.rate = 0.88; u.pitch = 1.15;
+      u.onend = u.onerror = () => { if(cur === u) cur = null; };
+      cur = u; busyUntil = performance.now() + 900 + text.length * 85;
+      setTimeout(() => { if(cur === u) speechSynthesis.speak(u); }, 70);   // small gap avoids a Chrome cancel/speak glitch
+    }catch(e){}
+  }
+  function stop(){ if(ok){ cur = null; speechSynthesis.cancel(); } }
+  function isBusy(){ return !!cur && performance.now() < busyUntil; }
+  return { say, stop, isBusy };
+})();
+
+/* ==========================================================================
+   UI: confetti and star particles (full-screen canvas)
+   ========================================================================== */
+const FX = (() => {
+  const cv = $('fx'), g = cv.getContext('2d');
+  const COL = ['#ff6b6b','#4dabf7','#40c463','#ffd43b','#b197fc','#ff922b'];
+  const parts = []; let W = 0, H = 0, rainLeft = 0, rainAcc = 0;
+  function resize(){
+    const dpr = Math.min(2, window.devicePixelRatio || 1);
+    W = innerWidth; H = innerHeight; cv.width = W*dpr; cv.height = H*dpr; g.setTransform(dpr,0,0,dpr,0,0);
+  }
+  addEventListener('resize', resize); resize();
+  function add(p){ if(parts.length < 500) parts.push(p); }
+  function burst(x, y, n, stars){
+    for(let i=0;i<n;i++) add({x,y,vx:(Math.random()-.5)*800,vy:-(250+Math.random()*650),r:Math.random()*6.3,vr:(Math.random()-.5)*12,
+      s:8+Math.random()*10,c:pick(COL),life:1.5+Math.random()*.9,t:0,g:1,kind:'rect'});
+    for(let i=0;i<(stars||0);i++) add({x,y,vx:(i-(stars-1)/2)*220+(Math.random()-.5)*60,vy:-820-Math.random()*120,r:0,vr:0,
+      s:44,c:'',life:1.5,t:0,g:.9,kind:'star'});
+  }
+  function puff(x, y){
+    for(let i=0;i<6;i++) add({x:x+(Math.random()-.5)*40,y,vx:(Math.random()-.5)*160,vy:-40-Math.random()*60,r:0,vr:0,
+      s:6+Math.random()*6,c:'rgba(255,255,255,.85)',life:.45,t:0,g:.05,kind:'dot'});
+  }
+  function rain(seconds){ rainLeft = seconds; }
+  function update(dt){
+    if(rainLeft > 0){
+      rainLeft -= dt; rainAcc += dt*45;
+      while(rainAcc > 1){ rainAcc--; add({x:Math.random()*W,y:-20,vx:(Math.random()-.5)*120,vy:80+Math.random()*160,r:Math.random()*6.3,
+        vr:(Math.random()-.5)*10,s:8+Math.random()*10,c:pick(COL),life:5,t:0,g:.25,kind:'rect'}); }
+    }
+    for(let i=parts.length-1;i>=0;i--){
+      const p = parts[i]; p.t += dt;
+      if(p.t > p.life || p.y > H+60){ parts.splice(i,1); continue; }
+      p.vy += 1200*dt*p.g; p.x += p.vx*dt; p.y += p.vy*dt; p.r += p.vr*dt;
+    }
+  }
+  function draw(){
+    g.clearRect(0,0,W,H);
+    for(const p of parts){
+      g.globalAlpha = clamp((p.life-p.t)/0.4, 0, 1);
+      if(p.kind === 'star'){ g.font = p.s+'px serif'; g.textAlign='center'; g.fillText('⭐', p.x, p.y); }
+      else if(p.kind === 'dot'){ g.fillStyle=p.c; g.beginPath(); g.arc(p.x,p.y,p.s,0,6.3); g.fill(); }
+      else { g.save(); g.translate(p.x,p.y); g.rotate(p.r); g.fillStyle=p.c; g.fillRect(-p.s/2,-p.s/3,p.s,p.s*.66); g.restore(); }
+    }
+    g.globalAlpha = 1;
+  }
+  return { burst, puff, rain, update, draw, clear(){ parts.length = 0; rainLeft = 0; } };
+})();
+
+/* ==========================================================================
+   TRACKING SYSTEM: webcam + MediaPipe Pose Landmarker
+   Produces: T.bodyX (smoothed, mirrored, 0..1), T.vx, T.lost, step events
+   ========================================================================== */
+const T = {
+  ready:false, landmarker:null, lastVideoTime:-1, lastPoseAt:-1e9,
+  lost:true, lastSeenAt:-1e9, seenSince:0,
+  pts:null,              // smoothed, mirrored landmarks for drawing
+  bodyX:0.5, vx:0,       // horizontal body position and speed (picture widths per second)
+  fullBody:false, feetVisible:false, tooClose:false, torso:0.25,
+  stepD:0, stepBase:0, stepSrc:'', lifted:false, lastStepAt:0,
+  onStep:null
+};
+const BONES = [[11,12],[11,23],[12,24],[23,24],[11,13],[13,15],[12,14],[14,16],[23,25],[25,27],[24,26],[26,28]];
+
+async function startCamera(){
+  if(!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia){
+    const e = new Error('no camera api'); e.name = 'InsecureContext'; throw e;
+  }
+  if(!(video.srcObject && video.srcObject.active)){
+    video.srcObject = await navigator.mediaDevices.getUserMedia({
+      audio:false, video:{ facingMode:'user', width:{ideal:640}, height:{ideal:480}, frameRate:{ideal:30} }
+    });
+  }
+  await video.play();
+  if(!video.videoWidth) await new Promise(res => video.addEventListener('loadedmetadata', res, {once:true}));
+  const ar = (video.videoWidth / video.videoHeight) || 4/3;
+  cam.width = 480; cam.height = Math.round(480/ar);
+  camBox.style.setProperty('--ar', ar.toFixed(4));
+}
+
+async function loadModel(){
+  try{
+    const vision = await import(CFG.MP_BASE + '/vision_bundle.mjs');
+    const files = await vision.FilesetResolver.forVisionTasks(CFG.MP_BASE + '/wasm');
+    const make = delegate => vision.PoseLandmarker.createFromOptions(files, {
+      baseOptions:{ modelAssetPath: CFG.MODEL, delegate },
+      runningMode:'VIDEO', numPoses:1,
+      minPoseDetectionConfidence:0.5, minPosePresenceConfidence:0.5, minTrackingConfidence:0.5
+    });
+    try{ T.landmarker = await make('GPU'); }catch(e){ T.landmarker = await make('CPU'); }
+  }catch(e){
+    console.error(e);
+    const err = new Error('model load failed'); err.name = 'ModelLoadError'; throw err;
+  }
+}
+
+/* Turn one frame of raw landmarks into smoothed game inputs */
+function processPose(lm, now){
+  if(!lm){ T.seenSince = 0; return; }
+  const ok = i => { const p = lm[i];
+    return !!p && (p.visibility === undefined || p.visibility > 0.45) && p.x > -0.05 && p.x < 1.05 && p.y > -0.05 && p.y < 1.05; };
+  const sh = ok(11)&&ok(12), hp = ok(23)&&ok(24), kn = ok(25)&&ok(26), an = ok(27)&&ok(28);
+  if(!sh && !hp){ T.seenSince = 0; return; }
+
+  const fresh = (now - T.lastPoseAt) > 600 || !T.pts;      // re-acquired: snap instead of gliding
+  const dt = clamp((now - T.lastPoseAt)/1000, 0.001, 0.2);
+  T.lastPoseAt = now;
+
+  // Horizontal body position: mirrored (1 - x), weighted toward hips and feet
+  const mid = (a,b) => 1 - (lm[a].x + lm[b].x)/2;
+  let sum = 0, w = 0;
+  if(hp){ sum += mid(23,24)*2; w += 2; }
+  if(sh){ sum += mid(11,12); w += 1; }
+  if(an){ sum += mid(27,28)*2; w += 2; } else if(kn){ sum += mid(25,26)*1.5; w += 1.5; }
+  const rawX = sum/w;
+
+  // Smoothing (exponential, frame-rate independent)
+  if(fresh){ T.bodyX = rawX; T.vx = 0; }
+  else{
+    const prev = T.bodyX;
+    T.bodyX += (rawX - T.bodyX) * (1 - Math.exp(-dt/CFG.SMOOTH_TAU));
+    T.vx += ((T.bodyX - prev)/dt - T.vx) * (1 - Math.exp(-dt/0.18));
+  }
+  if(!T.pts) T.pts = Array.from({length:33}, () => ({x:.5,y:.5,v:0}));
+  const a2 = fresh ? 1 : 1 - Math.exp(-dt/0.06);
+  for(let i=0;i<33;i++){
+    const p = lm[i], q = T.pts[i]; if(!p) continue;
+    q.x += ((1 - p.x) - q.x)*a2; q.y += (p.y - q.y)*a2; q.v = ok(i) ? 1 : 0;
+  }
+
+  // Visibility facts used by calibration
+  T.fullBody = sh && hp; T.feetVisible = an;
+  if(sh && hp) T.torso = clamp(Math.abs((lm[23].y+lm[24].y)/2 - (lm[11].y+lm[12].y)/2), 0.05, 0.6);
+  T.tooClose = (sh && Math.abs(lm[11].x - lm[12].x) > 0.42) || (sh && !hp);
+
+  // Step / stomp detection: one foot (or knee) rises compared with the other
+  let a = null, b = null, up = 0, down = 0, src = '';
+  if(an){ a = lm[27].y; b = lm[28].y; up = 0.10; down = 0.045; src = 'ankle'; }
+  else if(kn){ a = lm[25].y; b = lm[26].y; up = 0.065; down = 0.03; src = 'knee'; }
+  if(a === null){ T.lifted = false; T.stepSrc = ''; }
+  else{
+    const d = (a - b)/T.torso;
+    if(fresh || src !== T.stepSrc){ T.stepD = d; T.stepBase = d; T.stepSrc = src; }
+    T.stepD += (d - T.stepD) * (1 - Math.exp(-dt/0.05));
+    T.stepBase += (T.stepD - T.stepBase) * (1 - Math.exp(-dt/1.2));   // slow baseline removes a tilted stance
+    const diff = T.stepD - T.stepBase;
+    if(!T.lifted && Math.abs(diff) > up && now - T.lastStepAt > 260){
+      T.lifted = true; T.lastStepAt = now;
+      if(T.onStep) T.onStep(diff > 0 ? 'R' : 'L');
+    } else if(T.lifted && Math.abs(diff) < down) T.lifted = false;
+  }
+
+  if(!T.seenSince) T.seenSince = now;
+  T.lastSeenAt = now;
+}
+
+function trackerUpdate(now){
+  if(!T.ready) return;
+  if(video.readyState >= 2 && video.videoWidth > 0 && video.currentTime !== T.lastVideoTime){
+    T.lastVideoTime = video.currentTime;
+    let lm = null;
+    try{ const res = T.landmarker.detectForVideo(video, now); lm = (res && res.landmarks && res.landmarks[0]) || null; }
+    catch(e){ console.warn(e); }
+    processPose(lm, now);
+  }
+  if(T.lost){ if(T.seenSince && now - T.seenSince > CFG.FOUND_MS) T.lost = false; }
+  else if(now - T.lastSeenAt > CFG.LOST_MS) T.lost = true;
+}
+
+/* ---------- camera preview drawing (mirrored video + skeleton + zones) ---------- */
+function drawSkeleton(g, w, h){
+  const P = T.pts; g.lineCap = 'round';
+  for(const pass of [['rgba(47,42,90,.6)',11],['#ffffff',5]]){
+    g.strokeStyle = pass[0]; g.lineWidth = pass[1]; g.beginPath();
+    for(const [a,b] of BONES){ if(P[a].v && P[b].v){ g.moveTo(P[a].x*w,P[a].y*h); g.lineTo(P[b].x*w,P[b].y*h); } }
+    g.stroke();
+  }
+  if(P[0].v){ g.strokeStyle='#fff'; g.lineWidth=5; g.beginPath(); g.arc(P[0].x*w,P[0].y*h,Math.max(16,T.torso*h*0.33),0,6.3); g.stroke(); }
+  for(const i of [27,28]){ if(P[i].v){ g.fillStyle='#ffd43b'; g.strokeStyle='#fff'; g.lineWidth=3; g.beginPath(); g.arc(P[i].x*w,P[i].y*h,10,0,6.3); g.fill(); g.stroke(); } }
+  // marker showing the horizontal position the game is using
+  g.fillStyle='#ffd43b'; g.strokeStyle='#2f2a5a'; g.lineWidth=3;
+  const bx = T.bodyX*w; g.beginPath(); g.moveTo(bx,h-34); g.lineTo(bx-14,h-8); g.lineTo(bx+14,h-8); g.closePath(); g.fill(); g.stroke();
+}
+function drawZones(g, w, h){
+  const N = G.N, bw = (Zone.R - Zone.L)/N;
+  g.textAlign = 'center'; g.font = '900 ' + Math.round(h*0.17) + 'px sans-serif';
+  for(let i=0;i<N;i++){
+    const x0 = i===0 ? 0 : Zone.L + i*bw, x1 = i===N-1 ? 1 : Zone.L + (i+1)*bw;
+    g.globalAlpha = i === G.zone ? 0.5 : 0.2; g.fillStyle = TILE_COLORS[G.order[i]].c;
+    g.fillRect(x0*w, 0, (x1-x0)*w, h);
+    g.globalAlpha = 1; g.fillStyle = '#fff'; g.strokeStyle = 'rgba(47,42,90,.7)'; g.lineWidth = 4;
+    const cx = (Zone.L + (i+.5)*bw)*w, L = G.letters[G.order[i]].l;
+    g.strokeText(L, cx, h*0.2); g.fillText(L, cx, h*0.2);
+  }
+}
+function drawCalGuides(g, w, h, now){
+  if(Cal.step === 'center'){
+    const x0 = (0.5-CFG.CENTER_TOL)*w, x1 = (0.5+CFG.CENTER_TOL)*w;
+    const good = !T.lost && T.fullBody && !T.tooClose && Math.abs(T.bodyX-0.5) < CFG.CENTER_TOL;
+    g.fillStyle = good ? 'rgba(64,196,99,.28)' : 'rgba(255,255,255,.2)'; g.fillRect(x0,0,x1-x0,h);
+    g.setLineDash([14,10]); g.lineWidth = 5; g.strokeStyle = good ? '#40c463' : '#fff'; g.strokeRect(x0,6,x1-x0,h-12); g.setLineDash([]);
+    g.font = Math.round(h*0.13)+'px serif'; g.textAlign='center'; g.fillText('👣', w/2, h-14);
+  } else if(Cal.step === 'left' || Cal.step === 'right'){
+    const dir = Cal.step === 'left' ? -1 : 1;
+    const sx = clamp(Cal.centerX + dir*0.21, 0.1, 0.9)*w, s = 1 + 0.12*Math.sin(now/160);
+    g.font = Math.round(h*0.24*s)+'px serif'; g.textAlign='center'; g.textBaseline='middle';
+    g.fillText('⭐', sx, h*0.45); g.textBaseline='alphabetic';
+  } else if(Cal.step === 'done'){
+    g.font = Math.round(h*0.4)+'px serif'; g.textAlign='center'; g.textBaseline='middle'; g.fillText('🎉', w/2, h/2); g.textBaseline='alphabetic';
+  }
+}
+function renderCam(now){
+  if(!T.ready) return;
+  const g = camCtx, w = cam.width, h = cam.height;
+  g.save(); g.translate(w,0); g.scale(-1,1);            // mirror so movement feels natural
+  try{ g.drawImage(video,0,0,w,h); }catch(e){}
+  g.restore();
+  if(App.screen === 'calib') drawCalGuides(g,w,h,now);
+  else if(App.screen === 'game') drawZones(g,w,h);
+  if(T.pts && !T.lost) drawSkeleton(g,w,h);
+}
+
+/* ==========================================================================
+   CALIBRATION: 1) visible + centred  2) step to one side  3) step to the other
+   The two side positions become the left/right boundaries of the virtual floor.
+   ========================================================================== */
+const Zone = { L:0.3, R:0.7 };
+const Cal = { step:'center', hold:0, elapsed:0, extreme:0, centerX:0.5, left:0.3, right:0.7, timer:0 };
+let lastLostSay = 0;
+function sayLost(now){ if(now - lastLostSay > 7000){ lastLostSay = now; Voice.say(LOST_TEXT); } }
+
+function beginCalibration(){
+  show('calib');
+  Object.assign(Cal, {step:'center', hold:0, elapsed:0, extreme:0, centerX:0.5});
+  lastLostSay = performance.now();
+  calDots(0);
+  Voice.say('Stand in the middle so I can see you!');
+}
+function calDots(n){
+  [...$('calDots').children].forEach((d,i) => { d.className = i < n ? 'done' : i === n ? 'now' : ''; });
+}
+function calNext(step){
+  const r = camBox.getBoundingClientRect();
+  Sfx.star(); FX.burst(r.left + r.width/2, r.top + r.height/2, 30, 1);
+  Cal.step = step; Cal.hold = 0; Cal.elapsed = 0; Cal.extreme = 0;
+  if(step === 'left'){ calDots(1); Voice.say('Great! Now take a step sideways to the star!'); }
+  else if(step === 'right'){ calDots(2); Voice.say('Super! Now step to the other star!'); }
+  else if(step === 'done'){
+    calDots(3);
+    let L = Math.min(Cal.left, Cal.right), R = Math.max(Cal.left, Cal.right);
+    if(R - L < 0.2){ const c = (L+R)/2; L = c - 0.1; R = c + 0.1; }
+    const span = R - L;                       // pull the edges in a little so the outer tiles are easy to reach
+    Zone.L = L + span*0.05; Zone.R = R - span*0.05;
+    Cal.timer = 1.8;
+    Voice.say("Perfect! Let's play!");
+  }
+}
+function skipCalibration(){
+  const cx = T.lost ? 0.5 : clamp(T.bodyX, 0.3, 0.7);
+  Zone.L = cx - 0.2; Zone.R = cx + 0.2;
+  startGame();
+}
+function calUpdate(now, dt){
+  const title = $('calTitle'), emoji = $('calEmoji');
+  setClass($('calArrowL'), 'show', Cal.step === 'left');
+  setClass($('calArrowR'), 'show', Cal.step === 'right');
+  if(Cal.step === 'done'){
+    setText(title, "Perfect! Let's play!"); setText(emoji, '🎉'); $('calBar').style.width = '100%';
+    Cal.timer -= dt; if(Cal.timer <= 0) startGame();
+    return;
+  }
+  if(T.lost){
+    setText(title, 'I can’t see you. Step back so I can see you!'); setText(emoji, '👀');
+    setClass($('chipSee'),'ok',false); setClass($('chipMid'),'ok',false); setClass($('chipFeet'),'ok',false);
+    Cal.hold = Math.max(0, Cal.hold - dt);
+    sayLost(now);
+  } else {
+    setClass($('chipSee'),'ok',T.fullBody); setClass($('chipFeet'),'ok',T.feetVisible);
+    if(Cal.step === 'center'){
+      const mid = Math.abs(T.bodyX - 0.5) < CFG.CENTER_TOL;
+      setClass($('chipMid'),'ok',mid);
+      const good = T.fullBody && mid && !T.tooClose;
+      if(!T.fullBody || T.tooClose){ setText(title,'Step back a little!'); setText(emoji,'👣'); }
+      else if(!mid){ setText(title,'Move this way!'); setText(emoji, T.bodyX < 0.5 ? '👉' : '👈'); }
+      else { setText(title,'Great! Stand still…'); setText(emoji,'😊'); }
+      Cal.hold = clamp(Cal.hold + (good ? dt : -dt*0.6), 0, CFG.CAL_HOLD);
+      if(Cal.hold >= CFG.CAL_HOLD){ Cal.centerX = T.bodyX; calNext('left'); return; }
+    } else {
+      const dir = Cal.step === 'left' ? -1 : 1;
+      const moved = (T.bodyX - Cal.centerX)*dir;
+      Cal.extreme = Math.max(Cal.extreme, moved); Cal.elapsed += dt;
+      const far = moved > CFG.CAL_MIN_STEP, still = Math.abs(T.vx) < 0.14;
+      setText(title, far ? 'Yes! Stand still…' : 'Step to the star!'); setText(emoji, far ? '😊' : '⭐');
+      Cal.hold = clamp(Cal.hold + (far && still ? dt : -dt*0.5), 0, CFG.CAL_SIDE_HOLD);
+      let x = null;
+      if(Cal.hold >= CFG.CAL_SIDE_HOLD) x = T.bodyX;
+      else if(Cal.elapsed > CFG.CAL_TIMEOUT) x = Cal.centerX + dir*clamp(Cal.extreme, 0.12, 0.3);   // forgiving fallback
+      if(x !== null){
+        if(Cal.step === 'left'){ Cal.left = x; calNext('right'); } else { Cal.right = x; calNext('done'); }
+        return;
+      }
+    }
+  }
+  const need = Cal.step === 'center' ? CFG.CAL_HOLD : CFG.CAL_SIDE_HOLD;
+  $('calBar').style.width = (clamp(Cal.hold/need,0,1)*100).toFixed(1) + '%';
+}
+
+/* ==========================================================================
+   GAME LOGIC
+   ========================================================================== */
+const G = {
+  N:4, letters:LETTER_SETS[0], order:[0,1,2,3], rounds:[], round:-1, target:0,
+  phase:'idle', timer:0, tries:0, tried:[], hint:false, hintAfter:1, idle:0, idleLimit:7,
+  dwell:0, zone:-1, ignoreZone:-1, p:0.5, dispP:0.5,
+  score:0, streak:0, paused:false, promptText:'', shortPrompt:'', tiles:[]
+};
+
+function buildRounds(){
+  const types = CFG.ROUND_TYPES;
+  for(let n=0;n<80;n++){
+    const ls = shuffled([0,1,2,3]), ps = shuffled([0,1,2,3]); let a = 0, b = 0;
+    const rounds = types.map(t => t === 'L' ? {type:'L', li:ls[a++]} : {type:'P', li:ps[b++]});
+    if(rounds.every((r,i) => i === 0 || r.li !== rounds[i-1].li)) return rounds;   // never the same letter twice in a row
+  }
+  return types.map((t,i) => ({type:t, li:i%4}));
+}
+function currentP(){ return clamp((T.bodyX - Zone.L)/(Zone.R - Zone.L), 0, 1); }
+function zoneFromP(p, cur){
+  const raw = clamp(p, 0, 0.9999)*G.N; let z = Math.floor(raw);
+  if(cur >= 0 && z !== cur && Math.abs(raw - (cur + 0.5)) < 0.5 + CFG.HYST) z = cur;   // hysteresis: no flicker at tile edges
+  return z;
+}
+
+function startGame(){
+  show('game');
+  Object.assign(G, {
+    letters:LETTER_SETS[App.setIndex], order:[0,1,2,3], rounds:buildRounds(), round:-1,
+    score:0, streak:0, paused:false, dwell:0, phase:'idle',
+    hintAfter: App.mode === 'easy' ? 1 : 2
+  });
+  G.p = G.dispP = currentP(); G.zone = T.lost ? -1 : zoneFromP(G.p, -1);
+  FX.clear(); renderTiles(); renderDots(); updateHud(false);
+  nextRound();
+}
+
+function makePrompt(r, idx){
+  const L = G.letters[r.li];
+  if(r.type === 'L'){
+    const forms = [x=>'Step on the letter '+x+'!', x=>'Find the letter '+x+'!', x=>'Can you step on the letter '+x+'?', x=>'Walk to the letter '+x+'!'];
+    G.promptText = forms[idx % forms.length](L.l);
+    G.shortPrompt = 'Find the letter ' + L.l + '!';
+  } else {
+    G.promptText = 'Find the letter that starts ' + L.word + '. ' + L.word + '!';
+    G.shortPrompt = 'Which letter starts ' + L.word + '?';
+  }
+}
+
+function nextRound(){
+  G.round++;
+  if(G.round >= G.rounds.length){ finishGame(); return; }
+  const r = G.rounds[G.round];
+  let pre = '';
+  if(G.round === 0) pre = 'Listen! Then walk to the letter and stomp on it. ';
+  if(G.round === CFG.SHUFFLE_AT){
+    let order = G.order;
+    for(let i=0;i<30;i++){ order = shuffled(G.order); if(order.join() !== G.order.join() && order.indexOf(r.li) !== G.zone) break; }
+    G.order = order; renderTiles(); Sfx.whoosh();
+    pre = 'Whee! The letters moved! ';
+  }
+  G.tiles.forEach(t => t.classList.remove('correct','hint','tried','oops'));
+  G.target = G.order.indexOf(r.li);
+  G.tries = 0; G.tried = [false,false,false,false]; G.hint = false; G.idle = 0; G.dwell = 0;
+  G.idleLimit = App.mode === 'easy' ? 7 : 12;
+  G.ignoreZone = (G.zone === G.target) ? -1 : G.zone;     // the tile the child is already on does not count until they move
+  G.phase = 'listen'; G.timer = 1.2;
+  makePrompt(r, G.round); renderBubble(false); updateDots(); updateHud(false);
+  Voice.say(pre + G.promptText);
+}
+
+function showHint(){
+  G.hint = true; G.tiles[G.target].classList.add('hint'); renderBubble(true); Sfx.pop();
+}
+
+function selectTile(z){
+  G.dwell = 0; G.idle = 0;
+  const r = G.rounds[G.round], L = G.letters[r.li], el = G.tiles[z];
+  if(z === G.target){
+    /* ----- correct: light up, sound, celebrate ----- */
+    const stars = G.tries === 0 ? 3 : G.tries === 1 ? 2 : 1;      // always at least one star
+    G.score += stars; G.streak = G.tries === 0 ? G.streak + 1 : 0; r.stars = stars;
+    el.classList.remove('hint'); el.classList.add('correct');
+    Sfx.correct();
+    const b = el.getBoundingClientRect(); FX.burst(b.left + b.width/2, b.top + b.height*0.3, 60, stars);
+    const av = $('avatar'); av.classList.add('jump'); setTimeout(() => av.classList.remove('jump'), 1250);
+    renderBubble(true); updateDots(); updateHud(true);
+    let text = pick(PRAISE) + (r.type === 'L' ? ' The letter ' + L.l + '!' : ' ' + L.word + ' starts with the letter ' + L.l + '!');
+    if(G.streak === 3 || G.streak === 5) text += ' ' + G.streak + ' in a row!';
+    Voice.say(text);
+    G.phase = 'celebrate'; G.timer = 2.2;
+  } else {
+    /* ----- not this one: gentle wobble, name the letter, no points lost ----- */
+    G.tries++; G.tried[z] = true;
+    el.classList.add('oops','tried'); setTimeout(() => el.classList.remove('oops'), 600);
+    Sfx.oops();
+    Voice.say('That is the letter ' + G.letters[G.order[z]].l + '. ' + pick(TRY_AGAIN) + ' ' + G.shortPrompt);
+    if(G.tries >= G.hintAfter && !G.hint) showHint();
+  }
+}
+
+/* Stomp events from the tracker speed up choosing a tile */
+T.onStep = side => {
+  if(App.screen !== 'game' || G.paused || T.lost) return;
+  const av = $('avatar'), cls = side === 'L' ? 'sl' : 'sr';
+  av.classList.add(cls); setTimeout(() => av.classList.remove(cls), 200);
+  Sfx.step();
+  const r = av.getBoundingClientRect(); FX.puff(r.left + r.width/2, r.bottom - 6);
+  const z = G.zone;
+  if(G.phase === 'active' && z >= 0 && !G.tried[z] && z !== G.ignoreZone && G.speed < CFG.STILL_SPEED){
+    G.dwell += CFG.STEP_BOOST;
+    const el = G.tiles[z]; el.classList.add('thump'); setTimeout(() => el.classList.remove('thump'), 220);
+  }
+};
+
+function gameUpdate(dt){
+  if(G.paused || T.lost) return;
+  const span = Zone.R - Zone.L;
+  G.p = currentP();
+  G.dispP += (G.p - G.dispP) * (1 - Math.exp(-dt/0.07));
+  G.speed = Math.abs(T.vx)/span*G.N;
+  const z = zoneFromP(G.p, G.zone);
+  if(z !== G.zone){ G.zone = z; G.dwell = 0; if(G.ignoreZone !== -1 && z !== G.ignoreZone) G.ignoreZone = -1; }
+
+  if(G.phase === 'listen'){
+    G.timer -= dt;                                  // wait for the teacher to finish talking
+    if(G.timer <= 0 && (!Voice.isBusy() || G.timer < -7)){ G.phase = 'active'; G.dwell = 0; G.idle = 0; }
+  } else if(G.phase === 'active'){
+    if(!G.tried[z] && z !== G.ignoreZone){
+      G.dwell += dt * (G.speed < CFG.STILL_SPEED ? 1 : 0.35);     // walking across a tile barely counts
+      if(G.dwell >= CFG.DWELL) selectTile(z);
+    }
+    if(G.phase === 'active'){
+      G.idle += dt;
+      if(G.idle > G.idleLimit){                     // stuck? show the glowing hint and repeat
+        G.idle = 0; G.idleLimit = 10;
+        if(!G.hint) showHint();
+        Voice.say(G.promptText + ' Look for the glowing letter!');
+      }
+    }
+  } else if(G.phase === 'celebrate'){
+    G.timer -= dt;
+    if(G.timer <= 0 && (!Voice.isBusy() || G.timer < -4)) nextRound();
+  }
+  renderGame(span);
+}
+
+function finishGame(){
+  G.phase = 'done'; show('result');
+  const max = G.rounds.length*3, ratio = G.score/max, rating = ratio >= 0.8 ? 3 : ratio >= 0.5 ? 2 : 1;
+  const title = ['You did it!','Great stepping!','Super stepper!'][rating-1];
+  $('resTitle').textContent = title; $('resScore').textContent = G.score;
+  $('resStars').innerHTML = [0,1,2].map(i => '<span class="rs' + (i < rating ? ' got' : '') + '" style="animation-delay:' + (0.4 + i*0.35) + 's">⭐</span>').join('');
+  $('resLetters').innerHTML = G.letters.map((L,i) =>
+    '<div class="mini" style="--c:' + TILE_COLORS[i].c + ';--cd:' + TILE_COLORS[i].d + '"><b>' + L.l + '</b><span>' + L.emoji + '</span><small>' + L.word + '</small></div>').join('');
+  Sfx.fanfare(); FX.rain(6);
+  for(let i=0;i<rating;i++) setTimeout(() => { if(App.screen === 'result') Sfx.star(); }, 900 + i*350);
+  Voice.say(title + ' You collected ' + G.score + ' stars!');
+}
+
+function setPaused(v){
+  if(App.screen !== 'game' || G.paused === v) return;
+  G.paused = v; $('overlayPause').classList.toggle('show', v);
+  if(v) Voice.stop();
+  else if(G.phase === 'listen' || G.phase === 'active'){ G.dwell = 0; Voice.say(G.promptText); }
+}
+
+/* ==========================================================================
+   UI: rendering and screen handling
+   ========================================================================== */
+function show(name){
+  App.screen = name;
+  document.querySelectorAll('.screen').forEach(s =>
+    s.classList.toggle('active', s.id === 'screen' + name[0].toUpperCase() + name.slice(1)));
+  camBox.classList.toggle('show', name === 'calib' || name === 'game' || name === 'result');
+  camBox.classList.toggle('big', name === 'calib');
+  camBox.classList.toggle('small', name !== 'calib');
+  $('overlayPause').classList.remove('show');
+  if(name !== 'game') G.paused = false;
+}
+
+function renderTiles(){
+  const floor = $('floor'); floor.innerHTML = '';
+  G.tiles = G.order.map(li => {
+    const L = G.letters[li], col = TILE_COLORS[li], el = document.createElement('div');
+    el.className = 'tile pop';
+    el.style.setProperty('--c', col.c); el.style.setProperty('--cl', col.l); el.style.setProperty('--cd', col.d);
+    el.innerHTML = '<div class="inner"><div class="fill"></div></div><span class="letter">' + L.l +
+      '</span><span class="tpic">' + L.emoji + '</span><span class="arrow">👇</span>';
+    floor.appendChild(el); return el;
+  });
+}
+function renderBubble(reveal){
+  const r = G.rounds[G.round], L = G.letters[r.li], col = TILE_COLORS[r.li]; let html;
+  if(r.type === 'L'){
+    const showLetter = reveal || App.mode === 'easy';
+    html = showLetter
+      ? '<span>Step on</span><span class="bigL' + (reveal ? ' reveal' : '') + '" style="color:' + col.c + '">' + L.l + '</span>'
+      : '<span>Listen!</span><span class="bigL">👂</span>';
+  } else {
+    html = '<span class="pic">' + L.emoji + '</span><span class="word">' +
+      (reveal ? '<span class="slot reveal" style="color:' + col.c + '">' + L.l + '</span>' : '<span class="slot">?</span>') +
+      L.word.slice(1).toUpperCase() + '</span>';
+  }
+  $('bubble').innerHTML = html;
+}
+function renderDots(){ $('progress').innerHTML = G.rounds.map(() => '<span class="dot"></span>').join(''); }
+function updateDots(){
+  [...$('progress').children].forEach((d,i) => {
+    const done = G.rounds[i].stars > 0;
+    d.className = 'dot' + (done ? ' done' : i === G.round ? ' now' : '');
+    d.textContent = done ? '⭐' : '';
+  });
+}
+function updateHud(pop){
+  $('scoreNum').textContent = G.score;
+  $('streakPill').hidden = G.streak < 2; $('streakNum').textContent = G.streak;
+  if(pop){ const p = $('scorePill'); p.classList.remove('pop'); void p.offsetWidth; p.classList.add('pop'); }
+}
+function renderGame(span){
+  const av = $('avatar');
+  av.style.left = (G.dispP*100).toFixed(2) + '%';
+  av.style.transform = 'translateX(-50%) rotate(' + clamp(T.vx/span*14, -12, 12).toFixed(1) + 'deg)';
+  G.tiles.forEach((el,i) => {
+    const on = i === G.zone; setClass(el, 'on', on);
+    const f = (on && G.phase === 'active' && !G.tried[i] && i !== G.ignoreZone) ? clamp(G.dwell/CFG.DWELL,0,1) : 0;
+    if(el._f !== f){ el._f = f; el.style.setProperty('--fill', f.toFixed(3)); }
+  });
+}
+
+/* Tracking lost: pause the game with a friendly message, resume by itself */
+let lostShown = false;
+function handleLost(now){
+  const want = App.screen === 'game' && T.lost && !G.paused;
+  if(want !== lostShown){
+    lostShown = want;
+    $('overlayLost').classList.toggle('show', want);
+    camBox.classList.toggle('medium', want);       // bigger preview helps the child find the picture again
+    if(want) lastLostSay = 0;
+    else if(App.screen === 'game' && !G.paused && !T.lost){
+      G.dwell = 0; Sfx.pop();
+      if(G.phase === 'listen' || G.phase === 'active') Voice.say('There you are! ' + G.promptText);
+    }
+  }
+  if(want) sayLost(now);
+}
+
+function showError(err){
+  console.error(err);
+  const name = err && err.name; let title, msg;
+  if(name === 'NotAllowedError' || name === 'PermissionDeniedError' || name === 'SecurityError'){
+    title = 'I need the camera to play';
+    msg = 'Click the camera icon in the address bar, choose Allow, then press Try Again.';
+  } else if(name === 'NotFoundError' || name === 'DevicesNotFoundError' || name === 'OverconstrainedError'){
+    title = 'I can’t find a camera'; msg = 'Plug in a webcam, then press Try Again.';
+  } else if(name === 'NotReadableError' || name === 'TrackStartError' || name === 'AbortError'){
+    title = 'The camera is busy'; msg = 'Close other apps or tabs that use the camera, then press Try Again.';
+  } else if(name === 'InsecureContext'){
+    title = 'The camera is blocked here'; msg = 'Open this page from https:// or http://localhost in Chrome, Edge or Firefox.';
+  } else if(name === 'ModelLoadError'){
+    title = 'I couldn’t load the body finder'; msg = 'The game needs the internet once to download it. Check the connection and press Try Again.';
+  } else { title = 'Something went wrong'; msg = 'Please press Try Again. (' + ((err && err.message) || 'unknown error') + ')'; }
+  $('errTitle').textContent = title; $('errMsg').textContent = msg;
+  show('error');
+}
+
+async function onStart(){
+  Sfx.unlock(); Voice.say("Hello! Let's get ready.");     // first click unlocks sound and speech
+  show('loading');
+  try{
+    $('loadText').textContent = 'Waking up the camera…';
+    await startCamera();
+    if(!T.landmarker){ $('loadText').textContent = 'Loading the body finder…'; await loadModel(); }
+    T.ready = true;
+    beginCalibration();
+  }catch(err){ showError(err); }
+}
+
+/* ---------- buttons and keys ---------- */
+$('btnStart').onclick = onStart;
+$('btnRetry').onclick = onStart;
+document.querySelectorAll('.mode').forEach(b => b.onclick = () => {
+  App.mode = b.dataset.mode; Sfx.unlock(); Sfx.pop();
+  document.querySelectorAll('.mode').forEach(x => x.classList.toggle('on', x === b));
+});
+$('btnSkipCal').onclick = skipCalibration;
+$('btnPause').onclick = () => setPaused(true);
+$('btnResume').onclick = () => setPaused(false);
+$('btnRestart').onclick = startGame;
+$('btnRestart2').onclick = startGame;
+$('btnRecal').onclick = beginCalibration;
+$('bubble').onclick = () => { if(G.phase === 'listen' || G.phase === 'active') Voice.say(G.promptText); };
+$('btnAgain').onclick = startGame;
+$('btnNew').onclick = () => { App.setIndex = (App.setIndex + 1) % LETTER_SETS.length; startGame(); };
+addEventListener('keydown', e => {
+  if(e.target && e.target.tagName === 'BUTTON') return;
+  if(App.screen === 'game' && (e.key === ' ' || e.key === 'p' || e.key === 'P' || e.key === 'Escape')){ e.preventDefault(); setPaused(!G.paused); }
+});
+document.addEventListener('visibilitychange', () => { if(document.hidden) setPaused(true); });
+
+/* ==========================================================================
+   MAIN LOOP
+   ========================================================================== */
+let lastT = performance.now();
+function frame(now){
+  const dt = Math.min(0.05, (now - lastT)/1000); lastT = now;
+  trackerUpdate(now);
+  if(App.screen === 'calib') calUpdate(now, dt);
+  else if(App.screen === 'game') gameUpdate(dt);
+  handleLost(now);
+  renderCam(now);
+  FX.update(dt); FX.draw();
+  requestAnimationFrame(frame);
+}
+requestAnimationFrame(frame);
+})();
+</script>
+</body>
+</html>

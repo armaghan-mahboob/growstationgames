@@ -1,0 +1,812 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, viewport-fit=cover">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="theme-color" content="#182747">
+<title>Puddle Pop Bowling</title>
+<style>
+/* ============================================================
+   UI — layout, HUD, controls, overlay screens
+   (glass look, responsive: phone portrait / phone landscape / tablet / desktop)
+   ============================================================ */
+:root{
+  --st:env(safe-area-inset-top,0px);--sr:env(safe-area-inset-right,0px);
+  --sb:env(safe-area-inset-bottom,0px);--sl:env(safe-area-inset-left,0px);
+  --bg:#182747;--ink:#22304a;--muted:#5d6b85;--blue:#3fb4ff;--deep:#1e7fd6;
+  --coral:#ff7f50;--star:#ffd23f;--green:#3cc46e;--r:20px;--btn:60px;
+  --glass:rgba(255,255,255,.14);--glass-b:rgba(255,255,255,.3);
+  --glass-sh:0 10px 30px rgba(6,12,32,.35),0 2px 6px rgba(6,12,32,.25),inset 0 1px 0 rgba(255,255,255,.35);
+}
+*{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent}
+html{background:var(--bg)}
+html,body{height:100%;width:100%;overflow:hidden;color:var(--ink);
+  font-family:"Trebuchet MS","Segoe UI",Verdana,sans-serif;touch-action:manipulation;
+  user-select:none;-webkit-user-select:none;overscroll-behavior:none}
+body{background:
+  radial-gradient(900px 520px at 10% -10%,rgba(63,180,255,.38),transparent 60%),
+  radial-gradient(800px 520px at 100% 110%,rgba(255,127,80,.30),transparent 60%),
+  var(--bg)}
+
+button{font:inherit;cursor:pointer;border:0;border-radius:999px;color:#fff;background:var(--deep);
+  min-height:var(--btn);padding:0 22px;font-size:1.15rem;font-weight:700;
+  box-shadow:0 5px 0 rgba(0,0,0,.25),0 8px 18px rgba(6,12,32,.18);
+  transition:transform .08s,filter .15s,box-shadow .15s}
+button:active{transform:translateY(3px);box-shadow:0 2px 0 rgba(0,0,0,.25)}
+button:focus-visible{outline:3px solid #fff;outline-offset:3px}
+@media (hover:hover){ button:not(:disabled):hover{filter:brightness(1.07);transform:translateY(-1px)} button:not(:disabled):active{transform:translateY(3px)} }
+button.secondary{background:#fff;color:var(--deep);border:3px solid var(--deep)}
+button.coral{background:linear-gradient(#ff9a6c,#ff6b3d)} button.green{background:linear-gradient(#52d681,#2fb25f)}
+button.small{min-height:44px;font-size:.95rem;padding:0 16px}
+button:disabled{opacity:.45;cursor:default;transform:none}
+
+#app{position:fixed;inset:0;display:flex;flex-direction:column;gap:10px;max-width:1280px;margin-inline:auto;
+  padding:calc(var(--st) + 10px) calc(var(--sr) + 10px) calc(var(--sb) + 10px) calc(var(--sl) + 10px)}
+
+/* HUD (glass bar) */
+#hud{display:flex;flex-wrap:wrap;align-items:center;gap:8px 10px;flex:0 0 auto;color:#fff;
+  padding:10px 16px;border-radius:var(--r);background:var(--glass);border:1px solid var(--glass-b);
+  box-shadow:var(--glass-sh);-webkit-backdrop-filter:blur(16px) saturate(150%);backdrop-filter:blur(16px) saturate(150%)}
+#hud .brand{display:flex;align-items:center;gap:8px;font-weight:900;font-size:1.15rem;color:#fff;
+  text-shadow:0 2px 6px rgba(0,0,0,.3);margin-right:4px}
+#hud .brand svg{width:30px;height:36px;filter:drop-shadow(0 3px 4px rgba(0,0,0,.3))}
+.pill{background:rgba(255,255,255,.16);border:1px solid rgba(255,255,255,.24);color:#fff;border-radius:999px;
+  padding:6px 14px;font-weight:700;font-size:1rem;white-space:nowrap;text-align:center}
+.pill.star{background:#ffe27a;color:#6f4d00;border-color:transparent}
+#challenge{flex:1 1 150px;min-width:0;text-align:center;background:#fff4ea;color:#a63a22;border-color:transparent;
+  font-size:1.05rem;white-space:normal;box-shadow:0 3px 10px rgba(0,0,0,.18)}
+#hud .btns{display:flex;gap:8px;margin-left:auto}
+#hud button.secondary{background:rgba(255,255,255,.18);color:#fff;border:1px solid rgba(255,255,255,.42);
+  box-shadow:0 3px 0 rgba(0,0,0,.22)}
+#hud button.secondary:active{box-shadow:0 1px 0 rgba(0,0,0,.22)}
+
+/* Stage: lane (camera floats on top as picture-in-picture) */
+#stage{flex:1 1 auto;min-height:0;position:relative;display:flex;flex-direction:column}
+#laneWrap{flex:1 1 auto;min-height:0;position:relative;border-radius:var(--r);overflow:hidden;background:#000;
+  border:1px solid rgba(255,255,255,.35);box-shadow:0 14px 40px rgba(0,0,0,.4),0 2px 8px rgba(0,0,0,.3)}
+#lane{position:absolute;inset:0;width:100%;height:100%;display:block;touch-action:none}
+#banner{position:absolute;left:50%;top:50%;transform:translate(-50%,-50%) scale(.8);opacity:0;
+  background:rgba(255,255,255,.95);border:1px solid rgba(255,255,255,.8);border-radius:24px;padding:16px 26px;
+  text-align:center;font-weight:900;font-size:clamp(1.2rem,4vmin,2.2rem);color:var(--deep);pointer-events:none;
+  max-width:92%;box-shadow:0 14px 36px rgba(0,0,0,.32),0 2px 6px rgba(0,0,0,.2);
+  -webkit-backdrop-filter:blur(8px);backdrop-filter:blur(8px);transition:opacity .2s,transform .2s;z-index:3}
+#banner.show{opacity:1;transform:translate(-50%,-50%) scale(1)}
+#banner small{display:block;font-size:.6em;color:var(--muted);margin-top:6px}
+#banner .math{font-size:1.5em;color:#b4432b;letter-spacing:.06em}
+
+#camWrap{position:absolute;top:10px;right:10px;z-index:6;width:clamp(104px,22vw,240px);height:auto;
+  aspect-ratio:4/3;border-radius:16px;overflow:hidden;background:#0b1430;
+  border:2px solid rgba(255,255,255,.7);box-shadow:0 8px 22px rgba(0,0,0,.4),0 2px 6px rgba(0,0,0,.3)}
+#cam,#camOverlay{position:absolute;inset:0;width:100%;height:100%;transform:scaleX(-1)} /* mirrored preview */
+#cam{object-fit:fill}
+#camStatus{position:absolute;left:6px;bottom:6px;background:rgba(0,0,0,.6);color:#fff;font-size:.72rem;
+  padding:3px 9px;border-radius:999px;font-weight:700;-webkit-backdrop-filter:blur(6px);backdrop-filter:blur(6px)}
+body.nocam #camWrap{display:none}
+body.calib #camWrap{position:fixed;z-index:55;left:50%;top:38%;right:auto;bottom:auto;transform:translate(-50%,-50%);
+  height:auto;max-height:none;width:min(84vw,55vh * 1.3333);border-width:3px}
+body.calib #camStatus{font-size:.85rem}
+
+/* Controls (glass bar) */
+#controls{flex:0 0 auto;display:flex;gap:12px;justify-content:center;align-items:center;flex-wrap:wrap;
+  padding:10px 14px;border-radius:var(--r);background:var(--glass);border:1px solid var(--glass-b);
+  box-shadow:var(--glass-sh);-webkit-backdrop-filter:blur(16px) saturate(150%);backdrop-filter:blur(16px) saturate(150%)}
+#controls .aim{min-width:76px;min-height:66px;font-size:1.7rem;background:#fff;color:var(--deep);padding:0 16px}
+#rollBtn{flex:0 1 340px;min-height:72px;font-size:1.6rem;background:linear-gradient(#ff9a6c,#ff6b3d);letter-spacing:.04em;
+  text-shadow:0 2px 3px rgba(0,0,0,.22)}
+#rollBtn:not(:disabled):not(:active){animation:rollGlow 2.2s ease-in-out infinite}
+@keyframes rollGlow{
+  0%,100%{box-shadow:0 5px 0 rgba(0,0,0,.25),0 0 0 0 rgba(255,127,80,.55)}
+  60%{box-shadow:0 5px 0 rgba(0,0,0,.25),0 0 0 14px rgba(255,127,80,0)}}
+
+/* ---------- Phones & small tablets: compact two-row HUD ---------- */
+@media (max-width:700px){
+  #app{gap:8px;padding:calc(var(--st) + 8px) calc(var(--sr) + 8px) calc(var(--sb) + 8px) calc(var(--sl) + 8px)}
+  #hud{padding:8px 10px;gap:6px}
+  #hud .brand,#laneName{display:none}
+  .pill{font-size:.88rem;padding:6px 8px}
+  #frameNo{order:1;flex:1 1 28%} #pinCount{order:2;flex:1 1 28%} #starCount{order:3;flex:1 1 28%}
+  #challenge{order:4;flex:1 1 150px;font-size:.92rem;padding:6px 10px;line-height:1.2}
+  #hud .btns{order:5;gap:6px}
+  #hud .btns button{padding:0 12px;font-size:.85rem;min-height:42px}
+  #controls{gap:8px;padding:8px 10px}
+  #controls .aim{min-width:64px;min-height:64px;padding:0}
+  #rollBtn{flex:1 1 0;min-width:0;min-height:64px;font-size:1.35rem}
+  #skipBtn{flex:1 1 100%}
+  #toast{bottom:calc(var(--sb) + 130px)}
+}
+@media (max-width:420px){
+  #hud .btns button{padding:0 9px;font-size:.8rem}
+  #camWrap{top:8px;right:8px}
+}
+
+/* ---------- Phones held sideways: everything on one slim row ---------- */
+@media (max-height:520px){
+  :root{--btn:48px}
+  #app{gap:6px;padding:calc(var(--st) + 6px) calc(var(--sr) + 8px) calc(var(--sb) + 6px) calc(var(--sl) + 8px)}
+  #hud{flex-wrap:nowrap;padding:5px 10px;gap:8px;border-radius:16px}
+  #hud .brand,#laneName{display:none}
+  .pill{flex:0 0 auto;font-size:.85rem;padding:5px 11px}
+  #challenge{flex:1 1 0;min-width:0;font-size:.85rem;padding:5px 10px;line-height:1.15}
+  #hud .btns button{min-height:38px;font-size:.8rem;padding:0 12px}
+  #controls{flex-wrap:nowrap;padding:5px 10px;gap:10px;border-radius:16px}
+  #controls .aim{min-width:58px;min-height:50px;font-size:1.4rem}
+  #rollBtn{min-height:50px;font-size:1.2rem;flex:0 1 300px}
+  #skipBtn{flex:0 0 auto;min-height:40px}
+  #camWrap{width:clamp(96px,18vw,150px);top:8px;right:8px}
+  #banner{padding:10px 18px;font-size:clamp(1rem,5vh,1.6rem)}
+  #toast{bottom:calc(var(--sb) + 80px)}
+  /* camera setup: picture on the left, instructions on the right */
+  body.calib #camWrap{left:27%;top:50%;width:min(44vw,70vh * 1.3333)}
+  #scrCalib{justify-content:flex-end}
+  #scrCalib .card{margin-top:0!important;max-width:46%;padding:14px}
+  #scrCalib #countdown{font-size:3rem}
+  .card{padding:16px;border-radius:22px}
+  .card svg.mascot{width:56px;height:68px;margin:0 auto}
+  .card p{margin:6px 0;font-size:.95rem}
+  .row{margin-top:8px;gap:8px}
+  .card h1{font-size:clamp(1.3rem,7vh,2rem)}
+  .bigstars{font-size:1.9rem;margin:4px 0}
+}
+
+/* ---------- Big screens: roomier, larger touch-free controls ---------- */
+@media (min-width:1024px) and (min-height:600px){
+  :root{--btn:64px}
+  #app{gap:14px;padding:calc(var(--st) + 16px) calc(var(--sr) + 16px) calc(var(--sb) + 16px) calc(var(--sl) + 16px)}
+  #hud{padding:12px 20px;gap:10px 12px}
+  #hud .brand{font-size:1.3rem;margin-right:8px} #hud .brand svg{width:34px;height:40px}
+  .pill{font-size:1rem;padding:8px 14px} #challenge{font-size:1.1rem}
+  #camWrap{top:14px;right:14px}
+  #controls{padding:12px 18px;gap:16px}
+  #rollBtn{min-height:76px;font-size:1.75rem}
+  .card{max-width:620px;padding:30px}
+  .card svg.mascot{width:110px;height:132px}
+}
+
+/* Overlay screens */
+.screen{position:fixed;inset:0;z-index:50;background:rgba(10,16,38,.72);-webkit-backdrop-filter:blur(10px);backdrop-filter:blur(10px);
+  display:none;align-items:center;justify-content:center;overflow:auto;
+  padding:calc(var(--st) + 12px) calc(var(--sr) + 12px) calc(var(--sb) + 12px) calc(var(--sl) + 12px)}
+.screen.show{display:flex}
+.card{background:linear-gradient(180deg,#fff,#f1f7ff);border:1px solid rgba(255,255,255,.85);border-radius:28px;padding:22px;
+  max-width:560px;width:100%;text-align:center;box-shadow:0 24px 70px rgba(0,0,0,.45),0 4px 12px rgba(0,0,0,.2);
+  max-height:100%;overflow:auto}
+.card h1{font-size:clamp(1.6rem,6vmin,2.6rem);line-height:1.1;color:var(--deep);
+  background:linear-gradient(90deg,#1e7fd6,#3fb4ff);-webkit-background-clip:text;background-clip:text;-webkit-text-fill-color:transparent}
+.card h2{font-size:clamp(1.3rem,5vmin,2rem);color:var(--deep)}
+.card p{color:var(--muted);font-size:1.05rem;margin:10px 0;line-height:1.45}
+.card .tiny{font-size:.85rem}
+.card svg.mascot{width:90px;height:108px;margin:6px auto;display:block;animation:bob 2.6s ease-in-out infinite;
+  filter:drop-shadow(0 8px 8px rgba(30,127,214,.3))}
+@keyframes bob{50%{transform:translateY(-6px)}}
+.row{display:flex;flex-wrap:wrap;gap:10px;justify-content:center;margin-top:14px}
+@media (max-width:560px){ .row button{flex:1 1 100%} .row button.small{flex:1 1 40%} }
+#countdown{font-size:5rem;font-weight:900;color:var(--coral);line-height:1;text-shadow:0 4px 0 rgba(255,127,80,.2)}
+.bigstars{font-size:2.6rem;color:#c99000;font-weight:900;margin:8px 0}
+.statgrid{display:flex;gap:12px;justify-content:center;flex-wrap:wrap;margin-top:8px}
+.statgrid div{background:#eef4ff;border:1px solid #dbe8ff;border-radius:16px;padding:10px 16px;font-weight:700;min-width:84px}
+.statgrid b{display:block;font-size:1.6rem;color:var(--deep)}
+#toast{position:fixed;left:50%;bottom:calc(var(--sb) + 110px);transform:translateX(-50%);background:rgba(20,30,58,.88);
+  -webkit-backdrop-filter:blur(10px);backdrop-filter:blur(10px);border:1px solid rgba(255,255,255,.25);
+  color:#fff;padding:10px 18px;border-radius:999px;font-weight:700;opacity:0;transition:opacity .3s;z-index:70;
+  pointer-events:none;max-width:90%;text-align:center;box-shadow:0 8px 24px rgba(0,0,0,.35)}
+#toast.show{opacity:1}
+#confetti{position:fixed;inset:0;pointer-events:none;z-index:52;display:none}
+#confetti.show{display:block}
+
+@media (prefers-reduced-motion:reduce){
+  #rollBtn,.card svg.mascot{animation:none!important}
+  *{transition-duration:.01ms!important}
+}
+</style>
+</head>
+<body class="nocam">
+
+<div id="app">
+  <!-- HUD -->
+  <header id="hud">
+    <div class="brand"><svg viewBox="0 0 60 72" aria-hidden="true"><path d="M30 3C30 3 6 32 6 46a24 24 0 0 0 48 0C54 32 30 3 30 3Z" fill="#3fb4ff" stroke="#1e7fd6" stroke-width="3"/><ellipse cx="20" cy="40" rx="4" ry="6" fill="#fff" opacity=".8"/><circle cx="23" cy="46" r="3.2" fill="#22304a"/><circle cx="37" cy="46" r="3.2" fill="#22304a"/><path d="M22 54Q30 61 38 54" stroke="#22304a" stroke-width="3" fill="none" stroke-linecap="round"/><circle cx="17" cy="52" r="3" fill="#ff9fb4" opacity=".7"/><circle cx="43" cy="52" r="3" fill="#ff9fb4" opacity=".7"/></svg><span>Puddle Pop Bowling</span></div>
+    <div class="pill" id="laneName">Sunny Meadow</div>
+    <div class="pill" id="frameNo">Frame 1 / 9</div>
+    <div class="pill" id="pinCount">Pins: 3</div>
+    <div class="pill star" id="starCount">⭐ 0</div>
+    <div class="pill" id="challenge">Knock down 3 pins!</div>
+    <div class="btns">
+      <button class="small secondary" id="pauseBtn">⏸ Pause</button>
+      <button class="small secondary" id="restartBtn">↻ Restart</button>
+    </div>
+  </header>
+
+  <!-- Lane + camera -->
+  <main id="stage">
+    <div id="laneWrap">
+      <canvas id="lane"></canvas>
+      <div id="banner"></div>
+    </div>
+    <aside id="camWrap">
+      <video id="cam" playsinline muted autoplay></video>
+      <canvas id="camOverlay"></canvas>
+      <div id="camStatus">Camera off</div>
+    </aside>
+  </main>
+
+  <!-- Touch / keyboard controls -->
+  <footer id="controls">
+    <button class="aim" id="aimL" aria-label="Aim left">◀</button>
+    <button id="rollBtn">🎳 ROLL!</button>
+    <button class="aim" id="aimR" aria-label="Aim right">▶</button>
+    <button class="small green" id="skipBtn">Skip frame ➜</button>
+  </footer>
+</div>
+
+<!-- Screens -->
+<div class="screen show" id="scrIntro"><div class="card">
+  <h1>Puddle Pop Bowling</h1>
+  <svg class="mascot" viewBox="0 0 60 72" aria-hidden="true"><path d="M30 3C30 3 6 32 6 46a24 24 0 0 0 48 0C54 32 30 3 30 3Z" fill="#3fb4ff" stroke="#1e7fd6" stroke-width="3"/><ellipse cx="20" cy="40" rx="4" ry="6" fill="#fff" opacity=".8"/><circle cx="23" cy="46" r="3.2" fill="#22304a"/><circle cx="37" cy="46" r="3.2" fill="#22304a"/><path d="M22 54Q30 61 38 54" stroke="#22304a" stroke-width="3" fill="none" stroke-linecap="round"/><circle cx="17" cy="52" r="3" fill="#ff9fb4" opacity=".7"/><circle cx="43" cy="52" r="3" fill="#ff9fb4" opacity=".7"/></svg>
+  <p>Hi! I'm <b>Puddle</b>. Lean left or right to aim, and gently swing your arm to roll me down the lane. I'll help you aim. You can stand or sit!</p>
+  <div class="row">
+    <button class="coral" id="btnCam">🎥 Play with camera</button>
+    <button class="secondary" id="btnNoCam">👆 Play with buttons</button>
+  </div>
+  <div class="row">
+    <button class="secondary small" id="tglAssist">Aim helper: ON</button>
+    <button class="secondary small" id="tglSound">Sound: ON</button>
+  </div>
+  <p class="tiny">Keyboard: ← → aim, Space rolls, P pauses, R restarts. Camera video stays on your device.</p>
+</div></div>
+
+<div class="screen" id="scrLoading"><div class="card"><h2>Getting the camera ready…</h2><p id="loadMsg">Please allow camera access when your browser asks.</p></div></div>
+
+<div class="screen" id="scrError"><div class="card">
+  <h2>Hmm, no camera</h2><p id="errMsg"></p>
+  <div class="row"><button class="coral" id="errRetry">Try camera again</button><button class="secondary" id="errButtons">Play with buttons</button></div>
+</div></div>
+
+<div class="screen" id="scrCalib"><div class="card" style="margin-top:auto">
+  <h2>Get ready!</h2>
+  <p>Stand or sit comfortably with your shoulders in the picture and your arms down.</p>
+  <div id="countdown">3</div>
+  <div class="row"><button class="secondary small" id="calibSkip">Skip</button></div>
+</div></div>
+
+<div class="screen" id="scrPaused"><div class="card">
+  <h2>Paused</h2><p>Take a breather. Puddle will wait!</p>
+  <div class="row">
+    <button class="green" id="resumeBtn">▶ Resume</button>
+    <button class="secondary" id="pauseRestart">↻ Restart game</button>
+    <button class="secondary" id="recalBtn">🎯 Recalibrate</button>
+    <button class="secondary" id="menuBtn">🏠 Main menu</button>
+  </div>
+</div></div>
+
+<div class="screen" id="scrLost"><div class="card">
+  <h2>Puddle can't see you!</h2>
+  <p>The game is paused. Step back so your shoulders are in the picture and we'll keep going.</p>
+  <p id="lostCount" style="font-weight:900;color:#1e7fd6"></p>
+  <div class="row"><button class="secondary" id="lostButtons">👆 Play with buttons instead</button></div>
+</div></div>
+
+<div class="screen" id="scrResults"><div class="card">
+  <h1>Hooray! 🎉</h1>
+  <p>You bowled all three lanes!</p>
+  <div class="bigstars">⭐ <span id="resStars">0</span> stars</div>
+  <div class="statgrid"><div><b id="resFrames">0</b>challenges</div><div><b id="resStrikes">0</b>strikes</div><div><b id="resRolls">0</b>rolls</div></div>
+  <div class="row"><button class="coral" id="againBtn">Play again</button><button class="secondary" id="resMenu">Main menu</button></div>
+</div></div>
+<canvas id="confetti"></canvas>
+<div id="toast"></div>
+
+<script type="module">
+'use strict';
+/* ============================================================
+   PUDDLE POP BOWLING
+   1. Helpers & sound   2. TRACKING   3. GAMEPLAY   4. UI & main loop
+   ============================================================ */
+const $=s=>document.querySelector(s);
+const clamp=(v,a,b)=>Math.max(a,Math.min(b,v));
+const lerp=(a,b,t)=>a+(b-a)*t;
+const wait=ms=>new Promise(r=>setTimeout(r,ms));
+
+/* ---------- 1. SOUND: tiny WebAudio synth, no files ---------- */
+const Sound={ on:true, ctx:null,
+  ac(){ if(!this.ctx) this.ctx=new (window.AudioContext||window.webkitAudioContext)(); if(this.ctx.state==='suspended') this.ctx.resume(); return this.ctx; },
+  tone(f,d,type='sine',vol=.2,slide=0,delay=0){ if(!this.on) return; try{
+    const c=this.ac(),t=c.currentTime+delay,o=c.createOscillator(),g=c.createGain();
+    o.type=type; o.frequency.setValueAtTime(f,t); if(slide) o.frequency.exponentialRampToValueAtTime(Math.max(40,f+slide),t+d);
+    g.gain.setValueAtTime(vol,t); g.gain.exponentialRampToValueAtTime(.001,t+d);
+    o.connect(g).connect(c.destination); o.start(t); o.stop(t+d+.05); }catch(e){} },
+  unlock(){ try{this.ac();}catch(e){} },
+  pop(){ this.tone(480+Math.random()*260,.16,'sine',.25,-260); },
+  count(){ this.tone(700,.1,'triangle',.15,200); },
+  roll(){ if(!this.on) return; try{ const c=this.ac(),n=c.sampleRate*.7,b=c.createBuffer(1,n,c.sampleRate),d=b.getChannelData(0);
+    for(let i=0;i<n;i++) d[i]=(Math.random()*2-1)*(1-i/n);
+    const s=c.createBufferSource(); s.buffer=b; const f=c.createBiquadFilter(); f.type='lowpass'; f.frequency.value=350;
+    const g=c.createGain(); g.gain.value=.3; s.connect(f).connect(g).connect(c.destination); s.start(); }catch(e){} },
+  chime(){ [523,659,784,1047].forEach((f,i)=>this.tone(f,.35,'triangle',.18,0,i*.11)); },
+  fanfare(){ [523,659,784,1047,784,1047,1319].forEach((f,i)=>this.tone(f,.4,'triangle',.2,0,i*.13)); },
+  tryAgain(){ this.tone(330,.25,'triangle',.15,-60); this.tone(415,.3,'triangle',.15,0,.22); },
+  click(){ this.tone(600,.07,'square',.05); }
+};
+
+/* ============================================================
+   2. TRACKING — camera, MediaPipe Pose Landmarker, smoothing,
+      calibration, lean-to-aim and arm-swing-to-roll gestures.
+   Landmark indices: 11/12 shoulders, 13/14 elbows, 15/16 wrists,
+   23/24 hips. Coordinates are normalised (0..1) in the raw video,
+   which we display mirrored; the lean sign is flipped to match.
+   ============================================================ */
+const Track={
+  ready:false, landmarker:null, stream:null, video:$('#cam'), ov:$('#camOverlay'),
+  sm:null,            // smoothed landmarks (EMA)
+  present:false, lastSeen:0, lastVT:-1,
+  calib:{cx:.5,sw:.25,torso:.4,done:false}, calibrating:false, samples:[],
+  lean:0,             // -1..1, positive = screen-right
+  lift:0, liftVel:0, lastLift:0, lastT:0,
+  armed:true,         // swing can only fire after the arm has come back down
+  onSwing:null
+};
+const ERR_TEXT={
+  NotAllowedError:'Camera permission was not given. You can allow it in your browser settings, or just play with the buttons!',
+  NotFoundError:'No camera was found on this device. You can still play with the buttons!',
+  NotReadableError:'The camera is busy or could not start. Close other apps that use it, or play with the buttons!',
+  SecurityError:'The camera only works on a secure page (https or localhost). You can play with the buttons!'
+};
+function setCamStatus(t){ $('#camStatus').textContent=t; }
+
+async function startTracking(){
+  if(Track.ready) return;
+  if(!navigator.mediaDevices||!navigator.mediaDevices.getUserMedia) throw {message:'This browser cannot use the camera. You can play with the buttons!'};
+  setCamStatus('Starting camera…');
+  try{ Track.stream=await navigator.mediaDevices.getUserMedia({video:{facingMode:'user',width:{ideal:640},height:{ideal:480}},audio:false}); }
+  catch(e){ throw {message:ERR_TEXT[e.name]||('Camera error: '+(e.message||e.name)+'. You can play with the buttons!')}; }
+  const v=Track.video; v.srcObject=Track.stream; await v.play().catch(()=>{});
+  await new Promise(r=>{ if(v.readyState>=2) r(); else v.onloadedmetadata=()=>r(); });
+  $('#camWrap').style.aspectRatio=(v.videoWidth||4)+'/'+(v.videoHeight||3);
+  setCamStatus('Loading tracking…'); $('#loadMsg').textContent='Loading the pose tracker…';
+  try{
+    const CDN='https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.14';
+    const vision=await import(CDN);
+    const fs=await vision.FilesetResolver.forVisionTasks(CDN+'/wasm');
+    const opts=d=>({baseOptions:{modelAssetPath:'https://storage.googleapis.com/mediapipe-models/pose_landmarker/pose_landmarker_lite/float16/1/pose_landmarker_lite.task',delegate:d},runningMode:'VIDEO',numPoses:1});
+    try{ Track.landmarker=await vision.PoseLandmarker.createFromOptions(fs,opts('GPU')); }
+    catch(e){ Track.landmarker=await vision.PoseLandmarker.createFromOptions(fs,opts('CPU')); }
+  }catch(e){ stopTracking(); throw {message:'The pose tracker could not be loaded (check your internet connection). You can still play with the buttons!'}; }
+  Track.ready=true; Track.lastSeen=performance.now(); setCamStatus('Tracking ✓');
+}
+function stopTracking(){
+  if(Track.stream){ Track.stream.getTracks().forEach(t=>t.stop()); Track.stream=null; }
+  Track.video.srcObject=null; Track.ready=false; Track.present=false; Track.sm=null; setCamStatus('Camera off'); drawOverlay(null);
+}
+
+/* Runs once per rendered frame: detect, smooth, compute gestures. */
+function updateTracking(now){
+  if(!Track.ready) return;
+  const v=Track.video; if(v.readyState<2) return;
+  if(v.currentTime===Track.lastVT) return; Track.lastVT=v.currentTime;
+  let res; try{ res=Track.landmarker.detectForVideo(v,performance.now()); }catch(e){ return; }
+  const lm=res&&res.landmarks&&res.landmarks[0];
+  const vis=p=>p?(p.visibility??1):0;
+  if(!lm||vis(lm[11])<.5||vis(lm[12])<.5){ Track.present=false; setCamStatus("Can't see you"); drawOverlay(null); return; }
+  Track.present=true; Track.lastSeen=now; setCamStatus('Tracking ✓');
+  // Exponential smoothing keeps the skeleton calm with wobbly kids
+  if(!Track.sm) Track.sm=lm.map(p=>({x:p.x,y:p.y,v:p.visibility??1}));
+  else lm.forEach((p,i)=>{ const s=Track.sm[i]; s.x=lerp(s.x,p.x,.35); s.y=lerp(s.y,p.y,.35); s.v=p.visibility??1; });
+  computeGestures(now); drawOverlay(Track.sm);
+}
+
+function computeGestures(now){
+  const L=Track.sm, ls=L[11], rs=L[12];
+  const cx=(ls.x+rs.x)/2, sy=(ls.y+rs.y)/2, sw=Math.max(.05,Math.hypot(ls.x-rs.x,ls.y-rs.y));
+  const hipsOk=L[23].v>.5&&L[24].v>.5;
+  const hy=hipsOk?(L[23].y+L[24].y)/2:sy+sw*1.6;     // seated / close-up fallback when hips are hidden
+  const torso=Math.max(.08,hy-sy);
+  if(Track.calibrating) Track.samples.push({cx,sw,torso});
+  if(!Track.calib.done){ Track.calib.cx=lerp(Track.calib.cx,cx,.05); Track.calib.sw=sw; Track.calib.torso=torso; } // drifts gently if never calibrated
+  // Torso lean → aim. Mirrored view, so leaning to screen-right means cx decreases.
+  let lean=(Track.calib.cx-cx)/(Track.calib.sw*.8);
+  const dz=.12; lean=Math.abs(lean)<dz?0:Math.sign(lean)*(Math.abs(lean)-dz)/(1-dz);
+  Track.lean=lerp(Track.lean,clamp(lean,-1,1),.3);
+  // Arm swing → roll. Use whichever wrist is higher (the swinging one).
+  const lw=L[15], rw=L[16];
+  const w=(lw.v>.4&&rw.v>.4)?(lw.y<rw.y?lw:rw):(lw.v>=rw.v?lw:rw);
+  const lift=clamp((hy-w.y)/torso,-.5,2);           // 0 = hand at hip, 1 = hand at shoulder
+  const dt=Math.max(.016,(now-Track.lastT)/1000); Track.lastT=now;
+  Track.liftVel=lerp(Track.liftVel,(lift-Track.lastLift)/dt,.5); Track.lastLift=lift; Track.lift=lift;
+  if(!Track.armed&&lift<.25) Track.armed=true;
+  if(Track.armed&&lift>.6&&Track.liftVel>1.0){        // gentle upward swing is enough
+    Track.armed=false; const strength=clamp(Track.liftVel/3.5,.4,1);
+    if(Track.onSwing) Track.onSwing(strength);
+  }
+}
+
+/* Skeleton overlay on the mirrored preview */
+const CONN=[[11,12],[11,13],[13,15],[12,14],[14,16],[11,23],[12,24],[23,24],[23,25],[24,26]];
+function drawOverlay(L){
+  const c=Track.ov, r=c.getBoundingClientRect(), dpr=window.devicePixelRatio||1;
+  if(r.width<2) return;
+  if(c.width!==Math.round(r.width*dpr)||c.height!==Math.round(r.height*dpr)){ c.width=Math.round(r.width*dpr); c.height=Math.round(r.height*dpr); }
+  const x=c.getContext('2d'); x.setTransform(dpr,0,0,dpr,0,0); x.clearRect(0,0,r.width,r.height);
+  if(!L) return;
+  const P=i=>({x:L[i].x*r.width,y:L[i].y*r.height,v:L[i].v});
+  x.lineWidth=3; x.lineCap='round'; x.strokeStyle='rgba(255,255,255,.85)';
+  for(const [a,b] of CONN){ const A=P(a),B=P(b); if(A.v<.4||B.v<.4) continue; x.beginPath(); x.moveTo(A.x,A.y); x.lineTo(B.x,B.y); x.stroke(); }
+  for(const i of [0,11,12,13,14,15,16,23,24]){ const p=P(i); if(p.v<.4) continue; const wrist=i===15||i===16;
+    x.beginPath(); x.arc(p.x,p.y,wrist?7:5,0,Math.PI*2); x.fillStyle=wrist?'#ff7f50':'#3fb4ff'; x.fill(); }
+}
+
+/* ============================================================
+   3. GAMEPLAY — lanes, frames, pins, ball physics, challenges,
+      subtraction feedback, stars.
+   ============================================================ */
+const LANES=[
+  {name:'Sunny Meadow',emoji:'🌼',sky:['#8fd9ff','#dff7c9'],lane:'#f9e7a8',edge:'#e2c977',gutter:'#8bd48b',pin:'#ff8a5b',decor:'flower'},
+  {name:'Candy Cove',emoji:'🍬',sky:['#ffc6e5','#fff1c9'],lane:'#fff3f8',edge:'#f7b1d1',gutter:'#b48cff',pin:'#ff5fa2',decor:'dot'},
+  {name:'Starry Night',emoji:'⭐',sky:['#1c2560','#4b3a8f'],lane:'#4a52a0',edge:'#8a92e0',gutter:'#20264d',pin:'#5bd1ff',decor:'star'}
+];
+const tri=rows=>{ const a=[]; for(let r=0;r<rows;r++) for(let i=0;i<=r;i++) a.push([(i-r/2)*1.05,-r*.92]); return a; };
+const LAYOUTS={
+  row3:[[-1.05,0],[0,0],[1.05,0]],
+  diamond4:[[0,0],[-.8,-.9],[.8,-.9],[0,-1.8]],
+  five:[[0,0],[-.8,-.9],[.8,-.9],[-1.6,-1.8],[1.6,-1.8]],
+  tri6:tri(3),
+  six2:[[0,0],[-.9,-.9],[.9,-.9],[0,-1.8],[-1.9,-1.8],[1.9,-1.8]],
+  seven:[...tri(3),[0,-2.75]],
+  eight:[[-1.6,0],[-.53,0],[.53,0],[1.6,0],[-1.6,-1],[-.53,-1],[.53,-1],[1.6,-1]],
+  wings8:[[0,0],[-1.1,-.9],[0,-.9],[1.1,-.9],[0,-1.8],[0,-2.7],[-2.1,-1.8],[2.1,-1.8]],
+  tri10:tri(4)
+};
+/* Each frame: lane, pin layout, and a small challenge */
+const FRAMES=[
+  {lane:0,layout:'row3',    ch:{type:'knock',n:3}},
+  {lane:0,layout:'diamond4',ch:{type:'leave',n:2}},
+  {lane:0,layout:'five',    ch:{type:'group',ids:[0,1,2]}},
+  {lane:1,layout:'tri6',    ch:{type:'knock',n:4}},
+  {lane:1,layout:'six2',    ch:{type:'leave',n:2}},
+  {lane:1,layout:'seven',   ch:{type:'group',ids:[0,1,3,4]}},
+  {lane:2,layout:'eight',   ch:{type:'knock',n:5}},
+  {lane:2,layout:'wings8',  ch:{type:'leave',n:2}},
+  {lane:2,layout:'tri10',   ch:{type:'group',ids:[0,1,2,3,4,5]}}
+];
+const challengeText=ch=>ch.type==='knock'?`Knock down ${ch.n} pins!`:ch.type==='leave'?`Leave exactly ${ch.n} pins standing!`:`Clear the ${ch.ids.length} glowing pins!`;
+
+const G={ frameIdx:0, pins:[], tries:0, rolls:0, stars:0, framesDone:0, strikes:0,
+  mode:'idle',          // idle | aim | rolling | settle | feedback | results
+  aim:0, manualUntil:0, assist:true, rollId:0, settleT:0,
+  paused:false, lost:false, resumeAt:0, camMode:false, calibTimer:null };
+const B={x:0,y:0,vx:0,vy:0,rolling:false,trail:[],gutter:false,spin:0};
+const FX=[];
+let W=0,H=0,DPR=1,s=40,laneW=0,laneX=0,laneCX=0,pinBaseY=0,ballR=20,pinR=12,gutterW=0;
+const DECOR=Array.from({length:70},(_,i)=>({x:(i*0.618034)%1,y:((i*0.381966)+0.17)%1,r:2+((i*7)%5),k:i}));
+
+function layout(){
+  laneW=Math.min(W*.68,H*.9); gutterW=laneW*.12; laneCX=W/2; laneX=laneCX-laneW/2;
+  s=Math.min(laneW/5.4,H*.085); pinBaseY=H*.40; ballR=s*.42; pinR=s*.34;
+  for(const p of G.pins){ p.x=laneCX+(p.ox+p.fx)*s; p.y=pinBaseY+(p.oy+p.fy)*s; }
+}
+const frame=()=>FRAMES[Math.min(G.frameIdx,FRAMES.length-1)];
+const theme=()=>LANES[frame().lane];
+const ballStartY=()=>H-ballR*2.2;
+
+function setupFrame(i){
+  G.frameIdx=i; G.tries=0; const F=frame();
+  G.pins=LAYOUTS[F.layout].map(([x,y],idx)=>({idx,ox:x,oy:y,fx:0,fy:0,x:0,y:0,state:'up',t:0,rot:0,dx:0,dy:0,
+    inGroup:F.ch.type==='group'&&F.ch.ids.includes(idx)}));
+  layout(); B.rolling=false; B.trail=[]; $('#skipBtn').style.display='none'; updateHUD();
+}
+function resetPins(){ for(const p of G.pins){ p.state='up'; p.t=0; p.rot=0; p.fx=p.fy=0; } layout(); }
+function resetGame(){ G.rollId++; G.stars=0; G.framesDone=0; G.strikes=0; G.rolls=0; G.aim=0; setupFrame(0); hideBanner(); $('#rollBtn').disabled=false; }
+
+/* Aim assist: nudge toward the pins that matter for this challenge */
+function assistTarget(){
+  const F=frame(); let set=G.pins.filter(p=>p.state==='up');
+  if(F.ch.type==='group') set=set.filter(p=>p.inGroup);
+  if(!set.length) return null;
+  return {x:set.reduce((a,p)=>a+p.x,0)/set.length, y:set.reduce((a,p)=>a+p.y,0)/set.length};
+}
+function aimAngle(sx,sy){
+  let ang=G.aim*.45;
+  if(G.assist){ const t=assistTarget(); if(t){ const ta=Math.atan2(t.x-sx,sy-t.y); ang=lerp(ang,clamp(ta,-.6,.6),.55); } }
+  return clamp(ang,-.7,.7);
+}
+function roll(strength=.8){
+  if(G.mode!=='aim'||G.paused||G.lost) return;
+  G.mode='rolling'; G.rollId++; G.tries++; G.rolls++;
+  B.x=laneCX+G.aim*laneW*.3; B.y=ballStartY();
+  const ang=aimAngle(B.x,B.y), sp=H*(.8+.5*strength);
+  B.vx=Math.sin(ang)*sp; B.vy=-Math.cos(ang)*sp; B.rolling=true; B.trail=[]; B.gutter=false; B.spin=0;
+  Sound.roll(); hideBanner(); $('#rollBtn').disabled=true;
+}
+function hitPin(p,nx,ny,vx,vy){
+  if(p.state!=='up') return;
+  const vl=Math.hypot(vx,vy)||1; let dx=nx*.8+vx/vl*.6, dy=ny*.8+vy/vl*.6; const l=Math.hypot(dx,dy)||1;
+  p.dx=dx/l; p.dy=dy/l; p.state='wobble'; p.t=0;
+}
+function splash(x,y,c,n=6){ for(let i=0;i<n;i++) FX.push({x,y,vx:(Math.random()-.5)*240,vy:-Math.random()*240-40,life:.5+Math.random()*.4,c,r:3+Math.random()*4}); }
+
+function update(dt,now){
+  if(G.paused) return;
+  // Camera lean drives the aim unless a button/finger was used recently
+  if(G.mode==='aim'&&G.camMode&&Track.present&&now>G.manualUntil) G.aim=lerp(G.aim,Track.lean,.2);
+  if(B.rolling){
+    B.trail.push({x:B.x,y:B.y,a:1}); if(B.trail.length>24) B.trail.shift();
+    B.x+=B.vx*dt; B.y+=B.vy*dt; B.spin+=B.vy*dt/ballR;
+    const f=Math.pow(.85,dt); B.vx*=f; B.vy*=f;
+    const half=laneW/2;
+    if(!B.gutter&&Math.abs(B.x-laneCX)>half-ballR*.4){ B.gutter=true; B.x=laneCX+Math.sign(B.x-laneCX)*(half+gutterW/2); B.vx=0; B.vy*=.6; }
+    if(!B.gutter) for(const p of G.pins) if(p.state==='up'){
+      const dx=p.x-B.x, dy=p.y-B.y, d=Math.hypot(dx,dy)||1;
+      if(d<ballR+pinR*1.5){ hitPin(p,dx/d,dy/d,B.vx,B.vy); B.vx-=dx/d*50; B.vx*=.9; B.vy*=.92; }
+    }
+    if(B.y<-ballR*2||Math.hypot(B.vx,B.vy)<15){ B.rolling=false; G.mode='settle'; G.settleT=0; }
+  }
+  for(const t of B.trail) t.a-=dt*1.6; B.trail=B.trail.filter(t=>t.a>0);
+  for(const p of G.pins){
+    if(p.state==='wobble'){ p.t+=dt; p.rot=Math.sin(p.t*45)*.3; if(p.t>.14){ p.state='falling'; p.t=0; Sound.pop(); splash(p.x,p.y,'#9fdcff',5); } }
+    else if(p.state==='falling'){
+      p.t+=dt; const k=Math.min(1,p.t/.55); p.rot=Math.sign(p.dx||1)*k*1.5;
+      p.fx+=p.dx*2*dt; p.fy+=p.dy*2*dt; p.x=laneCX+(p.ox+p.fx)*s; p.y=pinBaseY+(p.oy+p.fy)*s;
+      if(k<.6) for(const q of G.pins) if(q!==p&&q.state==='up'){      // generous chain reaction
+        const ddx=q.x-p.x, ddy=q.y-p.y, d=Math.hypot(ddx,ddy)||1;
+        if(d<s*1.25&&(ddx*p.dx+ddy*p.dy)/d>-.2) hitPin(q,ddx/d,ddy/d,p.dx,p.dy);
+      }
+      if(p.t>.55) p.state='down';
+    }
+  }
+  for(const f of FX){ f.vy+=600*dt; f.x+=f.vx*dt; f.y+=f.vy*dt; f.life-=dt; }
+  for(let i=FX.length-1;i>=0;i--) if(FX[i].life<=0) FX.splice(i,1);
+  if(G.mode==='settle'){
+    const busy=G.pins.some(p=>p.state==='wobble'||p.state==='falling');
+    G.settleT=busy?0:G.settleT+dt; if(G.settleT>.5) evaluateRoll();
+  }
+}
+function checkChallenge(){
+  const ch=frame().ch, fallen=G.pins.filter(p=>p.state==='down').length, standing=G.pins.length-fallen;
+  if(ch.type==='knock') return fallen>=ch.n;
+  if(ch.type==='leave') return standing===ch.n;
+  return ch.ids.every(i=>G.pins[i].state==='down');
+}
+/* Subtraction animation, then success or friendly retry */
+async function evaluateRoll(){
+  G.mode='feedback'; const id=G.rollId, ch=frame().ch;
+  const total=G.pins.length, fallen=G.pins.filter(p=>p.state==='down').length, standing=total-fallen;
+  const pinWord=n=>n+' pin'+(n===1?'':'s');
+  for(let k=0;k<=fallen;k++){
+    if(id!==G.rollId) return;
+    showBanner(`<div class="math">${total} − ${k}${k===fallen?' = '+standing:''}</div><small>${k===fallen?pinWord(standing)+' still standing':'counting the pins that fell…'}</small>`);
+    if(k<fallen) Sound.count();
+    await wait(fallen>6?260:400);
+  }
+  updateHUD(); await wait(1100); if(id!==G.rollId) return;
+  if(checkChallenge()){
+    let gain=3, msg='Hooray! Challenge done!';
+    if(fallen===total){ gain++; msg='STRIKE! All pins down!'; G.strikes++; }
+    G.stars+=gain; G.framesDone++; Sound.chime();
+    for(let i=0;i<4;i++) splash(laneCX+(Math.random()-.5)*laneW,pinBaseY-s,'#ffd23f',8);
+    showBanner(`🎉 ${msg}<small>+${gain} ⭐</small>`); updateHUD();
+    await wait(2000); if(id!==G.rollId) return; nextFrame();
+  }else{
+    const gain=G.tries<=2?1:0; G.stars+=gain; Sound.tryAgain(); updateHUD();
+    let msg=fallen===0?'The ball rolled past. Let\'s try again!'
+      :ch.type==='leave'?`${pinWord(standing)} standing, we want ${ch.n}. Try again!`
+      :ch.type==='group'?`${ch.ids.filter(i=>G.pins[i].state==='up').length} glowing pins to go. Roll again!`
+      :`${pinWord(fallen)} down, we want ${ch.n}. Roll again!`;
+    showBanner(msg+(gain?'<small>+1 ⭐ for trying something new!</small>':'<small>No worries, roll again!</small>'));
+    if(G.tries>=3) $('#skipBtn').style.display='';
+    await wait(2100); if(id!==G.rollId) return;
+    resetPins(); hideBanner(); G.mode='aim'; $('#rollBtn').disabled=false; updateHUD();
+  }
+}
+async function nextFrame(){
+  const id=G.rollId, prevLane=frame().lane;
+  if(G.frameIdx+1>=FRAMES.length){ showResults(); return; }
+  setupFrame(G.frameIdx+1);
+  if(frame().lane!==prevLane){ showBanner(`${theme().emoji} Welcome to ${theme().name}!`); await wait(1600); if(id!==G.rollId) return; }
+  hideBanner(); G.mode='aim'; $('#rollBtn').disabled=false; updateHUD();
+}
+
+/* ---------- Rendering ---------- */
+const CV=$('#lane'), CTX=CV.getContext('2d');
+function roundRect(x,y,w,h,r){ CTX.beginPath(); CTX.roundRect(x,y,w,h,r); }
+function render(now){
+  const T=theme(), ctx=CTX; ctx.setTransform(DPR,0,0,DPR,0,0); ctx.clearRect(0,0,W,H);
+  const g=ctx.createLinearGradient(0,0,0,H); g.addColorStop(0,T.sky[0]); g.addColorStop(1,T.sky[1]); ctx.fillStyle=g; ctx.fillRect(0,0,W,H);
+  // Decorations outside the lane
+  for(const d of DECOR){ const x=d.x*W, y=d.y*H;
+    if(T.decor==='star'){ ctx.globalAlpha=.5+.5*Math.sin(now/500+d.k); ctx.fillStyle='#fff'; ctx.beginPath(); ctx.arc(x,y,d.r*.6,0,Math.PI*2); ctx.fill(); }
+    else if(T.decor==='dot'){ ctx.globalAlpha=.35; ctx.fillStyle=d.k%2?'#ff7fb0':'#fff'; ctx.beginPath(); ctx.arc(x,y,d.r*1.6,0,Math.PI*2); ctx.fill(); }
+    else { ctx.globalAlpha=.8; ctx.fillStyle=d.k%3?'#fff':'#ffd23f'; for(let i=0;i<5;i++){ const a=i/5*Math.PI*2; ctx.beginPath(); ctx.arc(x+Math.cos(a)*d.r,y+Math.sin(a)*d.r,d.r*.7,0,Math.PI*2); ctx.fill(); } ctx.fillStyle='#ffb000'; ctx.beginPath(); ctx.arc(x,y,d.r*.6,0,Math.PI*2); ctx.fill(); }
+  }
+  ctx.globalAlpha=1;
+  // Gutters and lane
+  ctx.fillStyle=T.gutter; ctx.fillRect(laneX-gutterW,0,laneW+gutterW*2,H);
+  ctx.fillStyle=T.lane; ctx.fillRect(laneX,0,laneW,H);
+  ctx.strokeStyle=T.edge; ctx.lineWidth=4; ctx.strokeRect(laneX,-4,laneW,H+8);
+  ctx.fillStyle=T.edge; for(let i=-2;i<=2;i++){ const x=laneCX+i*laneW*.14, y=H*.62-Math.abs(i)*s*.5; ctx.beginPath(); ctx.moveTo(x,y-s*.5); ctx.lineTo(x-s*.22,y); ctx.lineTo(x+s*.22,y); ctx.fill(); }
+  ctx.fillRect(laneX,H*.78,laneW,4);
+  // Group badge: live count of glowing pins still up
+  const F=frame();
+  if(F.ch.type==='group'){ const set=G.pins.filter(p=>p.inGroup); const left=set.filter(p=>p.state==='up').length;
+    const bx=set.reduce((a,p)=>a+(laneCX+p.ox*s),0)/set.length, by=Math.min(...set.map(p=>pinBaseY+p.oy*s))-s*1.5;
+    ctx.fillStyle='#ffd23f'; ctx.beginPath(); ctx.arc(bx,by,s*.5,0,Math.PI*2); ctx.fill();
+    ctx.fillStyle='#22304a'; ctx.font=`900 ${s*.55}px Trebuchet MS,sans-serif`; ctx.textAlign='center'; ctx.textBaseline='middle'; ctx.fillText(left,bx,by+1);
+    ctx.font=`700 ${s*.22}px Trebuchet MS,sans-serif`; ctx.fillStyle='#8a6200'; ctx.fillText('to go',bx,by+s*.75); }
+  // Pins: fallen first, then standing back-to-front
+  const down=G.pins.filter(p=>p.state==='down'), up=G.pins.filter(p=>p.state!=='down').sort((a,b)=>a.y-b.y);
+  for(const p of down) drawPin(p,T,now); for(const p of up) drawPin(p,T,now);
+  // Aim guide + waiting ball
+  if(G.mode==='aim'){
+    const sx=laneCX+G.aim*laneW*.3, sy=ballStartY(), ang=aimAngle(sx,sy);
+    ctx.save(); ctx.setLineDash([10,12]); ctx.lineDashOffset=-now/40; ctx.strokeStyle='rgba(255,255,255,.85)'; ctx.lineWidth=4;
+    ctx.beginPath(); ctx.moveTo(sx,sy); ctx.lineTo(sx+Math.sin(ang)*H,sy-Math.cos(ang)*H); ctx.stroke(); ctx.restore();
+    drawBall(sx,sy,0,now);
+  }
+  // Trail + rolling ball
+  if(B.rolling||G.mode==='settle'||G.mode==='feedback'){
+    for(const t of B.trail){ ctx.globalAlpha=t.a*.5; ctx.fillStyle='#9fdcff'; ctx.beginPath(); ctx.arc(t.x,t.y,ballR*t.a,0,Math.PI*2); ctx.fill(); }
+    ctx.globalAlpha=1; if(B.rolling) drawBall(B.x,B.y,B.spin,now);
+  }
+  for(const f of FX){ ctx.globalAlpha=Math.min(1,f.life*2); ctx.fillStyle=f.c; ctx.beginPath(); ctx.arc(f.x,f.y,f.r,0,Math.PI*2); ctx.fill(); }
+  ctx.globalAlpha=1;
+}
+function drawPin(p,T,now){
+  const ctx=CTX, w=s*.6, h=s*1.15;
+  ctx.save(); ctx.globalAlpha=p.state==='down'?.35:1; ctx.translate(p.x,p.y+h*.45);
+  if(p.state!=='down'){ ctx.fillStyle='rgba(0,0,0,.15)'; ctx.beginPath(); ctx.ellipse(0,0,w*.6,w*.25,0,0,Math.PI*2); ctx.fill(); }
+  ctx.rotate(p.rot);
+  if(p.inGroup&&p.state==='up'){ ctx.strokeStyle='#ffd23f'; ctx.lineWidth=5; ctx.globalAlpha=.6+.4*Math.sin(now/200); ctx.beginPath(); ctx.ellipse(0,-h*.42,w*.75,h*.62,0,0,Math.PI*2); ctx.stroke(); ctx.globalAlpha=1; }
+  ctx.fillStyle='#fff';
+  ctx.beginPath(); ctx.ellipse(0,-h*.3,w*.5,h*.42,0,0,Math.PI*2); ctx.fill();
+  ctx.beginPath(); ctx.arc(0,-h*.8,w*.33,0,Math.PI*2); ctx.fill();
+  ctx.fillRect(-w*.26,-h*.8,w*.52,h*.3);
+  ctx.fillStyle=T.pin; ctx.fillRect(-w*.44,-h*.58,w*.88,h*.08); ctx.fillRect(-w*.4,-h*.45,w*.8,h*.07);
+  ctx.fillStyle='#22304a'; ctx.beginPath(); ctx.arc(-w*.16,-h*.26,w*.07,0,Math.PI*2); ctx.arc(w*.16,-h*.26,w*.07,0,Math.PI*2); ctx.fill();
+  ctx.strokeStyle='#22304a'; ctx.lineWidth=2; ctx.beginPath(); ctx.arc(0,-h*.2,w*.16,.2,Math.PI-.2); ctx.stroke();
+  ctx.restore();
+}
+function drawBall(x,y,spin,now){
+  const ctx=CTX, r=ballR; ctx.save(); ctx.translate(x,y);
+  ctx.fillStyle='rgba(0,0,0,.15)'; ctx.beginPath(); ctx.ellipse(0,r*.9,r*.9,r*.3,0,0,Math.PI*2); ctx.fill();
+  const g=ctx.createRadialGradient(-r*.3,-r*.3,r*.1,0,0,r); g.addColorStop(0,'#9fdcff'); g.addColorStop(1,'#1e7fd6');
+  ctx.fillStyle=g; ctx.beginPath(); ctx.arc(0,0,r,0,Math.PI*2); ctx.fill();
+  ctx.save(); ctx.rotate(spin); ctx.fillStyle='rgba(255,255,255,.35)'; ctx.beginPath(); ctx.arc(0,0,r*.95,.3,1.2); ctx.lineTo(0,0); ctx.fill(); ctx.restore();
+  ctx.fillStyle='#22304a'; ctx.beginPath(); ctx.arc(-r*.3,-r*.15,r*.12,0,Math.PI*2); ctx.arc(r*.3,-r*.15,r*.12,0,Math.PI*2); ctx.fill();
+  ctx.strokeStyle='#22304a'; ctx.lineWidth=3; ctx.lineCap='round'; ctx.beginPath(); ctx.arc(0,r*.1,r*.35,.25,Math.PI-.25); ctx.stroke();
+  ctx.fillStyle='rgba(255,159,180,.7)'; ctx.beginPath(); ctx.arc(-r*.55,r*.15,r*.12,0,Math.PI*2); ctx.arc(r*.55,r*.15,r*.12,0,Math.PI*2); ctx.fill();
+  ctx.restore();
+}
+
+/* ============================================================
+   4. UI — screens, HUD, inputs, tracking-loss handling, loop
+   ============================================================ */
+const SCREENS=['scrIntro','scrLoading','scrError','scrCalib','scrPaused','scrLost','scrResults'];
+function showScreen(id){ for(const sId of SCREENS) $('#'+sId).classList.toggle('show',sId===id); }
+let toastT; function toast(t){ const e=$('#toast'); e.textContent=t; e.classList.add('show'); clearTimeout(toastT); toastT=setTimeout(()=>e.classList.remove('show'),2800); }
+function showBanner(html){ const b=$('#banner'); b.innerHTML=html; b.classList.add('show'); }
+function hideBanner(){ $('#banner').classList.remove('show'); }
+function updateHUD(){
+  $('#laneName').textContent=theme().emoji+' '+theme().name;
+  $('#frameNo').textContent=`Frame ${Math.min(G.frameIdx+1,FRAMES.length)} / ${FRAMES.length}`;
+  $('#pinCount').textContent='Pins: '+G.pins.filter(p=>p.state!=='down').length;
+  $('#starCount').textContent='⭐ '+G.stars;
+  $('#challenge').textContent=challengeText(frame().ch);
+}
+
+/* Canvas sizing */
+function resize(){ const r=$('#laneWrap').getBoundingClientRect(); if(r.width<2||r.height<2) return;
+  DPR=Math.min(2,window.devicePixelRatio||1); W=r.width; H=r.height; CV.width=Math.round(W*DPR); CV.height=Math.round(H*DPR); layout(); }
+new ResizeObserver(resize).observe($('#laneWrap')); window.addEventListener('orientationchange',()=>setTimeout(resize,250));
+
+/* Start / modes */
+async function startGame(cam){
+  Sound.unlock(); G.camMode=cam; document.body.classList.toggle('nocam',!cam); resetGame(); G.lost=false; G.paused=false;
+  if(cam){
+    showScreen('scrLoading'); $('#loadMsg').textContent='Please allow camera access when your browser asks.';
+    try{ await startTracking(); showCalibration(); }
+    catch(e){ $('#errMsg').textContent=e.message||'Something went wrong with the camera.'; showScreen('scrError'); }
+  }else{ showScreen(null); G.mode='aim'; toast('Use ◀ ▶ and ROLL, or arrow keys + Space'); }
+  setTimeout(resize,50);
+}
+function showCalibration(){
+  document.body.classList.add('calib'); showScreen('scrCalib'); G.mode='idle';
+  Track.calibrating=true; Track.samples=[]; let n=3; $('#countdown').textContent=n;
+  clearInterval(G.calibTimer);
+  G.calibTimer=setInterval(()=>{ n--; if(n>0){ $('#countdown').textContent=n; Sound.click(); } else finishCalibration(); },1000);
+}
+function finishCalibration(){
+  clearInterval(G.calibTimer); Track.calibrating=false; const S=Track.samples;
+  if(S.length>5){ const avg=k=>S.reduce((a,x)=>a+x[k],0)/S.length; Track.calib={cx:avg('cx'),sw:avg('sw'),torso:avg('torso'),done:true}; toast('Calibrated! Lean to aim, swing your arm to roll.'); }
+  else { Track.calib.done=false; toast("I couldn't see you well, I'll adjust as we go."); }
+  document.body.classList.remove('calib'); showScreen(null); G.mode='aim'; G.lost=false; Track.armed=false; Track.lastSeen=performance.now(); $('#rollBtn').disabled=false;
+  setTimeout(resize,50);
+}
+function togglePause(force){
+  if(G.mode==='idle'||G.mode==='results'||G.lost) return;
+  G.paused=force===undefined?!G.paused:force;
+  $('#recalBtn').style.display=G.camMode?'':'none';
+  showScreen(G.paused?'scrPaused':null); $('#pauseBtn').textContent=G.paused?'▶ Resume':'⏸ Pause';
+}
+function showResults(){
+  G.mode='results'; hideBanner();
+  $('#resStars').textContent=G.stars; $('#resFrames').textContent=G.framesDone; $('#resStrikes').textContent=G.strikes; $('#resRolls').textContent=G.rolls;
+  showScreen('scrResults'); Sound.fanfare(); Confetti.start();
+}
+function goMenu(){ Confetti.stop(); stopTracking(); G.camMode=false; G.paused=false; G.lost=false; G.mode='idle'; resetGame(); document.body.classList.add('nocam'); showScreen('scrIntro'); $('#pauseBtn').textContent='⏸ Pause'; }
+
+/* Confetti for the results screen */
+const Confetti={ run:false, parts:[], c:$('#confetti'),
+  start(){ this.run=true; this.c.classList.add('show'); const d=Math.min(2,window.devicePixelRatio||1); this.c.width=innerWidth*d; this.c.height=innerHeight*d; this.d=d;
+    this.parts=Array.from({length:140},()=>({x:Math.random()*innerWidth,y:-20-Math.random()*innerHeight,vx:(Math.random()-.5)*60,vy:80+Math.random()*120,r:4+Math.random()*6,c:['#ff7f50','#3fb4ff','#ffd23f','#3cc46e','#ff5fa2'][Math.random()*5|0],a:Math.random()*6}));
+    this.t0=performance.now(); this.last=this.t0; this.tick(); },
+  stop(){ this.run=false; this.c.classList.remove('show'); },
+  tick(){ if(!this.run) return; const now=performance.now(), dt=Math.min(.05,(now-this.last)/1000); this.last=now;
+    const x=this.c.getContext('2d'); x.setTransform(this.d,0,0,this.d,0,0); x.clearRect(0,0,innerWidth,innerHeight);
+    for(const p of this.parts){ p.y+=p.vy*dt; p.x+=p.vx*dt+Math.sin(now/300+p.a)*30*dt; p.a+=dt*3; if(p.y>innerHeight+20){ p.y=-20; p.x=Math.random()*innerWidth; }
+      x.save(); x.translate(p.x,p.y); x.rotate(p.a); x.fillStyle=p.c; x.fillRect(-p.r,-p.r*.6,p.r*2,p.r*1.2); x.restore(); }
+    if(now-this.t0<8000) requestAnimationFrame(()=>this.tick()); else this.stop(); }
+};
+
+/* Buttons */
+$('#btnCam').onclick=()=>startGame(true);
+$('#btnNoCam').onclick=()=>startGame(false);
+$('#tglAssist').onclick=e=>{ G.assist=!G.assist; e.target.textContent='Aim helper: '+(G.assist?'ON':'OFF'); Sound.click(); };
+$('#tglSound').onclick=e=>{ Sound.on=!Sound.on; e.target.textContent='Sound: '+(Sound.on?'ON':'OFF'); Sound.click(); };
+$('#errRetry').onclick=()=>startGame(true);
+$('#errButtons').onclick=()=>{ G.camMode=false; document.body.classList.add('nocam'); showScreen(null); G.mode='aim'; };
+$('#calibSkip').onclick=finishCalibration;
+$('#pauseBtn').onclick=()=>togglePause();
+$('#resumeBtn').onclick=()=>togglePause(false);
+$('#pauseRestart').onclick=()=>{ togglePause(false); resetGame(); G.mode='aim'; toast('Starting over from Frame 1!'); };
+$('#recalBtn').onclick=()=>{ G.paused=false; $('#pauseBtn').textContent='⏸ Pause'; showCalibration(); };
+$('#menuBtn').onclick=goMenu; $('#resMenu').onclick=goMenu;
+$('#restartBtn').onclick=()=>{ if(G.mode==='idle'||G.paused) return; Confetti.stop(); showScreen(null); resetGame(); G.mode='aim'; toast('Starting over from Frame 1!'); };
+$('#againBtn').onclick=()=>{ Confetti.stop(); showScreen(null); resetGame(); G.mode='aim'; };
+$('#lostButtons').onclick=()=>{ G.camMode=false; G.lost=false; document.body.classList.add('nocam'); showScreen(null); };
+$('#skipBtn').onclick=()=>{ if(G.mode!=='aim') return; G.rollId++; $('#skipBtn').style.display='none'; toast('Skipping ahead, nice exploring!'); nextFrame(); };
+$('#rollBtn').onclick=()=>roll(.8);
+Track.onSwing=st=>roll(st);
+
+/* Aim buttons (hold to keep turning), touch drag on the lane, keyboard */
+function manualAim(v){ G.aim=clamp(v,-1,1); G.manualUntil=performance.now()+2000; }
+let holdT=null;
+for(const [id,dir] of [['#aimL',-1],['#aimR',1]]){ const b=$(id);
+  const start=e=>{ e.preventDefault(); manualAim(G.aim+dir*.12); clearInterval(holdT); holdT=setInterval(()=>manualAim(G.aim+dir*.06),60); };
+  const stop=()=>clearInterval(holdT);
+  b.addEventListener('pointerdown',start); b.addEventListener('pointerup',stop); b.addEventListener('pointercancel',stop); b.addEventListener('pointerleave',stop); }
+let dragging=false;
+CV.addEventListener('pointerdown',e=>{ dragging=true; manualAim((e.offsetX-laneCX)/(laneW/2)); });
+CV.addEventListener('pointermove',e=>{ if(dragging) manualAim((e.offsetX-laneCX)/(laneW/2)); });
+window.addEventListener('pointerup',()=>dragging=false);
+window.addEventListener('keydown',e=>{
+  if(e.key==='ArrowLeft'){ manualAim(G.aim-.1); e.preventDefault(); }
+  else if(e.key==='ArrowRight'){ manualAim(G.aim+.1); e.preventDefault(); }
+  else if(e.key===' '||e.key==='Enter'){ if(G.mode==='aim'&&!G.paused){ roll(.8); e.preventDefault(); } }
+  else if(e.key==='p'||e.key==='P') togglePause();
+  else if(e.key==='r'||e.key==='R') $('#restartBtn').click();
+  else if(e.key==='Escape'&&G.paused) togglePause(false);
+});
+document.addEventListener('visibilitychange',()=>{ if(document.hidden&&!G.paused&&G.mode!=='idle'&&G.mode!=='results') togglePause(true); });
+
+/* Tracking-loss: pause kindly, resume with a short countdown once the player is back */
+function handleLoss(now){
+  if(!G.camMode||!Track.ready||G.paused||G.mode==='results'||G.mode==='idle') return;
+  const seen=now-Track.lastSeen<1500;
+  if(!G.lost){ if(!seen&&G.mode==='aim'){ G.lost=true; G.resumeAt=0; $('#lostCount').textContent=''; showScreen('scrLost'); } return; }
+  if(seen){ if(!G.resumeAt) G.resumeAt=now+2000;
+    $('#lostCount').textContent='Found you! Resuming in '+Math.ceil((G.resumeAt-now)/1000)+'…';
+    if(now>=G.resumeAt){ G.lost=false; showScreen(null); Track.armed=false; toast('Welcome back!'); } }
+  else { G.resumeAt=0; $('#lostCount').textContent=''; }
+}
+
+/* Main loop */
+let last=performance.now();
+function tick(now){
+  const dt=Math.min(.05,(now-last)/1000); last=now;
+  updateTracking(now); handleLoss(now);
+  if(!G.lost) update(dt,now);
+  if(W>0) render(now);
+  requestAnimationFrame(tick);
+}
+resize(); setupFrame(0); updateHUD(); requestAnimationFrame(tick);
+</script>
+</body>
+</html>

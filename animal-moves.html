@@ -1,0 +1,1468 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no">
+<meta name="theme-color" content="#BFE6FF">
+<title>Animal Moves</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Fredoka:wght@500;600;700&display=swap">
+<style>
+:root{
+  --ink:#3B2F5C; --ink-soft:#6B5E8E; --sky:#BFE6FF; --pink:#FF8FB8; --sun:#FFD36E; --mint:#8EDB9B; --lilac:#C9B6FF;
+  --go-top:#62E29E; --go-bot:#2FBF70; --go-edge:#1F9A57;
+  --font:'Fredoka','Baloo 2','Arial Rounded MT Bold','Varela Round','Comic Sans MS',system-ui,sans-serif;
+  --st:env(safe-area-inset-top,0px); --sr:env(safe-area-inset-right,0px); --sb:env(safe-area-inset-bottom,0px); --sl:env(safe-area-inset-left,0px);
+}
+*{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+html,body{margin:0;width:100%;height:100%;overflow:hidden;background:var(--sky);color:var(--ink);font-family:var(--font);-webkit-user-select:none;user-select:none;-webkit-touch-callout:none;overscroll-behavior:none;touch-action:manipulation}
+#cam{position:fixed;inset:0;width:100%;height:100%;object-fit:cover;transform:scaleX(-1);opacity:0;transition:opacity .6s ease;background:#2b2440}
+#cam.on{opacity:1}
+#stage{position:fixed;inset:0;width:100%;height:100%;display:block;touch-action:none}
+button{font-family:var(--font);color:var(--ink);cursor:pointer}
+button:focus-visible{outline:5px solid var(--pink);outline-offset:5px}
+
+.screen{position:fixed;inset:0;display:none;flex-direction:column;align-items:center;justify-content:center;gap:clamp(8px,2.2vmin,28px);padding:calc(var(--st) + 3vmin) calc(var(--sr) + 4vmin) calc(var(--sb) + 3vmin) calc(var(--sl) + 4vmin);text-align:center;pointer-events:none}
+.screen.active{display:flex}
+.screen button{pointer-events:auto}
+.title{font-weight:700;font-size:clamp(30px,8.5vmin,104px);line-height:1;color:var(--ink);text-shadow:0 .05em 0 #fff,0 -.05em 0 #fff,.05em 0 0 #fff,-.05em 0 0 #fff,.04em .04em 0 #fff,-.04em -.04em 0 #fff,.04em -.04em 0 #fff,-.04em .04em 0 #fff,0 .16em .2em rgba(59,47,92,.18)}
+.emoji-row{font-size:clamp(26px,7vmin,84px);display:flex;gap:1.6vmin;line-height:1}
+.emoji-row span{display:inline-block;animation:hop 2.4s ease-in-out infinite}
+.emoji-row span:nth-child(2){animation-delay:.2s}.emoji-row span:nth-child(3){animation-delay:.4s}
+.emoji-row span:nth-child(4){animation-delay:.6s}.emoji-row span:nth-child(5){animation-delay:.8s}.emoji-row span:nth-child(6){animation-delay:1s}
+@keyframes hop{0%,60%,100%{transform:translateY(0)}30%{transform:translateY(-22%)}}
+.mascot-spot{flex:0 1 auto;width:min(46vmin,70vw);height:clamp(90px,30vh,380px)}
+.mascot-spot.small{height:clamp(80px,24vh,300px)}
+.label{font-weight:700;font-size:clamp(26px,7vmin,84px);line-height:1.05;padding:.15em .6em .2em;background:#fff;border-radius:999px;box-shadow:0 .6vmin 0 rgba(59,47,92,.12)}
+.label.sm{font-size:clamp(20px,5vmin,60px)}
+.note{max-width:min(720px,92vw);font-weight:500;font-size:clamp(14px,2.4vmin,22px);line-height:1.35;color:var(--ink-soft);background:rgba(255,255,255,.88);padding:.6em 1em;border-radius:18px}
+.note:empty{display:none}
+.row{display:flex;gap:3vmin;align-items:center;justify-content:center;flex-wrap:wrap}
+.hidden{display:none!important}
+
+.big{font-weight:700;font-size:clamp(40px,10.5vmin,128px);line-height:1;color:#fff;background:linear-gradient(var(--go-top),var(--go-bot));border:clamp(5px,1.1vmin,12px) solid #fff;border-radius:999px;padding:.32em 1.05em .38em;min-height:max(16vh,84px);min-width:max(40vmin,220px);box-shadow:0 1.3vmin 0 var(--go-edge),0 2.6vmin 4vmin rgba(40,50,90,.28);text-shadow:0 .05em 0 rgba(0,0,0,.18);transition:transform .12s}
+.big:active{transform:translateY(1vmin) scale(.98)}
+.pulse{animation:pulse 1.6s ease-in-out infinite}
+@keyframes pulse{0%,100%{transform:scale(1)}50%{transform:scale(1.07)}}
+.mid{font-size:clamp(30px,7.5vmin,90px);min-width:max(30vmin,170px)}
+.blue{background:linear-gradient(#8FD3FF,#4FB3F6);box-shadow:0 1.3vmin 0 #2E8FD1,0 2.6vmin 4vmin rgba(40,50,90,.28);min-width:max(18vmin,110px)}
+
+#hud{position:fixed;inset:0;pointer-events:none;z-index:5}
+#starbar{position:absolute;top:calc(var(--st) + 1.4vmin);left:50%;transform:translateX(-50%);display:none;gap:clamp(2px,.6vmin,8px);padding:clamp(4px,.9vmin,12px) clamp(8px,1.8vmin,22px);background:rgba(255,255,255,.85);border-radius:999px;box-shadow:0 .8vmin 2vmin rgba(59,47,92,.15)}
+#hud.game #starbar{display:flex}
+.slot{font-size:clamp(17px,4.2vmin,50px);line-height:1;filter:grayscale(1);opacity:.32;transition:opacity .3s,filter .3s}
+.slot.on{filter:none;opacity:1;animation:starpop .7s cubic-bezier(.3,1.7,.5,1)}
+@keyframes starpop{0%{transform:scale(.2) rotate(-40deg)}100%{transform:scale(1) rotate(0)}}
+.hbtn{pointer-events:auto;position:absolute;display:grid;place-items:center;border:none;border-radius:50%;background:#fff;box-shadow:0 .8vmin 0 rgba(59,47,92,.15),0 1.4vmin 3vmin rgba(59,47,92,.18);padding:0;line-height:1}
+#btnSay{right:calc(var(--sr) + 2.6vmin);bottom:calc(var(--sb) + 2.6vmin);width:clamp(64px,15vmin,160px);height:clamp(64px,15vmin,160px);font-size:clamp(30px,8vmin,84px);border:clamp(4px,.9vmin,10px) solid var(--sun)}
+#btnMute{right:calc(var(--sr) + 2vmin);top:calc(var(--st) + 1.4vmin);width:clamp(44px,8.5vmin,86px);height:clamp(44px,8.5vmin,86px);font-size:clamp(20px,4.4vmin,44px)}
+#grown{pointer-events:auto;position:absolute;left:var(--sl);top:var(--st);width:clamp(56px,10vmin,96px);height:clamp(56px,10vmin,96px);display:grid;place-items:center;touch-action:none;-webkit-touch-callout:none}
+#grown .lock{font-size:clamp(14px,2.6vmin,24px);opacity:.28;position:relative}
+#grown .ring{position:absolute;inset:16%;border-radius:50%;background:conic-gradient(var(--pink) calc(var(--p,0) * 1turn),rgba(255,255,255,.5) 0);opacity:0;transition:opacity .2s}
+#grown.holding .ring{opacity:1}
+#grown.holding .lock{opacity:1}
+
+#panel{position:fixed;inset:0;z-index:20;display:none;align-items:center;justify-content:center;background:rgba(59,47,92,.5);padding:calc(var(--st) + 16px) 16px calc(var(--sb) + 16px);-webkit-user-select:auto;user-select:auto}
+#panel.open{display:flex}
+.pcard{width:min(560px,100%);max-height:100%;overflow:auto;background:#fff;border-radius:24px;padding:22px 22px 18px;box-shadow:0 20px 60px rgba(30,20,60,.35);font-size:17px}
+.pcard h2{margin:0 0 4px;font-size:24px}
+.pcard .sub{margin:0 0 10px;color:var(--ink-soft);font-size:14px;line-height:1.4}
+.field{display:flex;flex-direction:column;gap:6px;margin:12px 0}
+.field>span{font-weight:600}
+.seg{display:flex;gap:6px;flex-wrap:wrap}
+.seg button{flex:1;min-width:90px;padding:10px 8px;border-radius:14px;border:2px solid #E2D6FF;background:#F7F3FF;font-size:16px;font-weight:600}
+.seg button.on{background:var(--ink);color:#fff;border-color:var(--ink)}
+.pcard select{font:inherit;font-size:16px;padding:10px;border-radius:12px;border:2px solid #E2D6FF;background:#FBF9FF;color:var(--ink);width:100%}
+.check{display:flex;gap:10px;align-items:center;margin:10px 0;font-weight:500}
+.check input{width:22px;height:22px;accent-color:var(--pink)}
+.pnote{font-size:14px;color:var(--ink-soft);margin:2px 0 0;line-height:1.4}
+.pnote:empty{display:none}
+.pactions{display:flex;gap:8px;flex-wrap:wrap;margin-top:16px}
+.pactions button{flex:1;min-width:120px;padding:12px;border-radius:14px;border:2px solid #E2D6FF;background:#F7F3FF;font-size:16px;font-weight:600}
+.pactions .primary{background:var(--go-bot);border-color:var(--go-bot);color:#fff}
+.pactions .warn{background:#FFE9F1;border-color:#FFC2D8}
+@media (prefers-reduced-motion: reduce){.pulse,.emoji-row span{animation:none}}
+@media (max-height:460px){.title{font-size:clamp(24px,7vmin,60px)}.emoji-row{display:none}}
+</style>
+</head>
+<body>
+<video id="cam" playsinline muted autoplay></video>
+<canvas id="stage"></canvas>
+
+<section class="screen active" data-screen="start">
+  <div class="title">Animal Moves</div>
+  <div class="emoji-row" aria-hidden="true"><span>🐸</span><span>🐘</span><span>🐦</span><span>🐍</span><span>🐰</span><span>🐵</span></div>
+  <div class="mascot-spot"></div>
+  <button id="btnPlay" class="big pulse" aria-label="Play">▶ PLAY</button>
+</section>
+
+<section class="screen" data-screen="perm">
+  <div class="mascot-spot small"></div>
+  <div id="permLabel" class="label">Camera, please!</div>
+  <div id="permNote" class="note"></div>
+  <div id="permBtns" class="row hidden">
+    <button id="btnTouch" class="big mid" aria-label="Play with touch">👆 Touch</button>
+    <button id="btnRetry" class="big mid blue" aria-label="Try the camera again">🔄</button>
+  </div>
+</section>
+
+<section class="screen" data-screen="loading">
+  <div class="mascot-spot"></div>
+  <div class="emoji-row" aria-hidden="true"><span>🐸</span><span>🐘</span><span>🐦</span><span>🐍</span><span>🐰</span><span>🐵</span></div>
+  <div class="label sm">Getting ready…</div>
+</section>
+
+<section class="screen" data-screen="rest">
+  <div class="label">Great job!</div>
+  <div class="mascot-spot"></div>
+  <div class="label sm">Drink some water 💧</div>
+  <button id="btnAgain" class="big pulse" aria-label="Play again">▶ Play again</button>
+</section>
+
+<div id="hud">
+  <div id="starbar" aria-label="Stars"></div>
+  <button id="btnMute" class="hbtn" aria-label="Sound on or off">🔔</button>
+  <button id="btnSay" class="hbtn" aria-label="Say it again">🔊</button>
+  <div id="grown" aria-label="Grown-up corner, press and hold for 3 seconds"><div class="ring"></div><span class="lock">🔒</span></div>
+</div>
+
+<div id="panel" role="dialog" aria-modal="true" aria-label="Grown-up corner">
+  <div class="pcard">
+    <h2>Grown-up corner</h2>
+    <p class="sub">The game is paused. Video is processed on this device and never uploaded.</p>
+    <div class="field"><span>Difficulty</span>
+      <div class="seg" id="segDiff"><button data-v="easy">Easy</button><button data-v="normal">Normal</button><button data-v="hard">Big kid</button></div>
+    </div>
+    <label class="field"><span>Camera</span><select id="selCam"></select></label>
+    <p id="camNote" class="pnote"></p>
+    <label class="field"><span>Microphone (optional: animal sounds make music sparkles)</span><select id="selMic"></select></label>
+    <p id="micNote" class="pnote"></p>
+    <label class="check"><input type="checkbox" id="chkTouch"> Touch mode, no camera</label>
+    <label class="check"><input type="checkbox" id="chkDots"> Show tracking dots</label>
+    <div class="pactions">
+      <button id="btnRestart">Restart game</button>
+      <button id="btnExit" class="warn">Exit and turn off camera</button>
+      <button id="btnClose" class="primary">Back to game</button>
+    </div>
+  </div>
+</div>
+<script>
+(() => {
+'use strict';
+
+/* ======================= CONFIG ======================= */
+const MP_VER = '0.5.1675469404';
+const MP_BASE = 'https://cdn.jsdelivr.net/npm/@mediapipe/pose@' + MP_VER + '/';
+const ROUNDS = 10;
+const TAU = Math.PI * 2;
+const TOG_CYCLE = 1.3;
+const EMOJI_FONT = '"Apple Color Emoji","Segoe UI Emoji","Noto Color Emoji","Twemoji Mozilla",sans-serif';
+const UI_FONT = 'Fredoka, "Baloo 2", "Arial Rounded MT Bold", "Varela Round", "Comic Sans MS", system-ui, sans-serif';
+const PALETTE = ['#FF8FB8', '#FFC46B', '#7FD99A', '#6CC4FF', '#B79CFF', '#FFE066', '#FF9F80', '#7EE0D6'];
+const PRAISE = ['Amazing!', 'You did it!', 'Super star!', 'Wow, great job!', 'Fantastic!', 'Hooray!', 'Brilliant moving!', 'You are so good at this!'];
+const OOPS = ['Oops, try again!', "Oops! Let's try again!", 'Almost! Try again!'];
+const NUMW = ['Zero', 'One', 'Two', 'Three', 'Four', 'Five'];
+const DIFF = {
+  easy:   { k: 0.7,  sched: [1, 1, 1, 1, 1, 2, 2, 2, 2, 2] },
+  normal: { k: 1.0,  sched: [1, 1, 1, 2, 2, 2, 2, 3, 3, 3] },
+  hard:   { k: 1.25, sched: [1, 1, 2, 2, 2, 3, 3, 3, 3, 3] }
+};
+const ANIMALS = {
+  frog:     { emoji: '🐸', name: 'frog',     label: 'Frog',     a: 'a',  color: '#7FD99A', how: 'Squat down low, then jump up high!', short: 'Squat down, and jump!' },
+  elephant: { emoji: '🐘', name: 'elephant', label: 'Elephant', a: 'an', color: '#AFC3EE', how: 'Make a long trunk with your arm, and swing it side to side!', short: 'Swing your trunk!' },
+  bird:     { emoji: '🐦', name: 'bird',     label: 'Bird',     a: 'a',  color: '#6CC4FF', how: 'Put your arms up, and flap your wings!', short: 'Flap, flap, flap!' },
+  snake:    { emoji: '🐍', name: 'snake',    label: 'Snake',    a: 'a',  color: '#B9E36B', how: 'Wiggle your body side to side. Sss!', short: 'Wiggle side to side!' },
+  bunny:    { emoji: '🐰', name: 'bunny',    label: 'Bunny',    a: 'a',  color: '#FFB3D1', how: 'Do little hops! Hop, hop!', short: 'Hop, hop!' },
+  monkey:   { emoji: '🐵', name: 'monkey',   label: 'Monkey',   a: 'a',  color: '#FFC46B', how: 'Put your hands up high, and scratch, scratch, scratch!', short: 'Hands up, and scratch!' }
+};
+const KEYS = Object.keys(ANIMALS);
+const IS_SMALL = Math.min(screen.width || 9999, screen.height || 9999) < 700 || /Android|iPhone|iPad|iPod|Mobile/i.test(navigator.userAgent);
+
+/* ======================= POSE DETECTORS =======================
+   Coordinates: x is scaled by video aspect so both axes share units
+   (fractions of frame height). y grows downward. U = body size unit
+   (about one shoulder width). k = difficulty multiplier. */
+// ==DETECTORS-START==
+class Osc {
+  constructor() { this.reset(); }
+  reset() { this.mn = null; this.mx = null; this.dir = 0; this.ev = []; }
+  update(v, h, t) {
+    if (this.mn === null) { this.mn = v; this.mx = v; return 0; }
+    if (this.dir !== -1 && v > this.mx) this.mx = v;
+    if (this.dir !== 1 && v < this.mn) this.mn = v;
+    if (this.dir !== 1 && v - this.mn > h) { this.ev.push({ t, d: 1, ext: this.mn }); this.dir = 1; this.mx = v; this.trim(t); return 1; }
+    if (this.dir !== -1 && this.mx - v > h) { this.ev.push({ t, d: -1, ext: this.mx }); this.dir = -1; this.mn = v; this.trim(t); return -1; }
+    return 0;
+  }
+  trim(t) { while (this.ev.length && t - this.ev[0].t > 10) this.ev.shift(); }
+  count(t, win, fn) { let n = 0; for (const e of this.ev) if (t - e.t <= win && (!fn || fn(e))) n++; return n; }
+  clear() { this.ev.length = 0; }
+}
+
+// Frog: shoulders drop (squat), then rise again (jump or stand up).
+class FrogDet {
+  constructor() { this.reset(); }
+  reset() { this.hist = []; this.state = 'up'; this.low = 0; this.prog = 0; this.cool = 0; }
+  update(f, U, k) {
+    const t = f.t, y = f.sm.y;
+    if (t < this.cool) { this.hist = [{ t, y }]; this.state = 'up'; this.prog = 0; return 0; }
+    this.hist.push({ t, y });
+    while (this.hist.length > 1 && t - this.hist[0].t > 2.5) this.hist.shift();
+    let top = Infinity; for (const h of this.hist) if (h.y < top) top = h.y;
+    const dropNeed = 0.45 * U * k, riseNeed = 0.32 * U * k;
+    if (this.state === 'up') {
+      const drop = y - top;
+      this.prog = Math.max(0, Math.min(0.5, 0.5 * drop / dropNeed));
+      if (drop > dropNeed) { this.state = 'down'; this.low = y; }
+    } else {
+      if (y > this.low) this.low = y;
+      const rise = this.low - y;
+      this.prog = 0.5 + Math.max(0, Math.min(0.5, 0.5 * rise / riseNeed));
+      if (rise > riseNeed) { this.state = 'up'; this.cool = t + 0.8; this.prog = 0; return 1; }
+    }
+    return 0;
+  }
+}
+
+// Bunny: small vertical bounces. Two hops = one repetition.
+class BunnyDet {
+  constructor() { this.reset(); }
+  reset() { this.o = new Osc(); this.hops = []; this.prog = 0; this.cool = 0; }
+  update(f, U, k) {
+    const t = f.t;
+    const r = this.o.update(-f.sm.y, 0.16 * U * k, t);
+    if (t < this.cool) return 0;
+    if (r === 1) this.hops.push(t);
+    while (this.hops.length && t - this.hops[0] > 2.5) this.hops.shift();
+    this.prog = Math.min(1, this.hops.length / 2);
+    if (this.hops.length >= 2) { this.hops = []; this.cool = t + 0.25; this.prog = 0; return 1; }
+    return 0;
+  }
+}
+
+// Bird: wrists flap up and down 3 times, peaking near or above the shoulders.
+class BirdDet {
+  constructor() { this.reset(); }
+  reset() { this.o = new Osc(); this.prog = 0; this.cool = 0; }
+  update(f, U, k) {
+    const t = f.t;
+    const vis = [f.lw, f.rw].filter(w => w.v > 0.25);
+    const use = vis.length ? vis : [f.lw, f.rw];
+    let wy = 0; for (const w of use) wy += w.y; wy /= use.length;
+    this.o.update(-wy, 0.28 * U * k, t);
+    if (t < this.cool) return 0;
+    const lim = -(f.sm.y + 0.6 * U / k);
+    const n = this.o.count(t, 4, e => e.d === -1 && e.ext > lim);
+    this.prog = Math.min(1, n / 3);
+    if (n >= 3) { this.o.clear(); this.cool = t + 0.4; this.prog = 0; return 1; }
+    return 0;
+  }
+}
+
+// Elephant: a hand below the nose swings left and right (trunk).
+class ElephantDet {
+  constructor() { this.reset(); }
+  reset() { this.oL = new Osc(); this.oR = new Osc(); this.prog = 0; this.cool = 0; }
+  update(f, U, k) {
+    const t = f.t, h = 0.45 * U * k, lowY = f.nose.y - 0.3 * U;
+    if (f.lw.y > lowY) this.oL.update(f.lw.x, h, t);
+    if (f.rw.y > lowY) this.oR.update(f.rw.x, h, t);
+    if (t < this.cool) return 0;
+    const n = Math.max(this.oL.count(t, 3.5), this.oR.count(t, 3.5));
+    this.prog = Math.min(1, n / 2);
+    if (n >= 2) { this.oL.clear(); this.oR.clear(); this.cool = t + 0.4; this.prog = 0; return 1; }
+    return 0;
+  }
+}
+
+// Snake: upper body sways left and right.
+class SnakeDet {
+  constructor() { this.reset(); }
+  reset() { this.o = new Osc(); this.prog = 0; this.cool = 0; }
+  update(f, U, k) {
+    const t = f.t;
+    this.o.update(f.sm.x * 0.5 + f.nose.x * 0.5, 0.32 * U * k, t);
+    if (t < this.cool) return 0;
+    const n = this.o.count(t, 4);
+    this.prog = Math.min(1, n / 2);
+    if (n >= 2) { this.o.clear(); this.cool = t + 0.4; this.prog = 0; return 1; }
+    return 0;
+  }
+}
+
+// Monkey: hands up around the head (one up, the other at least at chest), held ~1.3 s. Scratching fills faster.
+class MonkeyDet {
+  constructor() { this.reset(); }
+  reset() { this.hold = 0; this.lastT = null; this.prev = null; this.prog = 0; this.cool = 0; }
+  update(f, U, k) {
+    const t = f.t;
+    const dt = this.lastT == null ? 0 : Math.max(0, Math.min(0.2, t - this.lastT));
+    this.lastT = t;
+    let motion = 0;
+    if (this.prev && dt > 0) motion = (Math.hypot(f.lw.x - this.prev.lx, f.lw.y - this.prev.ly) + Math.hypot(f.rw.x - this.prev.rx, f.rw.y - this.prev.ry)) / U / dt;
+    this.prev = { lx: f.lw.x, ly: f.lw.y, rx: f.rw.x, ry: f.rw.y };
+    if (t < this.cool) { this.hold = 0; this.prog = 0; return 0; }
+    const upY = f.sm.y + 0.2 * U / k, nearY = f.sm.y + 0.9 * U / k;
+    const ok = (f.lw.y < upY && f.rw.y < nearY) || (f.rw.y < upY && f.lw.y < nearY);
+    if (ok) this.hold += dt * (motion > 1.2 ? 1.5 : 1);
+    else this.hold = Math.max(0, this.hold - dt * 0.6);
+    const need = 1.3 * k;
+    this.prog = Math.min(1, this.hold / need);
+    if (this.hold >= need) { this.hold = 0; this.cool = t + 0.6; this.prog = 0; return 1; }
+    return 0;
+  }
+}
+
+const DETECTORS = { frog: FrogDet, bunny: BunnyDet, bird: BirdDet, elephant: ElephantDet, snake: SnakeDet, monkey: MonkeyDet };
+function makeDetector(key) { const C = DETECTORS[key]; return C ? new C() : null; }
+
+function features(L, aspect, t) {
+  const P = (i) => ({ x: L[i].x * aspect, y: L[i].y, v: L[i].v });
+  const ls = P(11), rs = P(12), lh = P(23), rh = P(24);
+  return {
+    t, ls, rs, nose: P(0), lw: P(15), rw: P(16),
+    sm: { x: (ls.x + rs.x) / 2, y: (ls.y + rs.y) / 2 },
+    hm: { x: (lh.x + rh.x) / 2, y: (lh.y + rh.y) / 2 },
+    hipsVis: (lh.v + rh.v) / 2 > 0.5,
+    sw: Math.hypot(ls.x - rs.x, ls.y - rs.y)
+  };
+}
+
+class Tracker {
+  constructor() { this.U = null; this.det = null; this.k = 1; this.key = null; }
+  set(key) { this.key = key; this.det = key ? makeDetector(key) : null; }
+  reset() { if (this.det) this.det.reset(); }
+  observe(f) {
+    let size = f.sw;
+    if (f.hipsVis) size = Math.max(size, 0.6 * Math.hypot(f.sm.x - f.hm.x, f.sm.y - f.hm.y));
+    size = Math.min(0.6, Math.max(0.06, size));
+    this.U = this.U == null ? size : this.U + 0.08 * (size - this.U);
+  }
+  detect(f) { return this.det ? this.det.update(f, this.U || 0.15, this.k) : 0; }
+  get prog() { return this.det ? this.det.prog : 0; }
+}
+// ==DETECTORS-END==
+
+/* ======================= HELPERS & STATE ======================= */
+const $ = (s) => document.querySelector(s);
+const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
+const rand = (a, b) => a + Math.random() * (b - a);
+const pick = (arr) => arr[Math.floor(Math.random() * arr.length)];
+const ease = (t) => t < 0.5 ? 2 * t * t : 1 - Math.pow(-2 * t + 2, 2) / 2;
+const easeOutBack = (t) => { const c1 = 1.70158, c3 = c1 + 1; return 1 + c3 * Math.pow(t - 1, 3) + c1 * Math.pow(t - 1, 2); };
+function shuffle(a) { for (let i = a.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [a[i], a[j]] = [a[j], a[i]]; } return a; }
+
+const video = $('#cam'), cv = $('#stage'), ctx = cv.getContext('2d');
+const hud = $('#hud'), starbar = $('#starbar'), grown = $('#grown'), panel = $('#panel');
+
+const S = { screen: 'start', mode: 'camera', prefTouch: false, muted: false, hidden: false, panel: false, diff: 'normal',
+  showDots: false, camId: '', micId: '', run: 0, permKind: 'ask', speechReady: false, speechUnlocked: false,
+  lastInteract: 0, idleRepeats: 0, lastTapGT: -99, lastRepTapGT: -99, camSuspended: false };
+const R = { tok: 0, plan: [], idx: 0, stars: 0, phase: 'none', phaseT: 0, segs: [], seg: 0, need: 1, reps: 0, lvl: 1,
+  misses: 0, hint: false, attempt: 0, idle: 0, detectOn: false, prog: 0, introHold: 0, lastMissGT: -9,
+  lastStepSay: -99, lastCloseSay: -99, tooClose: 0, stepBack: false, finStars: [] };
+const person = { lastSeen: -99, present: false, motion: 0, f: null };
+const tracker = new Tracker();
+const SM = Array.from({ length: 33 }, () => ({ x: 0.5, y: 0.5, v: 0, init: false }));
+const D = {};
+let gt = 0; // game clock in seconds, frozen while paused
+let W = 1, H = 1, DPR = 1, spot = null, muteBottom = 60, insets = { t: 0, r: 0, b: 0, l: 0 };
+
+/* ----- pause-aware timers, tied to the current segment token ----- */
+const timers = [];
+function newSeg() { return ++R.tok; }
+function afterSeg(sec, fn) { timers.push({ at: gt + sec, fn, tok: R.tok }); }
+function clearTimers() { timers.length = 0; }
+function runTimers() {
+  for (let i = 0; i < timers.length; i++) {
+    const tm = timers[i];
+    if (tm.tok !== R.tok) { timers.splice(i--, 1); continue; }
+    if (gt >= tm.at) { timers.splice(i--, 1); try { tm.fn(); } catch (e) { console.error(e); } }
+  }
+}
+
+/* ======================= AUDIO (Web Audio only) ======================= */
+let ac = null, master = null, noiseBuf = null, sfxBusyUntil = 0;
+function audio() {
+  if (!ac) {
+    const A = window.AudioContext || window.webkitAudioContext;
+    if (!A) return null;
+    try {
+      ac = new A();
+      master = ac.createGain(); master.gain.value = S.muted ? 0 : 0.55;
+      const comp = ac.createDynamicsCompressor(); comp.threshold.value = -18; comp.ratio.value = 4;
+      master.connect(comp); comp.connect(ac.destination);
+    } catch (e) { ac = null; return null; }
+  }
+  if (ac.state === 'suspended' && !S.hidden && !S.panel) ac.resume().catch(() => {});
+  return ac;
+}
+function tone(type, f0, f1, delay, dur, vol, o) {
+  o = o || {};
+  const a = audio(); if (!a || S.muted) return;
+  const t = a.currentTime + 0.01 + delay;
+  const osc = a.createOscillator(); osc.type = type;
+  osc.frequency.setValueAtTime(f0, t);
+  if (f1 && f1 !== f0) osc.frequency.exponentialRampToValueAtTime(f1, t + (o.glide || dur));
+  const g = a.createGain();
+  const at = o.attack != null ? o.attack : 0.012, rel = o.release != null ? o.release : Math.min(0.12, dur * 0.5);
+  const v = Math.max(0.0002, vol);
+  g.gain.setValueAtTime(0.0001, t);
+  g.gain.exponentialRampToValueAtTime(v, t + at);
+  g.gain.setValueAtTime(v, t + Math.max(at, dur - rel));
+  g.gain.exponentialRampToValueAtTime(0.0001, t + dur);
+  let node = osc; const lfos = [];
+  if (o.vib) { const l = a.createOscillator(), lg = a.createGain(); l.frequency.value = o.vib[0]; lg.gain.value = o.vib[1]; l.connect(lg); lg.connect(osc.frequency); lfos.push(l); }
+  if (o.am) { const l = a.createOscillator(), lg = a.createGain(), am = a.createGain(); l.frequency.value = o.am; lg.gain.value = 0.5; am.gain.value = 0.5; l.connect(lg); lg.connect(am.gain); node.connect(am); node = am; lfos.push(l); }
+  if (o.filter) { const fl = a.createBiquadFilter(); fl.type = o.filter[0]; fl.frequency.value = o.filter[1]; fl.Q.value = o.filter[2] || 1; node.connect(fl); node = fl; }
+  node.connect(g); g.connect(master);
+  osc.start(t); osc.stop(t + dur + 0.05);
+  lfos.forEach(l => { l.start(t); l.stop(t + dur + 0.05); });
+  sfxBusyUntil = Math.max(sfxBusyUntil, t + dur + 0.25);
+}
+function noise(delay, dur, vol, filt, o) {
+  o = o || {};
+  const a = audio(); if (!a || S.muted) return;
+  if (!noiseBuf) { noiseBuf = a.createBuffer(1, Math.floor(a.sampleRate * 1.2), a.sampleRate); const d = noiseBuf.getChannelData(0); for (let i = 0; i < d.length; i++) d[i] = Math.random() * 2 - 1; }
+  const t = a.currentTime + 0.01 + delay;
+  const src = a.createBufferSource(); src.buffer = noiseBuf; src.loop = true;
+  const fl = a.createBiquadFilter(); fl.type = filt[0]; fl.frequency.value = filt[1]; fl.Q.value = filt[2] || 0.7;
+  const g = a.createGain(), at = o.attack || 0.02, rel = o.release || 0.2;
+  g.gain.setValueAtTime(0.0001, t); g.gain.exponentialRampToValueAtTime(vol, t + at);
+  g.gain.setValueAtTime(vol, t + Math.max(at, dur - rel)); g.gain.exponentialRampToValueAtTime(0.0001, t + dur);
+  src.connect(fl); fl.connect(g); g.connect(master); src.start(t); src.stop(t + dur + 0.05);
+  sfxBusyUntil = Math.max(sfxBusyUntil, t + dur + 0.25);
+}
+const STAR_STEPS = [0, 2, 4, 7, 9, 12, 14, 16, 19, 21];
+const sfx = {
+  click() { tone('sine', 700, 900, 0, 0.07, 0.08); },
+  pop(n) { const b = 523.25 * Math.pow(2, ((n || 1) - 1) * 4 / 12); tone('triangle', b, b * 1.5, 0, 0.16, 0.2, { glide: 0.06 }); tone('sine', b * 2, b * 2, 0.03, 0.12, 0.05); },
+  oops() { tone('sine', 440, 370, 0, 0.2, 0.11, { glide: 0.18 }); tone('sine', 349, 294, 0.18, 0.32, 0.1, { glide: 0.25 }); },
+  jingle() {
+    [523.25, 659.25, 783.99, 1046.5].forEach((f, i) => { const d = i === 3 ? 0.5 : 0.18; tone('triangle', f, f, i * 0.11, d, 0.18); tone('sine', f * 2, f * 2, i * 0.11, d, 0.04); });
+    [1568, 2093, 2637].forEach((f, i) => tone('sine', f, f, 0.55 + i * 0.07, 0.15, 0.035));
+  },
+  chime() { tone('triangle', 659.25, 659.25, 0, 0.18, 0.15); tone('triangle', 987.77, 987.77, 0.12, 0.35, 0.15); },
+  star(i) { const f = 784 * Math.pow(2, STAR_STEPS[(i || 0) % 10] / 12); tone('sine', f, f, 0, 0.22, 0.08); tone('triangle', f * 1.5, f * 1.5, 0.04, 0.2, 0.035); },
+  sparkle() { [1760, 2217, 2637].forEach((f, i) => tone('sine', f, f, i * 0.06, 0.12, 0.04)); },
+  fanfare() {
+    [523.25, 659.25, 783.99, 1046.5, 1318.5, 1568].forEach((f, i) => tone('triangle', f, f, i * 0.12, 0.22, 0.15));
+    [523.25, 659.25, 783.99, 1046.5].forEach(f => tone('triangle', f, f, 0.8, 0.9, 0.07));
+  }
+};
+const ANIMAL_SFX = {
+  frog() { tone('square', 190, 130, 0, 0.15, 0.22, { am: 36, filter: ['bandpass', 850, 1.3], attack: 0.006 }); tone('square', 215, 140, 0.21, 0.19, 0.24, { am: 36, filter: ['bandpass', 950, 1.3], attack: 0.006 }); },
+  elephant() {
+    tone('sawtooth', 300, 600, 0, 0.8, 0.07, { glide: 0.28, vib: [6.5, 16], filter: ['lowpass', 1700, 0.8], attack: 0.05, release: 0.25 });
+    tone('sawtooth', 302, 604, 0, 0.8, 0.05, { glide: 0.28, vib: [6.5, 16], filter: ['lowpass', 1500, 0.8], attack: 0.05, release: 0.25 });
+  },
+  bird() { for (let i = 0; i < 3; i++) tone('sine', 2300, 3500, i * 0.15, 0.09, 0.08, { glide: 0.07, attack: 0.005 }); tone('sine', 3100, 2700, 0.48, 0.16, 0.06, { vib: [28, 180] }); },
+  snake() { noise(0, 0.95, 0.07, ['highpass', 4200, 0.8], { attack: 0.12, release: 0.35 }); },
+  bunny() { tone('sine', 240, 720, 0, 0.34, 0.17, { glide: 0.14, vib: [13, 22], release: 0.18 }); tone('triangle', 140, 70, 0, 0.09, 0.1); },
+  monkey() { [[430, 560, 0], [430, 560, 0.19], [560, 780, 0.4], [560, 780, 0.6]].forEach(([a, b, d]) => tone('triangle', a, b, d, 0.16, 0.16, { glide: 0.1, vib: [9, 14], filter: ['lowpass', 1800, 0.8] })); }
+};
+function animalSound(k) { if (ANIMAL_SFX[k]) ANIMAL_SFX[k](); }
+
+/* ======================= VOICE (speechSynthesis) ======================= */
+const hasSpeech = 'speechSynthesis' in window && 'SpeechSynthesisUtterance' in window;
+let voice = null, lastSpokeGT = -99, speakTimer = 0;
+function pickVoice() {
+  const vs = (hasSpeech && speechSynthesis.getVoices()) || [];
+  const en = vs.filter(v => /^en([-_]|$)/i.test(v.lang));
+  const prefs = ['Samantha', 'Google US English', 'Microsoft Aria', 'Microsoft Jenny', 'Karen', 'Tessa', 'Moira', 'Serena', 'Microsoft Zira', 'Google UK English Female', 'Fiona', 'Victoria'];
+  for (const p of prefs) { const v = en.find(x => x.name.indexOf(p) >= 0); if (v) return v; }
+  return en.find(v => /female|woman|girl/i.test(v.name)) || en.find(v => /en-US/i.test(v.lang)) || en[0] || null;
+}
+if (hasSpeech) { voice = pickVoice(); speechSynthesis.onvoiceschanged = () => { voice = pickVoice(); }; }
+function say(text, opt) {
+  if (!text) return;
+  lastSpokeGT = gt;
+  if (S.muted || !hasSpeech) return;
+  try {
+    const u = new SpeechSynthesisUtterance(text);
+    u.rate = 0.85; u.pitch = 1.2; u.volume = 1;
+    if (voice) { u.voice = voice; u.lang = voice.lang; } else u.lang = 'en-US';
+    if (opt && opt.queue) { speechSynthesis.speak(u); return; }
+    speechSynthesis.cancel(); clearTimeout(speakTimer);
+    speakTimer = setTimeout(() => { try { speechSynthesis.speak(u); } catch (e) {} }, 70);
+  } catch (e) {}
+}
+function cancelSpeech() { clearTimeout(speakTimer); if (hasSpeech) try { speechSynthesis.cancel(); } catch (e) {} }
+function speaking() { return hasSpeech && (speechSynthesis.speaking || speechSynthesis.pending); }
+function unlock() {
+  audio();
+  if (hasSpeech && !S.speechUnlocked) { try { const u = new SpeechSynthesisUtterance(' '); u.volume = 0; speechSynthesis.speak(u); } catch (e) {} S.speechUnlocked = true; }
+  S.speechReady = true;
+}
+
+/* ======================= CAMERA + MEDIAPIPE POSE ======================= */
+let stream = null, pose = null, posePromise = null, poseBusy = false, poseLast = 0, poseRaf = 0, poseLoopOn = false, poseErrors = 0;
+function loadScript(src) {
+  return new Promise((res, rej) => {
+    const s = document.createElement('script'); s.src = src; s.crossOrigin = 'anonymous';
+    s.onload = res; s.onerror = () => rej(Object.assign(new Error('script load failed'), { name: 'ModelError' }));
+    document.head.appendChild(s);
+  });
+}
+function withTimeout(p, ms) { return Promise.race([p, new Promise((_, rej) => setTimeout(() => rej(Object.assign(new Error('timeout'), { name: 'ModelError' })), ms))]); }
+function initPose() {
+  if (pose) return Promise.resolve(pose);
+  if (!posePromise) {
+    posePromise = (async () => {
+      if (!window.Pose) await loadScript(MP_BASE + 'pose.js');
+      if (!window.Pose) throw Object.assign(new Error('Pose missing'), { name: 'ModelError' });
+      const p = new window.Pose({ locateFile: (file) => MP_BASE + file });
+      p.setOptions({ modelComplexity: IS_SMALL ? 0 : 1, smoothLandmarks: true, enableSegmentation: false, minDetectionConfidence: 0.5, minTrackingConfidence: 0.5 });
+      p.onResults(onPoseResults);
+      if (typeof p.initialize === 'function') await p.initialize();
+      pose = p; return p;
+    })();
+    posePromise.catch(() => { posePromise = null; });
+  }
+  return posePromise;
+}
+async function startCamera(run) {
+  stopCamera();
+  if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) throw Object.assign(new Error('no camera api'), { name: 'NoMedia' });
+  const size = IS_SMALL ? { width: { ideal: 640 }, height: { ideal: 480 } } : { width: { ideal: 1280 }, height: { ideal: 720 } };
+  const base = Object.assign({ facingMode: 'user' }, size);
+  let s;
+  try { s = await navigator.mediaDevices.getUserMedia({ audio: false, video: S.camId ? Object.assign({ deviceId: { exact: S.camId } }, size) : base }); }
+  catch (e) {
+    if (S.camId && (e.name === 'OverconstrainedError' || e.name === 'NotFoundError')) { S.camId = ''; s = await navigator.mediaDevices.getUserMedia({ audio: false, video: base }); }
+    else throw e;
+  }
+  if (run !== S.run) { s.getTracks().forEach(t => t.stop()); throw Object.assign(new Error('stale'), { name: 'Stale' }); }
+  stream = s; video.srcObject = s; video.muted = true;
+  try { await video.play(); } catch (e) {}
+  await new Promise((res) => { if (video.videoWidth) return res(); const done = () => { video.removeEventListener('loadedmetadata', done); res(); }; video.addEventListener('loadedmetadata', done); setTimeout(res, 3000); });
+  video.classList.add('on');
+  s.getVideoTracks().forEach(t => t.addEventListener('ended', () => { if (stream === s) cameraLost(); }));
+}
+function stopCamera() {
+  stopPoseLoop();
+  if (stream) { stream.getTracks().forEach(t => t.stop()); stream = null; }
+  try { video.pause(); } catch (e) {}
+  video.srcObject = null; video.classList.remove('on');
+  person.lastSeen = -99; person.f = null; SM.forEach(s => { s.init = false; });
+}
+function startPoseLoop() { if (poseLoopOn) return; poseLoopOn = true; poseRaf = requestAnimationFrame(poseTick); }
+function stopPoseLoop() { poseLoopOn = false; cancelAnimationFrame(poseRaf); }
+function poseTick() {
+  if (!poseLoopOn) return;
+  poseRaf = requestAnimationFrame(poseTick);
+  if (poseBusy || !pose || S.hidden || !stream || video.readyState < 2 || !video.videoWidth) return;
+  const n = performance.now(); if (n - poseLast < 30) return; poseLast = n;
+  poseBusy = true;
+  Promise.resolve().then(() => pose.send({ image: video })).then(
+    () => { poseBusy = false; poseErrors = 0; },
+    (e) => { poseBusy = false; if (++poseErrors > 30) { console.warn(e); cameraLost(); } });
+}
+function onPoseResults(res) {
+  const lm = res && res.poseLandmarks;
+  if (!lm || lm.length < 25) return;
+  const vis = (i) => (lm[i].visibility == null ? 1 : lm[i].visibility);
+  if ((vis(11) + vis(12)) / 2 < 0.4 && vis(0) < 0.4) return;
+  const now = performance.now() / 1000;
+  if (now - person.lastSeen > 1.0) SM.forEach(s => { s.init = false; });
+  person.lastSeen = now;
+  for (let i = 0; i < 33; i++) {
+    const r = lm[i], s = SM[i], v = vis(i);
+    if (!s.init) { s.x = r.x; s.y = r.y; s.v = v; s.init = true; }
+    else { s.x += 0.55 * (r.x - s.x); s.y += 0.55 * (r.y - s.y); s.v += 0.4 * (v - s.v); }
+  }
+  const aspect = (video.videoWidth && video.videoHeight) ? video.videoWidth / video.videoHeight : 4 / 3;
+  const f = features(SM, aspect, now), pf = person.f;
+  tracker.observe(f);
+  if (pf) {
+    const dt = Math.max(0.016, now - pf.t), U = tracker.U || 0.15;
+    const d = (a, b) => Math.hypot(a.x - b.x, a.y - b.y);
+    const m = (d(f.nose, pf.nose) + d(f.lw, pf.lw) + d(f.rw, pf.rw) + 2 * d(f.sm, pf.sm)) / U / dt;
+    person.motion += 0.3 * (m - person.motion);
+  }
+  person.f = f;
+  if (S.screen === 'game' && R.detectOn && (R.phase === 'intro' || R.phase === 'play') && !isPaused()) {
+    if (tracker.detect(f) > 0) onRep();
+  }
+}
+function isPaused() { return S.hidden || S.panel; }
+
+/* ======================= SCREENS & PERMISSION ======================= */
+const PERM = {
+  ask:      { icon: '📷', label: 'Camera, please!', btns: false, note: 'Tap “Allow” so Pip can see your child move. Video stays on this device.', line: "Hi! I'm Pip! I want to see you move! Ask a grown-up to let me use the camera." },
+  denied:   { icon: '🙈', label: 'I can’t see you', btns: true, note: 'The camera was blocked. Tap the camera icon in the address bar, choose Allow, then tap 🔄. Or play with touch.', line: "Oh! I can't see you. That's okay! Ask a grown-up for help, or tap the hand to play with touch!" },
+  nocam:    { icon: '🙈', label: 'No camera', btns: true, note: 'No camera was found. Connect one and tap 🔄, or play with touch.', line: "I can't find a camera. That's okay! Tap the hand to play with touch!" },
+  busy:     { icon: '🙈', label: 'Camera is busy', btns: true, note: 'Another app or tab is using the camera. Close it, then tap 🔄. Or play with touch.', line: "The camera is busy. Ask a grown-up for help, or tap the hand to play with touch!" },
+  insecure: { icon: '🙈', label: 'No camera here', btns: true, note: 'This browser only allows the camera on https:// pages or localhost. Open the game from a secure address, or play with touch.', line: "I can't use the camera here. That's okay! Tap the hand to play with touch!" },
+  model:    { icon: '🙈', label: 'Almost ready', btns: true, note: 'The movement helper could not load. Check the internet connection and tap 🔄, or play with touch.', line: "Oops, I'm not ready yet. Ask a grown-up to try again, or tap the hand to play with touch!" }
+};
+function setPerm(kind) {
+  S.permKind = kind; const p = PERM[kind] || PERM.ask;
+  $('#permLabel').textContent = p.label; $('#permNote').textContent = p.note;
+  $('#permBtns').classList.toggle('hidden', !p.btns);
+}
+function errKind(e) {
+  const n = (e && e.name) || '';
+  if (n === 'NotAllowedError' || n === 'PermissionDeniedError' || n === 'SecurityError') return 'denied';
+  if (n === 'NotFoundError' || n === 'DevicesNotFoundError' || n === 'OverconstrainedError') return 'nocam';
+  if (n === 'NotReadableError' || n === 'TrackStartError' || n === 'AbortError') return 'busy';
+  if (n === 'NoMedia') return 'insecure';
+  return 'denied';
+}
+function showScreen(name) {
+  S.screen = name;
+  document.querySelectorAll('.screen').forEach(s => s.classList.toggle('active', s.dataset.screen === name));
+  hud.classList.toggle('game', name === 'game');
+  S.idleRepeats = 0; S.lastInteract = gt;
+  requestAnimationFrame(updateSpot);
+}
+function screenLine() {
+  switch (S.screen) {
+    case 'start': return "Hi! I'm Pip! Tap the big green play button!";
+    case 'perm': return (PERM[S.permKind] || PERM.ask).line;
+    case 'loading': return 'Getting ready!';
+    case 'rest': return 'Great job! Time to drink some water, and rest. Tap play to play again!';
+    case 'finale': return 'Hooray! You got all the stars!';
+    default: return currentInstruction();
+  }
+}
+function sayScreen() { say(screenLine()); }
+function currentInstruction() {
+  if (!R.segs.length || !(R.phase === 'intro' || R.phase === 'play')) return R.phase === 'success' ? pick(PRAISE) : "Let's play animal moves! Watch me, and move like me!";
+  const A = ANIMALS[R.segs[R.seg]];
+  let s = R.need > 1 ? `Can you be ${A.a} ${A.name}, ${NUMW[R.need].toLowerCase()} times? ${A.how}` : `Can you be ${A.a} ${A.name}? ${A.how}`;
+  if (S.mode === 'touch') s += ` Then tap the ${A.name}!`;
+  return s;
+}
+
+/* ======================= FLOW ======================= */
+async function goCamera(resume) {
+  const run = ++S.run;
+  S.mode = 'camera';
+  showScreen('perm'); setPerm('ask'); sayScreen();
+  try { await startCamera(run); }
+  catch (e) { if (run !== S.run || e.name === 'Stale') return; console.warn('Camera:', e); setPerm(errKind(e)); sayScreen(); return; }
+  if (run !== S.run) return;
+  showScreen('loading');
+  try { await withTimeout(initPose(), 60000); }
+  catch (e) { if (run !== S.run) return; console.warn('Pose:', e); stopCamera(); setPerm('model'); showScreen('perm'); sayScreen(); return; }
+  if (run !== S.run) return;
+  startPoseLoop();
+  if (S.micId) startMic(S.micId).catch(() => { S.micId = ''; });
+  if (resume && R.plan.length && R.idx < ROUNDS) { showScreen('game'); startRound(); }
+  else startGame();
+}
+function goTouch() { S.run++; S.mode = 'touch'; stopCamera(); startGame(); }
+function cameraLost() {
+  if (S.mode !== 'camera') return;
+  stopCamera(); S.mode = 'touch';
+  if (S.screen === 'game') { say("Oh! The camera stopped. Let's play with touch!"); if (R.phase === 'play' || R.phase === 'intro') afterSeg(3, () => say(currentInstruction(), { queue: true })); }
+}
+function exitToStart() {
+  S.run++; newSeg(); clearTimers(); stopCamera(); stopMic(); cancelSpeech();
+  S.panel = false; panel.classList.remove('open');
+  R.phase = 'none'; R.segs = []; card.key = null; parts.length = 0; rewards.length = 0; flyers.length = 0;
+  showScreen('start');
+}
+function makePlan() {
+  const sched = DIFF[S.diff].sched, plan = []; let bag = [], last = null;
+  const draw = () => {
+    if (!bag.length) bag = shuffle(KEYS.slice());
+    let i = bag.findIndex(a => a !== last); if (i < 0) { bag = shuffle(KEYS.filter(a => a !== last)); i = 0; }
+    const a = bag.splice(i, 1)[0]; last = a; return a;
+  };
+  for (let r = 0; r < ROUNDS; r++) {
+    const lvl = sched[r];
+    if (lvl === 3) plan.push({ lvl, segs: [draw(), draw()], reps: 2 });
+    else plan.push({ lvl, segs: [draw()], reps: lvl === 1 ? 1 : 3 });
+  }
+  return plan;
+}
+function startGame() {
+  clearTimers(); newSeg();
+  R.plan = makePlan(); R.idx = 0; R.stars = 0; R.segs = []; R.phase = 'welcome'; R.phaseT = 0; R.hint = false;
+  card.key = null; parts.length = 0; rewards.length = 0; flyers.length = 0; mascot.init = false;
+  buildStars(); showScreen('game');
+  say(S.mode === 'touch' ? "Let's play animal moves! Watch me, move like me, and tap the animal!" : "Let's play animal moves! Watch me, and move like me!");
+  afterSeg(4.2, startRound);
+}
+function startRound() {
+  const p = R.plan[R.idx];
+  R.segs = p.segs.slice(); R.seg = 0; R.need = p.reps; R.lvl = p.lvl;
+  beginSegment(true);
+}
+function beginSegment(first) {
+  newSeg();
+  const key = R.segs[R.seg], A = ANIMALS[key];
+  Object.assign(R, { reps: 0, misses: 0, hint: false, attempt: 0, idle: 0, detectOn: false, phase: 'intro', phaseT: 0, prog: 0, lastMissGT: -9 });
+  tracker.set(key); tracker.k = DIFF[S.diff].k;
+  card.key = key; card.appear = 0; card.wob = 0;
+  let line, d1;
+  if (first) {
+    if (R.segs.length > 1) { const B = ANIMALS[R.segs[1]]; line = `Can you be ${A.a} ${A.name}, and then ${B.a} ${B.name}?`; }
+    else if (R.need > 1) line = `Can you be ${A.a} ${A.name}, ${NUMW[R.need].toLowerCase()} times?`;
+    else line = `Can you be ${A.a} ${A.name}?`;
+    card.init = false;
+    d1 = 0.5 + line.split(' ').length * 0.32;
+  } else { line = `Now, ${A.a} ${A.name}!`; d1 = 1.2; }
+  R.introHold = first ? d1 + 1.6 : 0;
+  say(line);
+  afterSeg(d1, () => { animalSound(key); card.move = 1.2; });
+  afterSeg(d1 + 0.6, () => say((first && R.segs.length > 1 ? `First, the ${A.name}! ` : '') + A.how + (S.mode === 'touch' ? ` Then tap the ${A.name}!` : ''), { queue: true }));
+  afterSeg(Math.min(1.3, d1), () => { tracker.reset(); R.detectOn = true; });
+  afterSeg(d1 + 1.0, () => { if (R.phase === 'intro') R.phase = 'play'; });
+}
+function onRep() {
+  if (!(R.phase === 'intro' || R.phase === 'play')) return;
+  R.phase = 'play';
+  R.reps++; R.attempt = 0; R.idle = 0; R.prog = 0;
+  sfx.pop(R.reps); card.bounce = 1; card.move = Math.max(card.move, 1.0);
+  sparkleKid();
+  if (R.reps >= R.need) completeSegment(false);
+  else { say(NUMW[R.reps] + '!'); bigNum = { n: R.reps, t: 0, at: 'card' }; tracker.reset(); }
+}
+function onMiss() {
+  if (R.phase !== 'play' || gt - R.lastMissGT < 1.5) return;
+  R.lastMissGT = gt; R.misses++; R.attempt = 0; R.idle = 0;
+  card.wob = 1; mascot.oops = 1; sfx.oops();
+  const A = ANIMALS[R.segs[R.seg]];
+  if (R.misses >= 4) { together(); return; }
+  if (R.misses >= 2) {
+    const first = !R.hint; R.hint = true;
+    if (first) {
+      say(`${pick(OOPS)} Watch me! Do it like this!`);
+      afterSeg(3.2, () => { if (R.phase === 'play') say(A.short + (S.mode === 'touch' ? ` Tap the ${A.name}!` : ''), { queue: true }); });
+    } else say(`${pick(OOPS)} ${A.short}`);
+  } else say(`${pick(OOPS)} ${A.short}`);
+}
+function together() {
+  newSeg(); R.phase = 'together'; R.phaseT = 0; R.detectOn = false;
+  say("Let's do it together!");
+  for (let i = 1; i <= 3; i++) afterSeg(1.8 + (i - 1) * TOG_CYCLE, () => {
+    sfx.pop(i); say(NUMW[i] + '!'); bigNum = { n: i, t: 0, at: 'center' };
+    R.reps = Math.min(R.need, Math.max(R.reps, Math.ceil(i * R.need / 3)));
+  });
+  afterSeg(1.8 + 3 * TOG_CYCLE - 0.2, () => { R.reps = R.need; completeSegment(true); });
+}
+function completeSegment(tog) {
+  if (R.seg < R.segs.length - 1) {
+    newSeg(); R.phase = 'between'; R.phaseT = 0; R.detectOn = false; R.hint = false;
+    sfx.chime(); addConf(card.x, card.y, 50, 0.7); say(pick(['Yay!', 'Great!', 'Wow!']));
+    afterSeg(1.5, () => { R.seg++; beginSegment(false); });
+  } else roundWin(tog);
+}
+function roundWin(tog) {
+  newSeg(); R.phase = 'success'; R.phaseT = 0; R.detectOn = false; R.hint = false;
+  sfx.jingle(); confettiBurst(); card.bounce = 1; card.move = 2.5;
+  const praise = pick(PRAISE);
+  say(R.need > 1 && !tog ? `${NUMW[R.need]}! ${praise}` : praise);
+  launchStar();
+  R.segs.forEach((k, i) => afterSeg(0.7 + i * 0.6, () => spawnReward(k, i)));
+  afterSeg(5.0, () => { R.idx++; if (R.idx >= ROUNDS) finale(); else startRound(); });
+}
+function finale() {
+  newSeg(); R.phase = 'finale'; R.phaseT = 0; R.finStars = [];
+  showScreen('finale'); sfx.fanfare(); confettiRain(160);
+  say('Hooray! You got all ten stars! You are a super animal star!');
+  for (let i = 0; i < ROUNDS; i++) afterSeg(0.6 + i * 0.2, () => { R.finStars[i] = gt; sfx.star(i); });
+  afterSeg(7.5, goRest);
+}
+function goRest() {
+  newSeg(); S.run++; stopCamera(); stopMic(); R.phase = 'none';
+  showScreen('rest'); sfx.chime();
+  say('Great job! Time to drink some water, and rest. Tap play to play again!');
+}
+function setDifficulty(v) {
+  if (!DIFF[v]) return;
+  S.diff = v; tracker.k = DIFF[v].k;
+  if (R.plan.length) { const fresh = makePlan(); for (let r = R.idx + 1; r < ROUNDS; r++) R.plan[r] = fresh[r]; }
+}
+
+/* ======================= STARS, PARTICLES, REWARDS ======================= */
+const card = { key: null, x: 0, y: 0, r: 60, appear: 0, wob: 0, bounce: 0, move: 0, init: false };
+const mascot = { x: 0, y: 0, s: 100, init: false, oops: 0 };
+const parts = [], rewards = [], flyers = [];
+let bigNum = null;
+function buildStars() {
+  starbar.innerHTML = '';
+  for (let i = 0; i < ROUNDS; i++) { const s = document.createElement('span'); s.className = 'slot'; s.textContent = '⭐'; starbar.appendChild(s); }
+}
+function launchStar() {
+  const idx = R.stars++; const slot = starbar.children[idx];
+  let tx = W / 2, ty = 30;
+  if (slot) { const b = slot.getBoundingClientRect(); if (b.width) { tx = b.left + b.width / 2; ty = b.top + b.height / 2; } }
+  flyers.push({ x0: card.x, y0: card.y, x1: tx, y1: ty, t: 0, dur: 0.9, idx });
+}
+function addConf(x, y, n, power) {
+  for (let i = 0; i < n && parts.length < 520; i++) {
+    const a = rand(-Math.PI * 0.95, -Math.PI * 0.05), sp = rand(0.35, 1.0) * (power || 1) * H;
+    parts.push({ k: 'c', x, y, vx: Math.cos(a) * sp * 0.8, vy: Math.sin(a) * sp, g: H * 1.5, rot: rand(0, 6), vr: rand(-8, 8),
+      w: rand(0.01, 0.02) * H, h: rand(0.006, 0.012) * H, col: pick(PALETTE), circ: Math.random() < 0.35, life: 0, max: rand(1.8, 2.8) });
+  }
+}
+function confettiBurst() { addConf(W * 0.2, H * 0.65, 60, 1.1); addConf(W * 0.8, H * 0.65, 60, 1.1); addConf(card.x, card.y, 40, 0.8); }
+function confettiRain(n) {
+  for (let i = 0; i < n && parts.length < 520; i++) parts.push({ k: 'c', x: rand(0, W), y: rand(-H * 0.4, 0), vx: rand(-0.05, 0.05) * H, vy: rand(0.1, 0.3) * H,
+    g: H * 0.25, rot: rand(0, 6), vr: rand(-6, 6), w: rand(0.01, 0.02) * H, h: rand(0.006, 0.012) * H, col: pick(PALETTE), circ: Math.random() < 0.35, life: 0, max: rand(3, 4.5) });
+}
+function addEmojiParts(e, x, y, n, size) {
+  for (let i = 0; i < n && parts.length < 520; i++) parts.push({ k: 'e', e, x: x + rand(-1, 1) * size, y: y + rand(-0.5, 0.5) * size,
+    vx: rand(-0.12, 0.12) * H, vy: rand(-0.35, -0.15) * H, g: H * 0.1, rot: rand(-0.4, 0.4), vr: rand(-1, 1), w: size * rand(0.6, 1), life: 0, max: rand(1.0, 1.6) });
+}
+function sparkleKid() {
+  const k = S.mode === 'camera' && person.present ? kidScreen() : null;
+  if (k) addEmojiParts('✨', k.x, k.y + k.sp * 0.5, 6, k.sp * 0.5);
+  else addEmojiParts('✨', card.x, card.y, 6, card.r * 0.5);
+}
+function spawnReward(key, i) {
+  const size = clamp(Math.min(H * 0.24, W * 0.3), 70, 420);
+  const k = S.mode === 'camera' && person.present ? kidScreen() : null;
+  let x, y, from;
+  if (k) { from = k.x < W / 2 ? 1 : -1; x = k.x + from * (k.sp * 1.5 + size * (0.55 + i * 1.05)); y = k.y + k.sp * 0.9; }
+  else { from = 1; x = W * 0.82 - i * size * 1.05; y = H * 0.62; }
+  x = clamp(x, size * 0.6, W - size * 0.6); y = clamp(y, size * 0.7, H - size * 0.6);
+  rewards.push({ key, x, y, size, t: 0, life: 4.2, from, noteT: 0 });
+  animalSound(key);
+  afterSeg(1.9, () => animalSound(key));
+}
+
+/* ======================= MICROPHONE (optional bonus) ======================= */
+let micStream = null, micAnalyser = null, micBuf = null, micLevel = 0, micLoud = 0, micLastFx = -9;
+async function startMic(id) {
+  stopMic();
+  const a = audio();
+  if (!a || !navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) throw new Error('no mic api');
+  const c = (id && id !== 'any') ? { deviceId: { exact: id }, echoCancellation: true } : { echoCancellation: true };
+  micStream = await navigator.mediaDevices.getUserMedia({ audio: c, video: false });
+  const src = a.createMediaStreamSource(micStream);
+  micAnalyser = a.createAnalyser(); micAnalyser.fftSize = 512; micBuf = new Uint8Array(micAnalyser.fftSize);
+  src.connect(micAnalyser);
+}
+function stopMic() { if (micStream) { micStream.getTracks().forEach(t => t.stop()); micStream = null; } micAnalyser = null; }
+function updateMic(dt) {
+  if (!micAnalyser || S.screen !== 'game' || R.phase !== 'play') return;
+  micAnalyser.getByteTimeDomainData(micBuf);
+  let s = 0; for (let i = 0; i < micBuf.length; i++) { const v = (micBuf[i] - 128) / 128; s += v * v; }
+  micLevel += (Math.sqrt(s / micBuf.length) - micLevel) * 0.3;
+  const busy = speaking() || (ac && ac.currentTime < sfxBusyUntil);
+  micLoud = (!busy && micLevel > 0.06) ? micLoud + dt : Math.max(0, micLoud - dt);
+  if (micLoud > 0.2 && gt - micLastFx > 1.2) { micLastFx = gt; micLoud = 0; addEmojiParts('🎵', card.x, card.y - card.r, 4, card.r * 0.5); card.bounce = 1; sfx.sparkle(); }
+}
+
+/* ======================= UPDATE ======================= */
+function update(dt) {
+  gt += dt;
+  runTimers();
+  if (S.screen === 'game') {
+    R.phaseT += dt;
+    const cam = S.mode === 'camera', now = performance.now() / 1000;
+    person.present = !cam || (now - person.lastSeen < 0.8);
+    const live = R.phase === 'play' || R.phase === 'intro' || R.phase === 'welcome';
+    R.stepBack = cam && live && (now - person.lastSeen > 1.3);
+    if (R.stepBack && !speaking() && gt - R.lastStepSay > 9 && R.phaseT > 1) { say('Step back so I can see you!'); R.lastStepSay = gt; }
+    R.tooClose = (cam && person.present && (tracker.U || 0) > 0.42) ? R.tooClose + dt : 0;
+    if (R.tooClose > 2 && R.phase === 'play' && !speaking() && gt - R.lastCloseSay > 15) { say('Step back a little, so I can see your whole body!'); R.lastCloseSay = gt; }
+    if (R.phase === 'play' && person.present) {
+      R.attempt += dt;
+      const active = cam ? person.motion > 4 : (gt - S.lastTapGT < 1.5);
+      R.idle = active ? 0 : R.idle + dt;
+      if (R.idle > 8 && gt - lastSpokeGT > 8 && !speaking()) { say(currentInstruction()); R.idle = 0; }
+      if (R.attempt > (cam ? 14 : 12)) onMiss();
+    }
+    const tp = (R.phase === 'play' || R.phase === 'intro') && R.detectOn ? tracker.prog : 0;
+    R.prog += (tp - R.prog) * Math.min(1, dt * 8);
+  } else if (S.screen === 'finale') {
+    R.phaseT += dt;
+  } else if (S.speechReady && S.screen !== 'loading' && S.idleRepeats < 2 && gt - S.lastInteract > 8 && gt - lastSpokeGT > 8 && !speaking()) {
+    S.idleRepeats++; sayScreen();
+  }
+  updateMic(dt);
+  updateCard(dt);
+  mascot.oops = Math.max(0, mascot.oops - dt * 1.5);
+  if (bigNum) { bigNum.t += dt; if (bigNum.t > 1.2) bigNum = null; }
+  for (let i = parts.length - 1; i >= 0; i--) {
+    const p = parts[i]; p.life += dt;
+    if (p.life > p.max) { parts.splice(i, 1); continue; }
+    p.vy += p.g * dt; p.vx *= Math.pow(0.5, dt);
+    if (p.k === 'c' && p.vy > 0.32 * H) p.vy = 0.32 * H;
+    p.x += (p.vx + (p.k === 'c' ? Math.sin(p.life * 5 + p.rot) * 0.04 * H : 0)) * dt; p.y += p.vy * dt; p.rot += p.vr * dt;
+  }
+  for (let i = rewards.length - 1; i >= 0; i--) {
+    const r = rewards[i]; r.t += dt; r.noteT += dt;
+    if (r.noteT > 0.7 && r.t < r.life - 0.6) { r.noteT = 0; addEmojiParts('🎵', r.x + r.size * 0.3, r.y - r.size * 0.4, 1, r.size * 0.3); }
+    if (r.t > r.life) rewards.splice(i, 1);
+  }
+  for (let i = flyers.length - 1; i >= 0; i--) {
+    const f = flyers[i]; f.t += dt;
+    if (f.t >= f.dur) { flyers.splice(i, 1); const s = starbar.children[f.idx]; if (s) s.classList.add('on'); sfx.star(f.idx); addEmojiParts('✨', f.x1, f.y1, 4, 20); }
+  }
+}
+function cardTarget() {
+  const m = Math.min(W, H);
+  if (S.mode === 'touch' || (R.phase === 'intro' && R.phaseT < R.introHold)) {
+    const r = S.mode === 'touch' ? Math.min(H * 0.2, W * 0.3) : Math.min(H * 0.19, W * 0.28);
+    return { x: W / 2, y: H * (S.mode === 'touch' ? 0.44 : 0.42), r };
+  }
+  const r = Math.max(46, Math.min(H * 0.13, W * 0.19));
+  return { x: W - insets.r - m * 0.025 - r * 1.22, y: muteBottom + m * 0.02 + r * 1.22, r };
+}
+function updateCard(dt) {
+  const t = cardTarget();
+  if (!card.init) { card.x = t.x; card.y = t.y; card.r = t.r; card.init = true; }
+  const k = 1 - Math.exp(-dt * 6);
+  card.x += (t.x - card.x) * k; card.y += (t.y - card.y) * k; card.r += (t.r - card.r) * k;
+  card.appear = Math.min(1.2, card.appear + dt * 2.2);
+  card.wob = Math.max(0, card.wob - dt * 1.4);
+  card.bounce = Math.max(0, card.bounce - dt * 2.5);
+  card.move = Math.max(0, card.move - dt);
+}
+
+/* ======================= DRAWING HELPERS ======================= */
+const emojiCache = new Map();
+function emojiImg(e) {
+  let c = emojiCache.get(e); if (c) return c;
+  c = document.createElement('canvas'); const s = 192; c.width = c.height = s;
+  const g = c.getContext('2d');
+  if (g) { g.font = `${s * 0.78}px ${EMOJI_FONT}`; g.textAlign = 'center'; g.textBaseline = 'middle'; g.fillText(e, s / 2, s / 2 + s * 0.05); }
+  emojiCache.set(e, c); return c;
+}
+function drawEmoji(e, x, y, size, rot, sx, sy, alpha) {
+  if (!(size > 1)) return;
+  ctx.save(); ctx.translate(x, y); if (rot) ctx.rotate(rot); ctx.scale(sx || 1, sy || 1);
+  if (alpha != null) ctx.globalAlpha *= alpha;
+  ctx.drawImage(emojiImg(e), -size / 2, -size / 2, size, size); ctx.restore();
+}
+function rr(x, y, w, h, r) {
+  r = Math.max(0, Math.min(r, w / 2, h / 2));
+  ctx.beginPath(); ctx.moveTo(x + r, y); ctx.arcTo(x + w, y, x + w, y + h, r); ctx.arcTo(x + w, y + h, x, y + h, r);
+  ctx.arcTo(x, y + h, x, y, r); ctx.arcTo(x, y, x + w, y, r); ctx.closePath();
+}
+function circle(x, y, r, fill, stroke, lw) { ctx.beginPath(); ctx.arc(x, y, Math.max(0.5, r), 0, TAU); if (fill) { ctx.fillStyle = fill; ctx.fill(); } if (stroke) { ctx.lineWidth = lw; ctx.strokeStyle = stroke; ctx.stroke(); } }
+function oval(x, y, rx, ry, fill, stroke, lw) { ctx.beginPath(); ctx.ellipse(x, y, Math.max(0.5, rx), Math.max(0.5, ry), 0, 0, TAU); if (fill) { ctx.fillStyle = fill; ctx.fill(); } if (stroke) { ctx.lineWidth = lw; ctx.strokeStyle = stroke; ctx.stroke(); } }
+function pillText(text, x, y, size, bg, fg, border) {
+  ctx.font = `700 ${size}px ${UI_FONT}`;
+  const w = ctx.measureText(text).width + size * 1.1, h = size * 1.45;
+  rr(x - w / 2, y - h / 2, w, h, h / 2); ctx.fillStyle = bg; ctx.fill();
+  if (border) { ctx.lineWidth = Math.max(2, size * 0.12); ctx.strokeStyle = border; ctx.stroke(); }
+  ctx.fillStyle = fg; ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.fillText(text, x, y + size * 0.05);
+}
+function drawArrow(x, y, ang, len, w, col) {
+  ctx.save(); ctx.translate(x, y); ctx.rotate(ang);
+  const hl = len * 0.42, hw = w * 1.2, x0 = -len / 2, x1 = len / 2, xs = x1 - hl;
+  ctx.beginPath(); ctx.moveTo(x0, -w / 2); ctx.lineTo(xs, -w / 2); ctx.lineTo(xs, -hw); ctx.lineTo(x1, 0);
+  ctx.lineTo(xs, hw); ctx.lineTo(xs, w / 2); ctx.lineTo(x0, w / 2); ctx.closePath();
+  ctx.lineJoin = 'round'; ctx.fillStyle = '#fff'; ctx.fill(); ctx.lineWidth = Math.max(3, w * 0.24); ctx.strokeStyle = col; ctx.stroke();
+  ctx.restore();
+}
+
+/* ======================= PIP, THE MASCOT ======================= */
+const PIP = { body: '#FFD36E', belly: '#FFF1BF', line: '#E39A3B', ear: '#FFB3C7', eye: '#3B2F5C', cheek: 'rgba(255,120,160,0.5)', mouth: '#C2496F' };
+function limb(pts, w, ow) {
+  ctx.lineCap = 'round'; ctx.lineJoin = 'round'; ctx.beginPath(); ctx.moveTo(pts[0][0], pts[0][1]);
+  for (let i = 1; i < pts.length; i++) ctx.lineTo(pts[i][0], pts[i][1]);
+  ctx.strokeStyle = PIP.line; ctx.lineWidth = w + ow * 2; ctx.stroke(); ctx.strokeStyle = PIP.body; ctx.lineWidth = w; ctx.stroke();
+}
+function basePose() { return { by: 0, squash: 1, tilt: 0, dx: 0, aL: 0.28, aR: 0.28, bL: 0.1, bR: 0.1, leg: 0, face: 'smile', trunk: false }; }
+function demoPose(key, p, cyc) {
+  const P = basePose();
+  switch (key) {
+    case 'frog': {
+      const c = cyc || 1.7, u = (((p % c) + c) % c) / c;
+      if (u < 0.38) { const e = ease(u / 0.38); P.leg = e; P.squash = 1 - 0.1 * e; P.aL = P.aR = 0.28 + 0.25 * e; }
+      else if (u < 0.72) { const v = (u - 0.38) / 0.34; P.by = -0.38 * Math.sin(Math.PI * v); P.leg = Math.max(0, 1 - v * 4); P.squash = 1.06; P.aL = P.aR = 0.5 + 2.2 * Math.sin(Math.PI * v); P.face = 'grin'; }
+      else { const w = (u - 0.72) / 0.28; P.leg = 0.45 * (1 - w); P.squash = 0.94 + 0.06 * w; P.aL = P.aR = 0.4; }
+      break;
+    }
+    case 'bunny': { const c = cyc || 0.6, u = (((p % c) + c) % c) / c, h = Math.sin(Math.PI * u); P.by = -0.14 * h; P.leg = 0.35 * (1 - h); P.aL = P.aR = 2.75; P.bL = P.bR = 0.3; P.squash = 0.95 + 0.08 * h; P.face = 'grin'; break; }
+    case 'bird': { const ph = TAU * p / (cyc || 0.6); P.aL = P.aR = 1.55 + 0.8 * Math.sin(ph); P.bL = P.bR = -0.15 * Math.sin(ph); P.by = -0.04 - 0.035 * Math.sin(ph + 1.2); P.face = 'grin'; break; }
+    case 'elephant': { const ph = TAU * p / (cyc || 1.4); P.trunk = true; P.aR = 0.5 * Math.sin(ph); P.aL = 0.3; P.tilt = 0.05 * Math.sin(ph); P.dx = 0.03 * Math.sin(ph); break; }
+    case 'snake': { const ph = TAU * p / (cyc || 1.4); P.tilt = 0.26 * Math.sin(ph); P.dx = 0.08 * Math.sin(ph); P.aL = 0.2 + 0.1 * Math.sin(ph); P.aR = 0.2 - 0.1 * Math.sin(ph); break; }
+    case 'monkey': { const ph = TAU * p / (cyc || 0.55); P.aL = 2.35 + 0.08 * Math.sin(ph * 2); P.aR = 2.35 + 0.08 * Math.sin(ph * 2 + 1.5); P.bL = 1.25 + 0.3 * Math.sin(ph * 2); P.bR = 1.25 + 0.3 * Math.sin(ph * 2 + 1.5); P.by = -0.04 * Math.abs(Math.sin(ph / 2)); P.tilt = 0.05 * Math.sin(ph / 2); P.face = 'grin'; break; }
+    case 'dance': { const ph = TAU * p / (cyc || 0.8); P.by = -0.1 * Math.abs(Math.sin(ph / 2)); P.aL = 1.9 + 0.9 * Math.sin(ph); P.aR = 1.9 - 0.9 * Math.sin(ph); P.tilt = 0.12 * Math.sin(ph / 2); P.face = 'grin'; break; }
+    case 'wave': { P.aR = 2.5 + 0.4 * Math.sin(TAU * p / 0.9); P.bR = 0.25; P.by = -0.02 * Math.abs(Math.sin(TAU * p / 1.8)); break; }
+    default: P.by = -0.015 * Math.abs(Math.sin(TAU * p / 2));
+  }
+  return P;
+}
+function drawPip(x, y, s, P, time, bubble, glow) {
+  if (!(s > 8)) return;
+  ctx.save();
+  if (glow) {
+    const gy = y - 0.45 * s, gr = ctx.createRadialGradient(x, gy, s * 0.1, x, gy, s * 0.85);
+    gr.addColorStop(0, 'rgba(255,240,150,0.85)'); gr.addColorStop(1, 'rgba(255,240,150,0)');
+    ctx.fillStyle = gr; ctx.beginPath(); ctx.arc(x, gy, s * 0.85, 0, TAU); ctx.fill();
+  }
+  const lift = Math.min(0, P.by || 0) * s, crouch = clamp(P.leg || 0, 0, 1), sq = P.squash || 1, ow = Math.max(1.5, 0.02 * s);
+  const shK = Math.max(0.4, 1 + lift / (s * 0.9));
+  oval(x + (P.dx || 0) * s, y, 0.3 * s * shK, 0.05 * s * shK, 'rgba(59,47,92,0.16)');
+  ctx.translate(x + (P.dx || 0) * s, y); ctx.rotate(P.tilt || 0); ctx.translate(0, lift);
+  const ry = 0.27 * s * sq, rx = 0.27 * s * (1 + (1 - sq) * 0.9), cy = -(0.47 - 0.1 * crouch) * s, hipY = cy + ry * 0.75;
+  for (const sd of [-1, 1]) {
+    const hx = sd * 0.1 * s, fx = sd * (0.12 + 0.06 * crouch) * s, fy = -0.035 * s;
+    const kx = sd * (0.13 + 0.13 * crouch) * s, ky = (hipY + fy) / 2 - 0.02 * s * crouch;
+    limb([[hx, hipY], [kx, ky], [fx, fy]], 0.085 * s, ow);
+    oval(fx + sd * 0.025 * s, -0.03 * s, 0.08 * s, 0.042 * s, PIP.body, PIP.line, ow);
+  }
+  for (const sd of [-1, 1]) { circle(sd * 0.17 * s, cy - ry * 0.85, 0.085 * s, PIP.body, PIP.line, ow); circle(sd * 0.17 * s, cy - ry * 0.85, 0.045 * s, PIP.ear); }
+  oval(0, cy, rx, ry, PIP.body, PIP.line, ow);
+  oval(0, cy + ry * 0.32, rx * 0.6, ry * 0.5, PIP.belly);
+  const fy = cy - ry * 0.2, blink = (time % 3.8) < 0.12 ? 0.12 : 1;
+  for (const sd of [-1, 1]) {
+    const ex = sd * 0.095 * s;
+    oval(ex, fy, 0.04 * s, 0.054 * s * blink, PIP.eye);
+    if (blink === 1) circle(ex + 0.013 * s, fy - 0.02 * s, 0.014 * s, '#fff');
+    oval(sd * 0.165 * s, fy + 0.075 * s, 0.042 * s, 0.026 * s, PIP.cheek);
+  }
+  const my = fy + 0.085 * s;
+  if (P.face === 'o') oval(0, my + 0.01 * s, 0.032 * s, 0.04 * s, PIP.mouth);
+  else if (P.face === 'grin') { ctx.beginPath(); ctx.moveTo(-0.06 * s, my); ctx.quadraticCurveTo(0, my + 0.11 * s, 0.06 * s, my); ctx.closePath(); ctx.fillStyle = PIP.mouth; ctx.fill(); oval(0, my + 0.04 * s, 0.024 * s, 0.013 * s, '#FF9DB8'); }
+  else { ctx.beginPath(); ctx.moveTo(-0.05 * s, my); ctx.quadraticCurveTo(0, my + 0.06 * s, 0.05 * s, my); ctx.lineWidth = Math.max(2, 0.018 * s); ctx.strokeStyle = PIP.eye; ctx.lineCap = 'round'; ctx.stroke(); }
+  for (const sd of [-1, 1]) {
+    const sx0 = sd * rx * 0.86, sy0 = cy - ry * 0.02;
+    if (sd === 1 && P.trunk) {
+      const ny = fy + 0.07 * s, a = P.aR || 0;
+      const mx2 = Math.sin(a * 0.5) * 0.13 * s, my2 = ny + Math.cos(a * 0.5) * 0.13 * s;
+      const hx = Math.sin(a) * 0.26 * s, hy = ny + Math.cos(a) * 0.26 * s;
+      limb([[sx0, sy0], [0.04 * s, ny], [mx2, my2], [hx, hy]], 0.075 * s, ow);
+      circle(hx, hy, 0.05 * s, PIP.body, PIP.line, ow);
+      continue;
+    }
+    const a = sd < 0 ? P.aL : P.aR, b = sd < 0 ? P.bL : P.bR, L1 = 0.17 * s, L2 = 0.15 * s;
+    const ex = sx0 + sd * Math.sin(a) * L1, ey = sy0 + Math.cos(a) * L1;
+    const hx = ex + sd * Math.sin(a + b) * L2, hy = ey + Math.cos(a + b) * L2;
+    limb([[sx0, sy0], [ex, ey], [hx, hy]], 0.075 * s, ow);
+    circle(hx, hy, 0.052 * s, PIP.body, PIP.line, ow);
+  }
+  ctx.restore();
+  if (bubble) {
+    const lw = Math.max(1.5, 0.014 * s);
+    circle(x + 0.25 * s, y - 0.8 * s, 0.03 * s, '#fff', '#D9CCFF', lw);
+    circle(x + 0.32 * s, y - 0.89 * s, 0.05 * s, '#fff', '#D9CCFF', lw);
+    const bx = x + 0.45 * s, by = y - 1.02 * s, r = 0.18 * s;
+    circle(bx, by, r, '#fff', '#D9CCFF', Math.max(2, 0.018 * s));
+    drawEmoji(bubble, bx, by, r * 1.4);
+  }
+}
+
+/* ======================= ANIMAL MOTION (card + rewards) ======================= */
+function animalTransform(key, p) {
+  const T = { dx: 0, dy: 0, rot: 0, sx: 1, sy: 1 };
+  switch (key) {
+    case 'frog': { const c = 1.1, u = (p % c) / c;
+      if (u < 0.3) { const e = u / 0.3; T.sy = 1 - 0.22 * e; T.sx = 1 + 0.14 * e; T.dy = 0.11 * e; }
+      else if (u < 0.8) { const v = (u - 0.3) / 0.5; T.dy = -0.75 * Math.sin(Math.PI * v); T.sy = 1.08; T.sx = 0.94; }
+      else { const w = (u - 0.8) / 0.2; T.sy = 0.88 + 0.12 * w; T.sx = 1.08 - 0.08 * w; T.dy = 0.06 * (1 - w); }
+      break; }
+    case 'bunny': { const u = (p % 0.5) / 0.5, h = Math.sin(Math.PI * u); T.dy = -0.35 * h; T.sy = 0.92 + 0.12 * h; T.sx = 1.04 - 0.06 * h; break; }
+    case 'bird': { T.dy = -0.25 - 0.12 * Math.sin(TAU * p / 1.2); T.sy = 1 + 0.1 * Math.sin(TAU * p / 0.35); T.rot = 0.12 * Math.sin(TAU * p / 1.2); break; }
+    case 'elephant': { const ph = TAU * p / 1.3; T.rot = 0.22 * Math.sin(ph); T.dx = 0.1 * Math.sin(ph); break; }
+    case 'snake': { const ph = TAU * p / 1.1; T.dx = 0.28 * Math.sin(ph); T.rot = -0.25 * Math.sin(ph); T.sx = 1 + 0.06 * Math.sin(ph * 2); break; }
+    case 'monkey': { T.rot = 0.1 * Math.sin(TAU * p / 0.3); T.dy = -0.12 * Math.abs(Math.sin(TAU * p / 0.6)); break; }
+  }
+  return T;
+}
+
+/* ======================= SCENE PIECES ======================= */
+let bg = null;
+function buildBg() {
+  bg = document.createElement('canvas'); bg.width = cv.width; bg.height = cv.height;
+  const g = bg.getContext('2d'); if (!g) return;
+  g.setTransform(DPR, 0, 0, DPR, 0, 0);
+  const gr = g.createLinearGradient(0, 0, 0, H); gr.addColorStop(0, '#BFE6FF'); gr.addColorStop(0.55, '#E8F5FF'); gr.addColorStop(1, '#FFE4F1');
+  g.fillStyle = gr; g.fillRect(0, 0, W, H);
+  const m = Math.min(W, H);
+  g.fillStyle = 'rgba(255,230,128,0.35)'; g.beginPath(); g.arc(W * 0.86, H * 0.15, m * 0.13, 0, TAU); g.fill();
+  g.fillStyle = '#FFE680'; g.beginPath(); g.arc(W * 0.86, H * 0.15, m * 0.085, 0, TAU); g.fill();
+  g.fillStyle = '#C9F2D8'; g.beginPath(); g.moveTo(0, H * 0.82); g.quadraticCurveTo(W * 0.25, H * 0.66, W * 0.55, H * 0.8); g.quadraticCurveTo(W * 0.8, H * 0.9, W, H * 0.76); g.lineTo(W, H); g.lineTo(0, H); g.closePath(); g.fill();
+  g.fillStyle = '#A9E8C2'; g.beginPath(); g.moveTo(0, H * 0.92); g.quadraticCurveTo(W * 0.35, H * 0.8, W * 0.7, H * 0.9); g.quadraticCurveTo(W * 0.88, H * 0.95, W, H * 0.88); g.lineTo(W, H); g.lineTo(0, H); g.closePath(); g.fill();
+  for (let i = 0; i < 14; i++) { g.fillStyle = PALETTE[i % PALETTE.length]; g.beginPath(); g.arc((i + 0.5) / 14 * W, H * (0.93 + 0.04 * ((i * 37) % 10) / 10), m * 0.009, 0, TAU); g.fill(); }
+}
+function drawClouds(time) {
+  const m = Math.min(W, H);
+  for (let i = 0; i < 4; i++) {
+    const span = W + m * 0.8, x = ((time * W * 0.012 * (1 + i * 0.35) + i * span / 4) % span) - m * 0.4, y = H * (0.1 + 0.08 * i), r = m * (0.045 + 0.015 * (i % 2));
+    ctx.fillStyle = 'rgba(255,255,255,0.92)';
+    [[0, 0, 1], [1.1, 0.15, 0.85], [-1.05, 0.2, 0.75], [0.3, -0.45, 0.8]].forEach(([ox, oy, k]) => { ctx.beginPath(); ctx.arc(x + ox * r, y + oy * r, r * k, 0, TAU); ctx.fill(); });
+  }
+}
+const FLOAT = [['🐸', 0.08, 0.22], ['🐘', 0.92, 0.3], ['🐦', 0.07, 0.6], ['🐍', 0.93, 0.66], ['🐰', 0.14, 0.88], ['🐵', 0.86, 0.9]];
+function drawFloaters(time) { const m = Math.min(W, H); FLOAT.forEach(([e, x, y], i) => drawEmoji(e, x * W, y * H + Math.sin(time * 1.3 + i) * m * 0.015, m * 0.08, Math.sin(time * 0.9 + i) * 0.12, 1, 1, 0.85)); }
+function drawSpotMascot(time) {
+  if (!spot || !spot.height) return;
+  const s = Math.min(spot.height / 1.15, spot.width);
+  const x = spot.left + spot.width / 2 - s * 0.15, y = spot.top + spot.height;
+  let P, bubble = null;
+  if (S.screen === 'loading') { P = demoPose('bunny', time, 0.7); bubble = '⏳'; }
+  else if (S.screen === 'perm') { P = S.permKind === 'ask' ? demoPose('wave', time) : demoPose('idle', time); bubble = (PERM[S.permKind] || PERM.ask).icon; }
+  else if (S.screen === 'rest') { P = demoPose('idle', time); bubble = '💧'; }
+  else P = demoPose('wave', time);
+  drawPip(x, y, s, P, time, bubble, false);
+}
+function mapPt(nx, ny) {
+  const vw = video.videoWidth, vh = video.videoHeight;
+  if (!vw || !vh) return { x: W - nx * W, y: ny * H };
+  const sc = Math.max(W / vw, H / vh), dw = vw * sc, dh = vh * sc;
+  return { x: W - ((W - dw) / 2 + nx * dw), y: (H - dh) / 2 + ny * dh };
+}
+const KEYPTS = [0, 11, 12, 13, 14, 15, 16, 23, 24, 25, 26];
+function updateD(dt) {
+  if (!person.f) return;
+  const a = 1 - Math.exp(-dt * 18);
+  for (const i of KEYPTS) {
+    const p = mapPt(SM[i].x, SM[i].y);
+    if (!D[i]) D[i] = { x: p.x, y: p.y, v: 0 };
+    D[i].x += (p.x - D[i].x) * a; D[i].y += (p.y - D[i].y) * a; D[i].v = SM[i].v;
+  }
+}
+function kidScreen() {
+  if (!D[11] || !D[12] || !D[0]) return null;
+  return { x: (D[11].x + D[12].x) / 2, y: (D[11].y + D[12].y) / 2, sp: Math.max(30, Math.hypot(D[11].x - D[12].x, D[11].y - D[12].y)), nose: D[0] };
+}
+function drawMirrorFrame() {
+  const m = Math.min(W, H), lw = m * 0.022;
+  const g = ctx.createLinearGradient(0, 0, W, H); g.addColorStop(0, '#FFB3D1'); g.addColorStop(0.5, '#C9B6FF'); g.addColorStop(1, '#9EDCFF');
+  ctx.save(); ctx.lineWidth = lw; ctx.strokeStyle = g; ctx.globalAlpha = 0.9; rr(lw / 2, lw / 2, W - lw, H - lw, m * 0.05); ctx.stroke(); ctx.restore();
+}
+function drawDots() {
+  ctx.save(); ctx.fillStyle = 'rgba(255,111,163,0.9)'; ctx.strokeStyle = 'rgba(255,255,255,0.9)'; ctx.lineWidth = 3;
+  [[11, 12], [11, 13], [13, 15], [12, 14], [14, 16], [11, 23], [12, 24], [23, 24]].forEach(([a, b]) => { if (D[a] && D[b]) { ctx.beginPath(); ctx.moveTo(D[a].x, D[a].y); ctx.lineTo(D[b].x, D[b].y); ctx.stroke(); } });
+  for (const i of KEYPTS) if (D[i]) circle(D[i].x, D[i].y, 7, 'rgba(255,111,163,0.9)', '#fff', 2);
+  ctx.restore();
+}
+function drawKidHat(k, time) {
+  const A = ANIMALS[card.key]; if (!A) return;
+  drawEmoji(A.emoji, k.nose.x, k.nose.y - k.sp * 1.05 + Math.sin(time * 2.4) * k.sp * 0.04, k.sp * 0.75, Math.sin(time * 1.6) * 0.08);
+}
+function drawHint(k, time) {
+  const key = card.key, col = (ANIMALS[key] || {}).color || '#FF8FB8', sp = k.sp, bob = Math.sin(time * TAU * 0.8);
+  const w = sp * 0.26, L = sp * 1.1;
+  ctx.save(); ctx.globalAlpha = 0.93;
+  switch (key) {
+    case 'frog': { const down = (time % 1.6) < 0.8; drawArrow(k.x, k.y + sp * (down ? 0.5 : 0.1), down ? Math.PI / 2 : -Math.PI / 2, L, w, col); break; }
+    case 'bunny': drawArrow(k.x, k.y - sp * 0.1 + bob * sp * 0.15, -Math.PI / 2, L * 0.9, w, col); break;
+    case 'bird': { const up = bob > 0; for (const sd of [-1, 1]) drawArrow(k.x + sd * sp * 1.4, k.y + (up ? -sp * 0.4 : sp * 0.4), up ? -Math.PI / 2 : Math.PI / 2, L * 0.85, w * 0.9, col); break; }
+    case 'elephant': {
+      const y = k.y + sp * 1.3, off = bob * sp * 0.2;
+      drawArrow(k.x - sp * 0.55 + off, y, Math.PI, L, w, col); drawArrow(k.x + sp * 0.55 + off, y, 0, L, w, col);
+      circle(k.nose.x, k.nose.y + sp * 0.15, sp * 0.32, null, col, Math.max(3, sp * 0.06)); break;
+    }
+    case 'snake': { const off = bob * sp * 0.3; drawArrow(k.x - sp * 0.8 + off, k.y, Math.PI, L * 1.1, w, col); drawArrow(k.x + sp * 0.8 + off, k.y, 0, L * 1.1, w, col); break; }
+    case 'monkey': {
+      for (const sd of [-1, 1]) drawEmoji('✋', k.x + sd * sp * 0.75, k.y - sp * 1.3, sp * 0.7, 0, sd, 1, 0.55 + 0.35 * (0.5 + 0.5 * bob));
+      for (const i of [15, 16]) if (D[i] && D[i].y > k.y) drawArrow(D[i].x, D[i].y - sp * 0.6, -Math.PI / 2, L * 0.8, w * 0.85, col);
+      break;
+    }
+  }
+  ctx.restore();
+}
+function drawTouchHint(time) {
+  const b = Math.sin(time * TAU * 0.7), r = card.r;
+  ctx.save(); ctx.globalAlpha = 0.85; ctx.lineWidth = r * 0.12; ctx.strokeStyle = '#FFE066';
+  ctx.beginPath(); ctx.arc(card.x, card.y, r * (1.32 + 0.06 * b), 0, TAU); ctx.stroke(); ctx.restore();
+  drawEmoji('👆', card.x + r * 0.8, card.y + r * 1.25 + b * r * 0.12, r * 0.7, -0.5);
+}
+function drawCard(time) {
+  if (!card.key || R.phase === 'welcome' || R.phase === 'none') return;
+  const A = ANIMALS[card.key], ap = easeOutBack(clamp(card.appear, 0, 1)), r = card.r * ap;
+  if (r < 2) return;
+  ctx.save(); ctx.translate(card.x, card.y);
+  ctx.rotate(Math.sin(time * 17) * 0.22 * card.wob);
+  const sc = 1 + 0.14 * Math.sin(Math.PI * card.bounce); ctx.scale(sc, sc);
+  oval(0, r * 0.1, r, r * 0.98, 'rgba(59,47,92,0.16)');
+  circle(0, 0, r, '#fff', A.color, r * 0.1);
+  if (R.prog > 0.02 && (R.phase === 'play' || R.phase === 'intro')) {
+    ctx.beginPath(); ctx.arc(0, 0, r * 1.14, -Math.PI / 2, -Math.PI / 2 + TAU * clamp(R.prog, 0, 1));
+    ctx.lineWidth = r * 0.09; ctx.lineCap = 'round'; ctx.strokeStyle = '#FF6FA3'; ctx.stroke();
+  }
+  const m = card.move > 0 ? animalTransform(card.key, time) : { dx: 0, dy: Math.sin(time * 2.4) * 0.03, rot: 0, sx: 1, sy: 1 };
+  const es = r * 1.3;
+  drawEmoji(A.emoji, m.dx * es * 0.5, m.dy * es * 0.5, es, m.rot, m.sx, m.sy);
+  if (R.phase === 'between') drawEmoji('✅', r * 0.65, -r * 0.65, r * 0.7);
+  let y = r * 1.36;
+  pillText(A.label, 0, y, Math.max(16, r * 0.28), '#fff', '#3B2F5C', A.color);
+  if (R.need > 1) {
+    y += r * 0.48; const dr = Math.max(10, r * 0.13), gap = dr * 2.7;
+    for (let i = 0; i < R.need; i++) {
+      const x = (i - (R.need - 1) / 2) * gap;
+      if (i < R.reps) { circle(x, y, dr, A.color, '#fff', Math.max(2, dr * 0.25)); drawEmoji('⭐', x, y, dr * 1.4); }
+      else circle(x, y, dr, 'rgba(255,255,255,0.9)', A.color, Math.max(2, dr * 0.25));
+    }
+  }
+  if (R.segs.length > 1) {
+    y += r * 0.5; const cr = Math.max(14, r * 0.2), gap = cr * 3.2;
+    R.segs.forEach((k, i) => {
+      const x = (i - (R.segs.length - 1) / 2) * gap, cur = i === R.seg && R.phase !== 'between' && R.phase !== 'success';
+      const done = i < R.seg || (i === R.seg && (R.phase === 'between' || R.phase === 'success'));
+      circle(x, y, cr * (cur ? 1.15 : 1), '#fff', cur ? '#FF6FA3' : ANIMALS[k].color, Math.max(2, cr * 0.18));
+      drawEmoji(ANIMALS[k].emoji, x, y, cr * 1.35);
+      if (done) drawEmoji('✅', x + cr * 0.7, y - cr * 0.7, cr * 0.8);
+      if (i < R.segs.length - 1) drawEmoji('➡️', x + gap / 2, y, cr * 0.8);
+    });
+  }
+  ctx.restore();
+}
+function drawGameMascot(time, dt) {
+  const m = Math.min(W, H);
+  let tx, ty, ts, glow = false;
+  if (R.phase === 'together') { ts = Math.min(H * 0.5, W * 0.42); tx = Math.max(insets.l + ts * 0.45 + m * 0.02, W * 0.22); ty = H - insets.b - m * 0.03; glow = true; }
+  else { ts = Math.min(H * 0.27, W * 0.34); if (R.hint && R.phase === 'play') { ts *= 1.3; glow = true; } tx = insets.l + ts * 0.45 + m * 0.02; ty = H - insets.b - m * 0.02; }
+  if (!mascot.init) { mascot.x = tx; mascot.y = ty; mascot.s = ts; mascot.init = true; }
+  const k = 1 - Math.exp(-dt * 5);
+  mascot.x += (tx - mascot.x) * k; mascot.y += (ty - mascot.y) * k; mascot.s += (ts - mascot.s) * k;
+  const key = card.key;
+  let P, bubble = null;
+  if (R.phase === 'success' || R.phase === 'between') P = demoPose('dance', time);
+  else if (R.phase === 'together') { P = demoPose(key, Math.max(0, R.phaseT - 1.8 + TOG_CYCLE * 0.15), TOG_CYCLE); bubble = ANIMALS[key].emoji; }
+  else if (R.phase === 'welcome' || !key) P = demoPose('wave', time);
+  else { P = demoPose(key, time * (R.hint ? 0.85 : 1)); bubble = ANIMALS[key].emoji; }
+  if (mascot.oops > 0) { P.face = 'o'; P.tilt += Math.sin(time * 12) * 0.12 * mascot.oops; }
+  drawPip(mascot.x, mascot.y, mascot.s, P, time, bubble, glow);
+}
+function drawRewards(time) {
+  for (const r of rewards) {
+    const enter = clamp(r.t / 0.4, 0, 1), exit = clamp((r.life - r.t) / 0.4, 0, 1), a = Math.min(enter, exit);
+    const x = r.x - r.from * (1 - ease(enter)) * r.size * 1.2;
+    oval(x, r.y + r.size * 0.45, r.size * 0.32, r.size * 0.07, `rgba(59,47,92,${0.18 * a})`);
+    const T = animalTransform(r.key, r.t);
+    drawEmoji(ANIMALS[r.key].emoji, x + T.dx * r.size, r.y + T.dy * r.size, r.size * (0.7 + 0.3 * a), T.rot, T.sx * r.from, T.sy, a);
+  }
+}
+function drawBigNum() {
+  if (!bigNum) return;
+  const t = bigNum.t, sc = easeOutBack(Math.min(1, t / 0.35)), a = t > 0.8 ? Math.max(0, 1 - (t - 0.8) / 0.4) : 1;
+  let x, y, size;
+  if (bigNum.at === 'center') { x = W / 2; y = H * 0.32; size = Math.min(H * 0.28, W * 0.3); }
+  else { size = card.r * 1.1; x = Math.max(size * 0.5, card.x - card.r * 1.75); y = card.y; }
+  ctx.save(); ctx.globalAlpha = a; ctx.font = `700 ${Math.max(1, size * sc)}px ${UI_FONT}`; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+  ctx.lineWidth = size * 0.1; ctx.strokeStyle = '#FF6FA3'; ctx.lineJoin = 'round'; ctx.strokeText(String(bigNum.n), x, y); ctx.fillStyle = '#fff'; ctx.fillText(String(bigNum.n), x, y);
+  ctx.restore();
+}
+function drawStepBack(time) {
+  ctx.fillStyle = 'rgba(255,255,255,0.4)'; ctx.fillRect(0, 0, W, H);
+  const h = H * 0.6, cx = W / 2, top = H * 0.16, hr = h * 0.12, sw = h * 0.22, sy = top + hr * 2.25;
+  ctx.save(); ctx.globalAlpha = 0.6 + 0.25 * Math.sin(time * Math.PI);
+  ctx.setLineDash([h * 0.035, h * 0.025]); ctx.lineWidth = Math.max(4, h * 0.014); ctx.strokeStyle = '#fff'; ctx.fillStyle = 'rgba(183,156,255,0.4)';
+  const shape = (x, y, w, hh, r) => { rr(x, y, w, hh, r); ctx.fill(); ctx.stroke(); };
+  ctx.beginPath(); ctx.arc(cx, top + hr, hr, 0, TAU); ctx.fill(); ctx.stroke();
+  shape(cx - sw * 0.6, sy, sw * 1.2, h * 0.38, sw * 0.35);
+  shape(cx - sw * 0.98, sy + sw * 0.08, sw * 0.3, h * 0.32, sw * 0.15); shape(cx + sw * 0.68, sy + sw * 0.08, sw * 0.3, h * 0.32, sw * 0.15);
+  shape(cx - sw * 0.5, sy + h * 0.35, sw * 0.42, h * 0.32, sw * 0.18); shape(cx + sw * 0.08, sy + h * 0.35, sw * 0.42, h * 0.32, sw * 0.18);
+  ctx.restore();
+  pillText('🚶 Step back!', W / 2, Math.min(H * 0.9, top + h * 1.12), Math.min(W, H) * 0.06, 'rgba(255,255,255,0.95)', '#3B2F5C', '#C9B6FF');
+}
+function drawFinale(time) {
+  const g = ctx.createLinearGradient(0, 0, 0, H); g.addColorStop(0, 'rgba(226,214,255,0.93)'); g.addColorStop(1, 'rgba(255,211,230,0.93)');
+  ctx.fillStyle = g; ctx.fillRect(0, 0, W, H);
+  const m = Math.min(W, H);
+  drawEmoji('🎉', W / 2, H * 0.16 + Math.sin(time * 2.5) * m * 0.015, m * 0.2, Math.sin(time * 1.5) * 0.1);
+  const ss = Math.min(W * 0.14, H * 0.13);
+  for (let i = 0; i < ROUNDS; i++) {
+    const row = i < 5 ? 0 : 1, col = i % 5, x = W / 2 + (col - 2) * ss * 1.15, y = H * 0.38 + row * ss * 1.15, st = R.finStars[i];
+    if (st == null) drawEmoji('⭐', x, y, ss * 0.6, 0, 1, 1, 0.2);
+    else drawEmoji('⭐', x, y + Math.sin(time * 2 + i) * ss * 0.05, ss * easeOutBack(clamp((gt - st) / 0.45, 0, 1)));
+  }
+  drawPip(W / 2, H - insets.b - m * 0.03, Math.min(H * 0.28, W * 0.4), demoPose('dance', time), time, null, true);
+}
+function drawParticles() {
+  for (const p of parts) {
+    const a = p.life > p.max - 0.5 ? Math.max(0, (p.max - p.life) / 0.5) : 1;
+    if (p.k === 'e') { drawEmoji(p.e, p.x, p.y, p.w, p.rot, 1, 1, a); continue; }
+    ctx.save(); ctx.globalAlpha = a; ctx.translate(p.x, p.y); ctx.rotate(p.rot); ctx.fillStyle = p.col;
+    if (p.circ) { ctx.beginPath(); ctx.arc(0, 0, p.h * 0.7, 0, TAU); ctx.fill(); } else ctx.fillRect(-p.w / 2, -p.h / 2, p.w, p.h);
+    ctx.restore();
+  }
+}
+function drawFlyers() {
+  for (const f of flyers) {
+    const u = ease(clamp(f.t / f.dur, 0, 1)), cx = (f.x0 + f.x1) / 2, cy = Math.min(f.y0, f.y1) - H * 0.15;
+    const x = (1 - u) * (1 - u) * f.x0 + 2 * (1 - u) * u * cx + u * u * f.x1, y = (1 - u) * (1 - u) * f.y0 + 2 * (1 - u) * u * cy + u * u * f.y1;
+    drawEmoji('⭐', x, y, Math.min(W, H) * (0.14 - 0.09 * u), u * TAU);
+  }
+}
+
+/* ======================= RENDER LOOP ======================= */
+function render(time, dt) {
+  ctx.setTransform(DPR, 0, 0, DPR, 0, 0);
+  ctx.clearRect(0, 0, W, H);
+  const sc = S.screen, camView = (sc === 'game' || sc === 'finale') && S.mode === 'camera' && !!stream;
+  if (!camView) { if (bg) ctx.drawImage(bg, 0, 0, W, H); drawClouds(time); }
+  if (sc === 'game') {
+    updateD(dt);
+    if (camView) drawMirrorFrame();
+    const kid = camView && person.present ? kidScreen() : null;
+    if (kid && S.showDots) drawDots();
+    if (kid && card.key && (R.phase === 'play' || R.phase === 'intro')) drawKidHat(kid, time);
+    if (kid && R.hint && R.phase === 'play') drawHint(kid, time);
+    drawRewards(time);
+    drawCard(time);
+    if (S.mode === 'touch' && R.hint && R.phase === 'play') drawTouchHint(time);
+    drawGameMascot(time, dt);
+    drawBigNum();
+    if (R.tooClose > 1 && !R.stepBack) pillText('🚶 Step back a little', W / 2, H - insets.b - Math.min(W, H) * 0.08, Math.min(W, H) * 0.045, 'rgba(255,255,255,0.92)', '#3B2F5C', '#FFB3D1');
+    if (R.stepBack) drawStepBack(time);
+  } else if (sc === 'finale') drawFinale(time);
+  else { if (sc !== 'start') drawFloaters(time); drawSpotMascot(time); }
+  drawParticles();
+  drawFlyers();
+}
+let lastFrame = performance.now();
+function frame(now) {
+  requestAnimationFrame(frame);
+  let dt = (now - lastFrame) / 1000; lastFrame = now;
+  if (!(dt >= 0)) dt = 0; if (dt > 0.1) dt = 0.1;
+  const paused = isPaused();
+  try {
+    if (!paused) update(dt);
+    if (ctx) render(now / 1000, paused ? 0 : dt);
+  } catch (e) { console.error(e); }
+}
+
+/* ======================= LAYOUT ======================= */
+const probe = document.createElement('div');
+probe.style.cssText = 'position:fixed;left:0;top:0;width:0;height:0;visibility:hidden;pointer-events:none;padding:env(safe-area-inset-top,0px) env(safe-area-inset-right,0px) env(safe-area-inset-bottom,0px) env(safe-area-inset-left,0px)';
+document.body.appendChild(probe);
+function updateSpot() { const el = document.querySelector('.screen.active .mascot-spot'); spot = el ? el.getBoundingClientRect() : null; }
+function resize() {
+  W = Math.max(1, window.innerWidth); H = Math.max(1, window.innerHeight);
+  DPR = Math.max(0.75, Math.min(window.devicePixelRatio || 1, 2, Math.sqrt(2.6e6 / (W * H))));
+  cv.width = Math.round(W * DPR); cv.height = Math.round(H * DPR);
+  const cs = getComputedStyle(probe);
+  insets = { t: parseFloat(cs.paddingTop) || 0, r: parseFloat(cs.paddingRight) || 0, b: parseFloat(cs.paddingBottom) || 0, l: parseFloat(cs.paddingLeft) || 0 };
+  const mb = $('#btnMute').getBoundingClientRect(); muteBottom = mb.bottom || (insets.t + 60);
+  updateSpot(); buildBg(); mascot.init = false;
+}
+window.addEventListener('resize', resize);
+window.addEventListener('orientationchange', () => setTimeout(resize, 250));
+
+/* ======================= INPUT ======================= */
+document.addEventListener('pointerdown', () => { S.lastInteract = gt; }, true);
+$('#btnPlay').addEventListener('click', () => { unlock(); sfx.click(); if (S.prefTouch) goTouch(); else goCamera(false); });
+$('#btnTouch').addEventListener('click', () => { unlock(); sfx.click(); goTouch(); });
+$('#btnRetry').addEventListener('click', () => { unlock(); sfx.click(); goCamera(false); });
+$('#btnAgain').addEventListener('click', () => { unlock(); sfx.click(); if (S.mode === 'touch' || S.prefTouch) goTouch(); else goCamera(false); });
+$('#btnSay').addEventListener('click', () => {
+  unlock(); S.lastInteract = gt; R.idle = 0;
+  if (S.screen === 'game' && (R.phase === 'play' || R.phase === 'intro')) { say(currentInstruction()); animalSound(R.segs[R.seg]); card.move = 1.2; }
+  else sayScreen();
+});
+$('#btnMute').addEventListener('click', () => {
+  unlock(); S.muted = !S.muted; $('#btnMute').textContent = S.muted ? '🔕' : '🔔';
+  if (master) master.gain.value = S.muted ? 0 : 0.55;
+  if (S.muted) cancelSpeech(); else sfx.click();
+});
+cv.addEventListener('pointerdown', (e) => {
+  if (S.screen !== 'game' || isPaused()) return;
+  unlock(); S.lastTapGT = gt;
+  if (!(R.phase === 'play' || R.phase === 'intro') || !card.key) return;
+  const d = Math.hypot(e.clientX - card.x, e.clientY - card.y);
+  if (d < card.r * 1.45) {
+    if (gt - S.lastRepTapGT < 0.4) return;
+    S.lastRepTapGT = gt; animalSound(card.key); card.move = 1.2; onRep();
+  } else if (S.mode === 'touch' && R.phase === 'play') onMiss();
+});
+
+/* ======================= GROWN-UP CORNER ======================= */
+let holdStart = 0, holdRaf = 0;
+function holdTick() {
+  const p = (performance.now() - holdStart) / 3000;
+  grown.style.setProperty('--p', Math.min(1, p).toFixed(3));
+  if (p >= 1) { endHold(); openPanel(); } else holdRaf = requestAnimationFrame(holdTick);
+}
+function endHold() { cancelAnimationFrame(holdRaf); grown.classList.remove('holding'); grown.style.setProperty('--p', '0'); }
+grown.addEventListener('pointerdown', (e) => {
+  e.preventDefault(); try { grown.setPointerCapture(e.pointerId); } catch (_) {}
+  holdStart = performance.now(); grown.classList.add('holding'); cancelAnimationFrame(holdRaf); holdRaf = requestAnimationFrame(holdTick);
+});
+['pointerup', 'pointercancel', 'lostpointercapture'].forEach(ev => grown.addEventListener(ev, endHold));
+grown.addEventListener('contextmenu', (e) => e.preventDefault());
+
+function addOpt(sel, v, label) { const o = document.createElement('option'); o.value = v; o.textContent = label; sel.appendChild(o); }
+async function fillDevices() {
+  const selCam = $('#selCam'), selMic = $('#selMic');
+  let devs = [];
+  try { if (navigator.mediaDevices && navigator.mediaDevices.enumerateDevices) devs = await navigator.mediaDevices.enumerateDevices(); } catch (e) {}
+  selCam.innerHTML = ''; addOpt(selCam, '', 'Front camera (default)');
+  devs.filter(d => d.kind === 'videoinput').forEach((d, i) => { if (d.deviceId) addOpt(selCam, d.deviceId, d.label || 'Camera ' + (i + 1)); });
+  selCam.value = S.camId; if (selCam.value !== S.camId) selCam.value = '';
+  selMic.innerHTML = ''; addOpt(selMic, '', 'Off');
+  let any = false;
+  devs.filter(d => d.kind === 'audioinput').forEach((d, i) => { if (d.deviceId && d.deviceId !== 'default' && d.deviceId !== 'communications') { addOpt(selMic, d.deviceId, d.label || 'Microphone ' + (i + 1)); any = true; } });
+  if (!any) addOpt(selMic, 'any', 'Microphone');
+  selMic.value = S.micId; if (selMic.value !== S.micId) selMic.value = '';
+}
+function syncPanel() {
+  document.querySelectorAll('#segDiff button').forEach(b => b.classList.toggle('on', b.dataset.v === S.diff));
+  $('#chkTouch').checked = S.mode === 'touch' || S.prefTouch; $('#chkDots').checked = S.showDots;
+}
+function openPanel() {
+  S.panel = true; panel.classList.add('open'); cancelSpeech();
+  if (ac && ac.state === 'running') ac.suspend().catch(() => {});
+  syncPanel(); fillDevices();
+  setTimeout(() => $('#btnClose').focus(), 50);
+}
+function closePanel() {
+  S.panel = false; panel.classList.remove('open'); lastFrame = performance.now();
+  if (ac && !S.hidden) ac.resume().catch(() => {});
+  if (S.screen === 'game' && (R.phase === 'play' || R.phase === 'intro')) { R.idle = 0; say(currentInstruction()); }
+}
+$('#segDiff').addEventListener('click', (e) => { const b = e.target.closest('button'); if (!b) return; setDifficulty(b.dataset.v); syncPanel(); });
+$('#selCam').addEventListener('change', async (e) => {
+  S.camId = e.target.value; $('#camNote').textContent = '';
+  if (S.mode === 'camera' && stream) {
+    try { await startCamera(S.run); startPoseLoop(); }
+    catch (err) { $('#camNote').textContent = 'That camera could not start. Pick another one or use touch mode.'; }
+  }
+});
+$('#selMic').addEventListener('change', async (e) => {
+  const v = e.target.value; S.micId = v; const note = $('#micNote');
+  if (!v) { stopMic(); note.textContent = ''; return; }
+  try { await startMic(v); note.textContent = 'Microphone on. Loud animal sounds make music notes appear 🎵'; fillDevices(); }
+  catch (err) { S.micId = ''; e.target.value = ''; note.textContent = 'The microphone is blocked or missing. That is fine, the game works without it.'; }
+});
+$('#chkTouch').addEventListener('change', (e) => {
+  S.prefTouch = e.target.checked;
+  if (e.target.checked) {
+    if (S.mode !== 'touch') { S.run++; S.mode = 'touch'; stopCamera(); if (S.screen === 'perm' || S.screen === 'loading') { S.panel = false; panel.classList.remove('open'); goTouch(); } }
+  } else if (S.mode === 'touch' && S.screen === 'game') { S.panel = false; panel.classList.remove('open'); goCamera(true); }
+  else if (S.mode === 'touch') S.mode = 'camera';
+});
+$('#chkDots').addEventListener('change', (e) => { S.showDots = e.target.checked; });
+$('#btnRestart').addEventListener('click', () => {
+  S.panel = false; panel.classList.remove('open');
+  if (S.mode === 'touch' || S.prefTouch) goTouch(); else if (stream && pose) startGame(); else goCamera(false);
+});
+$('#btnExit').addEventListener('click', exitToStart);
+$('#btnClose').addEventListener('click', closePanel);
+panel.addEventListener('click', (e) => { if (e.target === panel) closePanel(); });
+document.addEventListener('keydown', (e) => { if (e.key === 'Escape' && S.panel) closePanel(); });
+
+/* ======================= VISIBILITY + CLEANUP ======================= */
+let hideTimer = 0;
+document.addEventListener('visibilitychange', () => {
+  if (document.hidden) {
+    S.hidden = true; cancelSpeech();
+    if (ac && ac.state === 'running') ac.suspend().catch(() => {});
+    clearTimeout(hideTimer);
+    hideTimer = setTimeout(() => { if (S.hidden && stream) { stopCamera(); S.camSuspended = true; } }, 60000);
+  } else {
+    S.hidden = false; clearTimeout(hideTimer); lastFrame = performance.now();
+    if (ac && !S.panel) ac.resume().catch(() => {});
+    if (S.camSuspended) {
+      S.camSuspended = false;
+      if (S.mode === 'camera' && (S.screen === 'game' || S.screen === 'finale')) startCamera(S.run).then(startPoseLoop).catch(() => cameraLost());
+    }
+    if (S.screen === 'game' && (R.phase === 'play' || R.phase === 'intro')) setTimeout(() => say(currentInstruction()), 500);
+  }
+});
+window.addEventListener('pagehide', () => { stopCamera(); stopMic(); cancelSpeech(); });
+window.addEventListener('beforeunload', () => { stopCamera(); stopMic(); });
+
+/* ======================= START ======================= */
+resize();
+if (document.fonts && document.fonts.load) document.fonts.load('700 40px Fredoka').catch(() => {});
+requestAnimationFrame(frame);
+})();
+</script>
+</body>
+</html>
