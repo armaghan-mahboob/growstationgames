@@ -1,0 +1,1231 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Beehive Bloom Patrol</title>
+<style>
+  :root { --ink:#3b2a1a; --honey:#ffb703; --cream:#fffaf0; }
+  * { box-sizing:border-box; }
+  html, body { margin:0; height:100%; overflow:hidden; background:#8fd3ff; color:var(--ink);
+    font-family:"Comic Sans MS","Chalkboard SE","Trebuchet MS",system-ui,sans-serif;
+    -webkit-user-select:none; user-select:none; touch-action:manipulation; }
+  #game { position:fixed; inset:0; width:100%; height:100%; display:block; }
+
+  #hud { position:fixed; top:0; left:0; right:0; z-index:8; display:flex; flex-wrap:wrap; align-items:center; gap:10px;
+    padding:max(10px, env(safe-area-inset-top)) 12px 10px; pointer-events:none; }
+  #hud > * { pointer-events:auto; }
+  .pill { background:rgba(255,250,240,.94); border:3px solid var(--ink); border-radius:999px; padding:6px 14px;
+    font-weight:800; font-size:clamp(14px,2vw,20px); box-shadow:0 4px 0 rgba(59,42,26,.25); white-space:nowrap; }
+  #goal { flex:1 1 300px; display:flex; align-items:center; gap:10px; flex-wrap:wrap; min-height:56px;
+    background:rgba(255,250,240,.96); border:3px solid var(--ink); border-radius:22px; padding:6px 14px;
+    box-shadow:0 4px 0 rgba(59,42,26,.25); }
+  #goalText { font-size:clamp(16px,2.6vw,28px); font-weight:800; }
+  #goalIcons { display:flex; gap:4px; align-items:center; flex-wrap:wrap; }
+  #goalIcons svg { width:clamp(26px,3.6vw,40px); height:clamp(26px,3.6vw,40px); }
+  #goalIcons .arrow { font-size:clamp(18px,2.6vw,28px); margin:0 2px; }
+  .chip { display:inline-block; padding:0 10px; border-radius:999px; border:2px solid var(--ink); color:#fff;
+    text-shadow:0 1px 2px rgba(0,0,0,.5); }
+  #controls { display:flex; gap:8px; margin-left:auto; flex-wrap:wrap; }
+
+  button { font:inherit; font-weight:800; font-size:clamp(15px,2vw,20px); color:var(--ink); background:#fff;
+    border:3px solid var(--ink); border-radius:16px; padding:10px 16px; min-height:48px; min-width:48px;
+    cursor:pointer; box-shadow:0 4px 0 var(--ink); transition:transform .08s; }
+  button:active { transform:translateY(3px); box-shadow:0 1px 0 var(--ink); }
+  button:disabled { opacity:.45; cursor:default; transform:none; box-shadow:0 4px 0 var(--ink); }
+  button.primary { background:var(--honey); }
+  button.big { font-size:clamp(22px,4vw,34px); padding:14px 34px; border-radius:24px; }
+  button.link { background:none; border:none; box-shadow:none; text-decoration:underline; font-size:15px;
+    padding:6px; min-height:auto; }
+
+  #preview { position:fixed; left:12px; bottom:12px; z-index:4; width:clamp(120px,20vw,240px); aspect-ratio:4/3;
+    border:3px solid var(--ink); border-radius:16px; overflow:hidden; background:#223;
+    box-shadow:0 4px 0 rgba(59,42,26,.3); transition:all .35s; }
+  #preview.hidden { display:none; }
+  #preview.big { left:50%; top:44%; bottom:auto; transform:translate(-50%,-50%); width:min(78vw,560px); z-index:7; }
+  #preview video, #preview canvas { position:absolute; inset:0; width:100%; height:100%; object-fit:cover; }
+  #preview video { transform:scaleX(-1); }
+  #trackChip { position:absolute; left:6px; top:6px; background:rgba(255,255,255,.92); border-radius:999px;
+    padding:2px 8px; font-size:12px; font-weight:800; }
+
+  #overlay { position:fixed; inset:0; z-index:6; display:flex; align-items:center; justify-content:center;
+    padding:100px 16px 16px; background:rgba(40,80,120,.28); }
+  #overlay.hidden { display:none; }
+  #overlay.bottom { align-items:flex-end; background:transparent; pointer-events:none; }
+  #overlay.bottom .card { pointer-events:auto; }
+  .card { background:var(--cream); border:4px solid var(--ink); border-radius:28px; padding:20px 26px;
+    max-width:min(660px,94vw); max-height:calc(100vh - 116px); overflow:auto; text-align:center;
+    box-shadow:0 8px 0 rgba(59,42,26,.3); }
+  .card h1 { margin:.1em 0; font-size:clamp(28px,5vw,48px); }
+  .card h2 { margin:.2em 0; font-size:clamp(22px,3.6vw,34px); }
+  .card p { font-size:clamp(16px,2.4vw,22px); margin:.5em 0; }
+  .card .small { font-size:14px; opacity:.8; }
+  .logo { font-size:clamp(44px,8vw,72px); line-height:1; }
+  .how { display:flex; gap:12px; justify-content:center; flex-wrap:wrap; margin:12px 0 16px; }
+  .how div { background:#fff; border:3px solid var(--ink); border-radius:18px; padding:10px 12px; width:150px;
+    font-weight:800; font-size:16px; }
+  .how .ic { font-size:38px; }
+  .row { display:flex; gap:10px; justify-content:center; flex-wrap:wrap; margin-top:10px; }
+  .ring { width:110px; height:110px; border-radius:50%; margin:6px auto; border:4px solid var(--ink);
+    background:conic-gradient(var(--honey) calc(var(--p,0) * 1turn), #eadfca 0); display:grid; place-items:center; }
+  .ring span { width:76px; height:76px; border-radius:50%; background:var(--cream); display:grid; place-items:center; font-size:34px; }
+  .spinner { width:56px; height:56px; margin:10px auto; border:7px solid #eadfca; border-top-color:var(--honey);
+    border-radius:50%; animation:spin 1s linear infinite; }
+  @keyframes spin { to { transform:rotate(360deg); } }
+  .rotate { display:none; font-size:15px; opacity:.85; }
+  @media (orientation:portrait) { .rotate { display:block; } }
+
+  #toast { position:fixed; left:50%; top:clamp(96px,15vh,140px); transform:translateX(-50%); z-index:9;
+    background:rgba(255,250,240,.97); border:3px solid var(--ink); border-radius:20px; padding:8px 18px;
+    font-weight:800; font-size:clamp(16px,2.6vw,26px); text-align:center; max-width:90vw;
+    opacity:0; transition:opacity .3s; pointer-events:none; }
+  #toast.show { opacity:1; }
+
+  #tests { position:fixed; inset:5vh 5vw; z-index:20; background:#fff; border:4px solid var(--ink); border-radius:20px;
+    padding:16px; overflow:auto; font-family:ui-monospace,Menlo,Consolas,monospace; font-size:14px; }
+  #tests li { margin:4px 0; }
+  .pass { color:#1b7f3b; } .fail { color:#c0392b; font-weight:bold; }
+
+  @media (max-width:640px) {
+    #controls button { padding:8px 10px; }
+    .how div { width:120px; font-size:14px; }
+  }
+</style>
+</head>
+<body>
+<canvas id="game"></canvas>
+
+<header id="hud">
+  <div class="pill" id="stageLabel">Stage 1 of 3</div>
+  <div id="goal" aria-live="polite"><span id="goalText"></span><span id="goalIcons"></span></div>
+  <div class="pill" id="score">🌼 0</div>
+  <div id="controls">
+    <button id="btnStart" class="primary">▶ Start</button>
+    <button id="btnPause" disabled>⏸ Pause</button>
+    <button id="btnRestart" disabled>↺ Restart</button>
+    <button id="btnSound" aria-label="Sound on or off">🔊</button>
+  </div>
+</header>
+
+<div id="preview" class="hidden">
+  <video id="cam" playsinline muted autoplay></video>
+  <canvas id="pose"></canvas>
+  <div id="trackChip">📷</div>
+</div>
+
+<div id="overlay" class="hidden"></div>
+<div id="toast"></div>
+<div id="tests" hidden></div>
+
+<script type="module">
+/* =====================================================================
+   CORE GAME LOGIC (pure, no DOM). Used by the game and by the self-tests.
+   ===================================================================== */
+const Core = (() => {
+  const W = 1600, H = 1000, GROUND = 880;
+  const BEE_R = 42, FLOWER_R = 50;
+  const HIVE = { x: 200, y: 390, r: 72 };
+  const BOUNDS = { xMin: 70, xMax: W - 70, yTop: 210, yBottom: 760 };
+  const MAX_VX = 300, MAX_VY = 320;                 // slow, gentle flying
+  const OPEN_TIME = 1.4, COOLDOWN = 7, REGROW_MIN = 0.8, REGROW_MAX = 2.4;
+  const DZ_LEAN = 0.18, FULL_LEAN = 0.7;            // lean in shoulder widths
+  const DZ_LIFT = 0.12, HANDS_UP = 1.0, LIFT_TOP = 0.9;
+  const LOST_AFTER = 0.8, RECOVER_AFTER = 1.0;      // seconds
+  const COLORS = { pink: '#ff6fb1', yellow: '#ffd23f', blue: '#4fa3ff', purple: '#a77bff' };
+  const STAGES = [
+    { type: 'collect', need: 5, clouds: 1, buds: 2, heights: ['s','s','s','s','m','m','m','m'] },
+    { type: 'color',   need: 3, clouds: 2, buds: 3, heights: ['s','s','s','m','m','m','m','t'] },
+    { type: 'hive',    need: 3, clouds: 2, buds: 3, heights: ['s','s','s','m','m','m','t','t'] },
+  ];
+
+  const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
+  const vis = p => (p && (p.vis ?? p.visibility ?? 1)) || 0;
+  const avg = a => a.reduce((s, v) => s + v, 0) / a.length;
+
+  function deadZone(v, dz, full = 1) {
+    const a = Math.abs(v);
+    if (a <= dz) return 0;
+    return Math.sign(v) * clamp((a - dz) / (full - dz), 0, 1);
+  }
+  const ema = (prev, next, a) => prev + (next - prev) * a;
+
+  function smoothLandmarks(prev, next, a) {
+    if (!prev || prev.length !== next.length) return next.map(p => ({ x: p.x, y: p.y, vis: vis(p) }));
+    return next.map((p, i) => ({ x: ema(prev[i].x, p.x, a), y: ema(prev[i].y, p.y, a), vis: ema(prev[i].vis, vis(p), a) }));
+  }
+
+  // Landmarks are already mirrored (x = 1 - x), so screen-left is the child's left.
+  function sampleInfo(lms) {
+    const L = lms && lms[11], R = lms && lms[12];
+    if (!L || !R || vis(L) < 0.5 || vis(R) < 0.5) return { ok: false };
+    const sw = Math.hypot(L.x - R.x, L.y - R.y);
+    if (sw < 0.03) return { ok: false };
+    const cx = (L.x + R.x) / 2;
+    const lifts = [];
+    for (const [wi, si] of [[15, 11], [16, 12]]) {
+      const wr = lms[wi];
+      if (wr && vis(wr) >= 0.35) lifts.push((lms[si].y - wr.y) / sw);
+    }
+    let hint = null;
+    if (sw < 0.09) hint = 'closer'; else if (sw > 0.5) hint = 'back';
+    return { ok: true, cx, sw, lift: lifts.length ? avg(lifts) : null, hint };
+  }
+
+  function calibrate(samples) {
+    const infos = samples.map(sampleInfo).filter(i => i.ok && !i.hint);
+    if (infos.length < 10) return null;
+    const lifts = infos.filter(i => i.lift !== null).map(i => i.lift);
+    let restLift = lifts.length ? avg(lifts) : -1.3;
+    restLift = Math.min(restLift, -0.8);   // if arms were up during calibration, assume a normal resting pose
+    return { cx: avg(infos.map(i => i.cx)), sw: avg(infos.map(i => i.sw)), restLift };
+  }
+
+  function computeControls(lms, calib) {
+    const out = { valid: false, steer: 0, lift: 0, lean: 0, liftRaw: 0 };
+    if (!lms || !calib) return out;
+    const info = sampleInfo(lms);
+    if (!info.ok) return out;
+    out.valid = true;
+    out.lean = (info.cx - calib.cx) / info.sw;
+    out.steer = deadZone(out.lean, DZ_LEAN, FULL_LEAN);
+    const lifts = [];
+    for (const [wi, ei, si] of [[15, 13, 11], [16, 14, 12]]) {
+      const wr = lms[wi], el = lms[ei], sh = lms[si];
+      if (wr && vis(wr) >= 0.35) lifts.push((sh.y - wr.y) / info.sw);
+      else if (el && vis(el) >= 0.35 && el.y < sh.y - 0.15 * info.sw) lifts.push(HANDS_UP); // wrists above the frame
+    }
+    if (lifts.length) {
+      const frac = (avg(lifts) - calib.restLift) / (LIFT_TOP - calib.restLift);
+      out.liftRaw = frac;
+      out.lift = frac <= DZ_LIFT ? 0 : clamp((frac - DZ_LIFT) / (1 - DZ_LIFT), 0, 1);
+    }
+    return out;
+  }
+
+  function makeRng(seed) {
+    let a = seed >>> 0;
+    return () => {
+      a |= 0; a = (a + 0x6D2B79F5) | 0;
+      let t = Math.imul(a ^ (a >>> 15), 1 | a);
+      t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+      return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+    };
+  }
+  function shuffle(arr, rand) {
+    for (let i = arr.length - 1; i > 0; i--) { const j = Math.floor(rand() * (i + 1)); [arr[i], arr[j]] = [arr[j], arr[i]]; }
+    return arr;
+  }
+
+  function makeFlower(id, x, y, color, budUntil, phase) {
+    return { id, x, y, color, state: budUntil > 0 ? 'bud' : 'open', budUntil, openStart: -99,
+      collectedAt: -99, nudgedAt: -99, phase, timesCollected: 0 };
+  }
+
+  function createWorld(stageIndex, rand = Math.random, forcedColor) {
+    const st = STAGES[stageIndex];
+    const w = { stageIndex, stage: st, time: 0, progress: 0, collected: 0, complete: false, targetColor: null,
+      lastHiveHint: -99, lastFullHint: -99,
+      bee: { x: 290, y: 700, vx: 0, vy: 0, face: 1, targetY: 700 }, flowers: [], clouds: [] };
+    const palette = Object.keys(COLORS);
+    let colors;
+    if (st.type === 'color') {
+      w.targetColor = forcedColor || ['pink', 'blue', 'purple'][Math.floor(rand() * 3)];
+      const others = palette.filter(c => c !== w.targetColor);
+      colors = [w.targetColor, w.targetColor, w.targetColor, w.targetColor, others[0], others[1], others[2], others[Math.floor(rand() * 3)]];
+    } else {
+      const start = Math.floor(rand() * 4);
+      colors = Array.from({ length: 8 }, (_, i) => palette[(start + i) % 4]);
+    }
+    shuffle(colors, rand);
+    const heights = shuffle(st.heights.slice(), rand);
+    const budIdx = new Set(shuffle([0, 1, 2, 3, 4, 5, 6, 7], rand).slice(0, st.buds));
+    for (let i = 0; i < 8; i++) {
+      const x = 430 + i * 154 + (rand() - 0.5) * 40;
+      const h = heights[i];
+      const y = h === 's' ? 715 + rand() * 35 : h === 'm' ? 600 + rand() * 40 : 500 + rand() * 40;
+      const budUntil = budIdx.has(i) ? 1 + rand() * 3 : 0;
+      w.flowers.push(makeFlower(i, x, y, colors[i], budUntil, rand() * Math.PI * 2));
+    }
+    for (let k = 0; k < st.clouds; k++) {
+      const y = 150 + rand() * 90;
+      w.clouds.push({ x: 350 + k * 650 + rand() * 200, y, cy: y, r: 70,
+        vx: (rand() < 0.5 ? -1 : 1) * (14 + rand() * 12), phase: rand() * 6.28, bumpedAt: -99 });
+    }
+    return w;
+  }
+
+  function clampBee(b) {
+    if (b.x < BOUNDS.xMin) { b.x = BOUNDS.xMin; if (b.vx < 0) b.vx = 0; }
+    if (b.x > BOUNDS.xMax) { b.x = BOUNDS.xMax; if (b.vx > 0) b.vx = 0; }
+    if (b.y < BOUNDS.yTop) { b.y = BOUNDS.yTop; if (b.vy < 0) b.vy = 0; }
+    if (b.y > BOUNDS.yBottom) { b.y = BOUNDS.yBottom; if (b.vy > 0) b.vy = 0; }
+  }
+
+  function stepBee(b, c, dt) {
+    const tvx = clamp(c.steer || 0, -1, 1) * MAX_VX;
+    b.vx += (tvx - b.vx) * Math.min(1, dt * 5);
+    b.x += b.vx * dt;
+    b.targetY = BOUNDS.yBottom - clamp(c.lift || 0, 0, 1) * (BOUNDS.yBottom - BOUNDS.yTop);
+    const tvy = clamp((b.targetY - b.y) * 3.2, -MAX_VY, MAX_VY);
+    b.vy += (tvy - b.vy) * Math.min(1, dt * 6);
+    b.y += b.vy * dt;
+    clampBee(b);
+    if (b.vx > 15) b.face = 1; else if (b.vx < -15) b.face = -1;
+  }
+
+  const hit = (ax, ay, ar, bx, by, br) => (ax - bx) ** 2 + (ay - by) ** 2 <= (ar + br) ** 2;
+
+  // Flower life cycle: bud -> opening -> open -> collected -> (cooldown) -> bud ...
+  function updateFlower(f, t, rand) {
+    if (f.state === 'collected' && t - f.collectedAt >= COOLDOWN) {
+      f.state = 'bud'; f.budUntil = t + REGROW_MIN + rand() * (REGROW_MAX - REGROW_MIN);
+    }
+    if (f.state === 'bud' && t >= f.budUntil) { f.state = 'opening'; f.openStart = t; }
+    if (f.state === 'opening' && t - f.openStart >= OPEN_TIME) f.state = 'open';
+  }
+
+  function stepWorld(w, ctrl, dt, rand = Math.random) {
+    const ev = [];
+    if (w.complete || !(dt > 0)) return ev;
+    w.time += dt;
+    const b = w.bee, st = w.stage;
+    stepBee(b, ctrl, dt);
+
+    for (const c of w.clouds) {
+      c.x += c.vx * dt;
+      if (c.x > W + 160) c.x = -160; else if (c.x < -160) c.x = W + 160;
+      c.cy = c.y + Math.sin(w.time * 0.6 + c.phase) * 8;
+      const dx = b.x - c.x, dy = b.y - c.cy, d = Math.hypot(dx, dy), min = BEE_R + c.r * 0.85;
+      if (d < min) {
+        const nx = d > 1e-3 ? dx / d : 0, ny = d > 1e-3 ? dy / d : 1;
+        b.x = c.x + nx * min; b.y = c.cy + ny * min;
+        clampBee(b);
+        if (w.time - c.bumpedAt > 1.5) ev.push({ type: 'cloud' });
+        c.bumpedAt = w.time;
+      }
+    }
+
+    for (const f of w.flowers) updateFlower(f, w.time, rand);
+
+    for (const f of w.flowers) {
+      if (f.state !== 'open' || !hit(b.x, b.y, BEE_R, f.x, f.y, FLOWER_R)) continue;
+      if (st.type === 'color' && f.color !== w.targetColor) {
+        if (w.time - f.nudgedAt > 2.5) { f.nudgedAt = w.time; ev.push({ type: 'wrongColor', color: f.color, flower: f }); }
+        continue;
+      }
+      if (st.type === 'hive' && w.progress >= st.need) {
+        if (w.time - w.lastFullHint > 4) { w.lastFullHint = w.time; ev.push({ type: 'full' }); }
+        continue;
+      }
+      f.state = 'collected'; f.collectedAt = w.time; f.timesCollected++;   // state change = no double scoring
+      w.progress++; w.collected++;
+      ev.push({ type: 'collect', flower: f, progress: w.progress, need: st.need });
+      if (st.type !== 'hive' && w.progress >= st.need) { w.complete = true; ev.push({ type: 'complete' }); break; }
+    }
+
+    if (st.type === 'hive' && !w.complete && hit(b.x, b.y, BEE_R, HIVE.x, HIVE.y, HIVE.r)) {
+      if (w.progress >= st.need) { w.complete = true; ev.push({ type: 'complete', hive: true }); }
+      else if (w.time - w.lastHiveHint > 4) { w.lastHiveHint = w.time; ev.push({ type: 'hiveEarly', remaining: st.need - w.progress }); }
+    }
+    return ev;
+  }
+
+  const createTracking = () => ({ status: 'ok', invalidSince: null, validSince: null });
+  function updateTracking(tr, valid, now) {
+    if (valid) {
+      tr.invalidSince = null;
+      if (tr.status === 'lost') {
+        if (tr.validSince === null) tr.validSince = now;
+        if (now - tr.validSince >= RECOVER_AFTER) { tr.status = 'ok'; tr.validSince = null; return 'recovered'; }
+      }
+      return null;
+    }
+    tr.validSince = null;
+    if (tr.invalidSince === null) tr.invalidSince = now;
+    if (tr.status === 'ok' && now - tr.invalidSince >= LOST_AFTER) { tr.status = 'lost'; return 'lost'; }
+    return null;
+  }
+
+  return { W, H, GROUND, BEE_R, FLOWER_R, HIVE, BOUNDS, MAX_VX, MAX_VY, OPEN_TIME, COOLDOWN, REGROW_MIN,
+    DZ_LEAN, COLORS, STAGES, clamp, vis, deadZone, ema, smoothLandmarks, sampleInfo, calibrate, computeControls,
+    makeRng, makeFlower, createWorld, stepBee, stepWorld, updateFlower, hit, createTracking, updateTracking };
+})();
+
+/* =====================================================================
+   APP / UI
+   ===================================================================== */
+const MP_BASE = 'https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.14';
+const MODEL_URL = 'https://storage.googleapis.com/mediapipe-models/pose_landmarker/pose_landmarker_lite/float16/1/pose_landmarker_lite.task';
+const CALIB_FRAMES = 40;
+const BONES = [[11,12],[11,13],[13,15],[12,14],[14,16],[11,23],[12,24],[23,24]];
+const PRAISE = ['Yummy pollen!', 'Great flying!', 'Buzz buzz, well done!', 'You found one!', 'Wonderful!', 'Super!'];
+const NUMBERS = ['zero','one','two','three','four','five','six','seven','eight','nine','ten'];
+
+const $ = s => document.querySelector(s);
+const canvas = $('#game'), gctx = canvas.getContext('2d');
+const video = $('#cam'), poseCanvas = $('#pose'), pctx = poseCanvas.getContext('2d');
+const overlay = $('#overlay'), toastEl = $('#toast'), previewEl = $('#preview'), chipEl = $('#trackChip');
+const btnStart = $('#btnStart'), btnPause = $('#btnPause'), btnRestart = $('#btnRestart'), btnSound = $('#btnSound');
+
+const G = {
+  mode: 'idle', inputMode: null, manualPause: false, lostPause: false,
+  stageIndex: 0, world: Core.createWorld(0, Math.random), totalScore: 0,
+  landmarker: null, stream: null, smoothLms: null, poseFrame: 0, lastPoseAt: -1, lastVideoTime: -1,
+  calib: null, calibState: null, ctrl: { steer: 0, lift: 0 }, ctrlValid: false,
+  track: Core.createTracking(), fx: [], timers: [], lastCollectAt: 0, lastIdleHint: 0, idleHintToggle: false,
+  keys: { left: false, right: false, up: false }, soundOn: true,
+};
+
+/* ---------- sound and voice ---------- */
+const Sfx = {
+  ctx: null,
+  init() {
+    if (!this.ctx) { try { this.ctx = new (window.AudioContext || window.webkitAudioContext)(); } catch (e) { this.ctx = null; } }
+    if (this.ctx && this.ctx.state === 'suspended') this.ctx.resume();
+  },
+  tone(freq, dur, type = 'sine', vol = 0.15, delay = 0) {
+    if (!G.soundOn || !this.ctx) return;
+    const t = this.ctx.currentTime + delay, o = this.ctx.createOscillator(), g = this.ctx.createGain();
+    o.type = type; o.frequency.setValueAtTime(freq, t);
+    g.gain.setValueAtTime(0.0001, t); g.gain.exponentialRampToValueAtTime(vol, t + 0.02);
+    g.gain.exponentialRampToValueAtTime(0.0001, t + dur);
+    o.connect(g).connect(this.ctx.destination); o.start(t); o.stop(t + dur + 0.05);
+  },
+  collect() { this.tone(660, 0.18); this.tone(880, 0.22, 'sine', 0.13, 0.09); this.tone(1175, 0.3, 'sine', 0.1, 0.18); },
+  bump() { this.tone(220, 0.25, 'triangle', 0.12); },
+  nope() { this.tone(330, 0.15, 'triangle', 0.08); this.tone(294, 0.2, 'triangle', 0.08, 0.12); },
+  win() { [523, 659, 784, 1047].forEach((f, i) => this.tone(f, 0.35, 'triangle', 0.13, i * 0.14)); },
+};
+
+const Voice = {
+  voice: null,
+  pick() {
+    const en = speechSynthesis.getVoices().filter(v => /^en/i.test(v.lang));
+    this.voice = en.find(v => /samantha|google us english|female|zira|aria|jenny/i.test(v.name)) || en[0] || null;
+  },
+  say(text, priority = false) {
+    if (!G.soundOn || !('speechSynthesis' in window)) return;
+    const s = window.speechSynthesis;
+    const u = new SpeechSynthesisUtterance(text);
+    u.rate = 0.92; u.pitch = 1.25; u.lang = this.voice ? this.voice.lang : 'en-US';
+    if (this.voice) u.voice = this.voice;
+    if (s.speaking || s.pending) {
+      if (!priority) return;
+      s.cancel(); setTimeout(() => s.speak(u), 80);
+    } else s.speak(u);
+  },
+  stop() { if ('speechSynthesis' in window) speechSynthesis.cancel(); },
+};
+if ('speechSynthesis' in window) { Voice.pick(); speechSynthesis.onvoiceschanged = () => Voice.pick(); }
+
+let toastTimer = 0;
+function toast(text, ms = 2800) {
+  toastEl.textContent = text; toastEl.classList.add('show');
+  clearTimeout(toastTimer); toastTimer = setTimeout(() => toastEl.classList.remove('show'), ms);
+}
+function talk(text, priority = false) { toast(text); Voice.say(text, priority); }
+const pick = a => a[Math.floor(Math.random() * a.length)];
+
+function later(fn, ms) { G.timers.push(setTimeout(fn, ms)); }
+function clearTimers() { G.timers.forEach(clearTimeout); G.timers = []; }
+
+/* ---------- HUD ---------- */
+function flowerIcon(color, filled) {
+  let petals = '';
+  for (let i = 0; i < 6; i++) petals += `<ellipse cx="0" cy="-14" rx="8" ry="11" transform="rotate(${i * 60})"/>`;
+  return `<svg viewBox="-30 -30 60 60" aria-hidden="true"><g fill="${filled ? color : '#ffffff'}" stroke="#3b2a1a" stroke-width="3">${petals}</g><circle r="9" fill="${filled ? '#ffb703' : '#eee6d6'}" stroke="#3b2a1a" stroke-width="3"/></svg>`;
+}
+function hiveIcon(on) {
+  return `<svg viewBox="-30 -30 60 60" aria-hidden="true"><g fill="${on ? '#f6b73c' : '#eee6d6'}" stroke="#3b2a1a" stroke-width="3"><ellipse cx="0" cy="-16" rx="12" ry="7"/><ellipse cx="0" cy="-5" rx="19" ry="8"/><ellipse cx="0" cy="7" rx="22" ry="8"/><ellipse cx="0" cy="18" rx="18" ry="7"/></g><ellipse cx="0" cy="18" rx="5" ry="3.5" fill="#3b2a1a"/></svg>`;
+}
+function updateHUD() {
+  const w = G.world, st = w.stage;
+  $('#stageLabel').textContent = `Stage ${G.stageIndex + 1} of 3`;
+  let text;
+  if (st.type === 'collect') text = `Collect ${st.need} flowers`;
+  else if (st.type === 'color') text = `Find ${st.need} <span class="chip" style="background:${Core.COLORS[w.targetColor]}">${w.targetColor}</span> flowers`;
+  else text = w.progress >= st.need ? 'Fly home to the hive!' : `Collect ${st.need} flowers, then fly home`;
+  $('#goalText').innerHTML = text;
+  const col = st.type === 'color' ? Core.COLORS[w.targetColor] : '#ffb703';
+  let icons = '';
+  for (let k = 0; k < st.need; k++) icons += flowerIcon(col, k < w.progress);
+  if (st.type === 'hive') icons += `<span class="arrow">➜</span>` + hiveIcon(w.progress >= st.need);
+  $('#goalIcons').innerHTML = icons;
+  $('#score').textContent = `🌼 ${G.totalScore}`;
+}
+function updateButtons() {
+  btnStart.disabled = !(G.mode === 'idle' || G.mode === 'error');
+  btnPause.disabled = G.mode !== 'playing';
+  btnPause.textContent = G.manualPause ? '▶ Resume' : '⏸ Pause';
+  btnRestart.disabled = G.mode === 'idle' || G.mode === 'loading';
+  btnSound.textContent = G.soundOn ? '🔊' : '🔇';
+}
+function setChip(t) { if (chipEl.textContent !== t) chipEl.textContent = t; }
+
+/* ---------- overlay screens ---------- */
+function showOverlay(kind, data = {}) {
+  overlay.className = '';
+  let html = '';
+  if (kind === 'start') html = `
+    <div class="card">
+      <div class="logo">🐝🌸</div>
+      <h1>Beehive Bloom Patrol</h1>
+      <div class="how">
+        <div><div class="ic">↔️</div>Lean to fly left and right</div>
+        <div><div class="ic">🙌</div>Hands up to fly high</div>
+        <div><div class="ic">🌼</div>Touch flowers to get pollen</div>
+      </div>
+      <button class="primary big" data-action="start-camera">▶ Start</button>
+      <p class="small">Grown-ups: the camera picture stays on this device. Place the child about 1.5 to 2 metres from the screen so shoulders and hands are in view.</p>
+      <p class="rotate">Tip: turn the tablet sideways for a bigger meadow.</p>
+      <button class="link" data-action="start-keys">Play with arrow keys instead</button>
+      <button class="link" data-action="tests">Run self-tests</button>
+    </div>`;
+  else if (kind === 'loading') html = `<div class="card"><div class="spinner"></div><h2 id="loadText">${data.text || 'Getting ready...'}</h2><p class="small">If your browser asks, choose "Allow" for the camera.</p></div>`;
+  else if (kind === 'calibrate') {
+    overlay.className = 'bottom';
+    html = `<div class="card"><div class="ring" id="calRing"><span>🐝</span></div><h2 id="calHint">Stand in the middle with your arms down</h2><p>Hold still like a statue for a moment.</p></div>`;
+  }
+  else if (kind === 'paused') html = `
+    <div class="card"><div class="logo">⏸</div><h1>Paused</h1><p>The bee is having a little rest.</p>
+      <div class="row"><button class="primary big" data-action="resume">▶ Resume</button></div>
+      <div class="row">${G.inputMode === 'camera' ? '<button data-action="recalibrate">🎯 Recalibrate</button>' : ''}<button data-action="restart">↺ Restart</button></div>
+    </div>`;
+  else if (kind === 'lost') html = `<div class="card"><div class="logo">🙈</div><h1>Where did you go?</h1><p>Come back in front of the camera so I can see your shoulders. The bee is waiting!</p></div>`;
+  else if (kind === 'stage') html = `
+    <div class="card"><div class="logo">🎉</div><h1>Stage ${G.stageIndex + 1} done!</h1><p>${data.text || ''}</p>
+      <div class="row"><button class="primary big" data-action="next">Next stage ▶</button></div></div>`;
+  else if (kind === 'finished') html = `
+    <div class="card"><div class="logo">🏆🐝</div><h1>You're a Super Bee!</h1>
+      <p>You collected ${G.totalScore} pollen today. The flowers and the bees say thank you!</p>
+      <div class="row"><button class="primary big" data-action="restart">↺ Play again</button></div></div>`;
+  else if (kind === 'error') html = `
+    <div class="card"><div class="logo">😮</div><h1>Oh no!</h1><p>${data.msg}</p>
+      <div class="row"><button class="primary big" data-action="start-camera">Try again</button></div>
+      <button class="link" data-action="start-keys">Play with arrow keys instead</button></div>`;
+  overlay.innerHTML = html;
+}
+function hideOverlay() { overlay.className = 'hidden'; overlay.innerHTML = ''; }
+
+overlay.addEventListener('click', e => {
+  const b = e.target.closest('[data-action]');
+  if (!b) return;
+  b.blur();
+  const a = b.dataset.action;
+  if (a === 'start-camera') startGame('camera');
+  else if (a === 'start-keys') startGame('keyboard');
+  else if (a === 'resume') togglePause(false);
+  else if (a === 'restart') restartGame();
+  else if (a === 'recalibrate') beginCalibration(true);
+  else if (a === 'next') nextStage();
+  else if (a === 'tests') showTests();
+});
+btnStart.addEventListener('click', e => { e.currentTarget.blur(); startGame('camera'); });
+btnPause.addEventListener('click', e => { e.currentTarget.blur(); togglePause(); });
+btnRestart.addEventListener('click', e => { e.currentTarget.blur(); restartGame(); });
+btnSound.addEventListener('click', e => { e.currentTarget.blur(); G.soundOn = !G.soundOn; if (!G.soundOn) Voice.stop(); updateButtons(); });
+
+/* ---------- camera and MediaPipe ---------- */
+async function setupCamera() {
+  if (!window.isSecureContext) throw { name: 'insecure' };
+  if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) throw { name: 'unsupported' };
+  const stream = await navigator.mediaDevices.getUserMedia({
+    video: { facingMode: 'user', width: { ideal: 640 }, height: { ideal: 480 } }, audio: false });
+  G.stream = stream;
+  stream.getVideoTracks().forEach(t => t.addEventListener('ended', () => { G.stream = null; G.smoothLms = null; }));
+  video.srcObject = stream;
+  if (video.readyState < 1) await new Promise(r => video.addEventListener('loadedmetadata', r, { once: true }));
+  await video.play();
+}
+async function loadModel() {
+  if (G.landmarker) return;
+  try {
+    const mp = await import(`${MP_BASE}/vision_bundle.mjs`);
+    const fileset = await mp.FilesetResolver.forVisionTasks(`${MP_BASE}/wasm`);
+    const opts = delegate => ({
+      baseOptions: { modelAssetPath: MODEL_URL, delegate }, runningMode: 'VIDEO', numPoses: 1,
+      minPoseDetectionConfidence: 0.5, minPosePresenceConfidence: 0.5, minTrackingConfidence: 0.5 });
+    try { G.landmarker = await mp.PoseLandmarker.createFromOptions(fileset, opts('GPU')); }
+    catch (e) { G.landmarker = await mp.PoseLandmarker.createFromOptions(fileset, opts('CPU')); }
+  } catch (e) { console.error(e); throw { name: 'model' }; }
+}
+function errorMessage(err) {
+  const n = (err && (err.name || err.code)) || '';
+  if (n === 'insecure') return 'The camera only works when this page is opened from https:// or http://localhost. Ask a grown-up to start a small local web server.';
+  if (n === 'unsupported') return 'This browser cannot use the camera. Try a recent Chrome, Edge, Firefox or Safari.';
+  if (n === 'NotAllowedError' || n === 'SecurityError' || n === 'PermissionDeniedError') return 'The camera is blocked. A grown-up can allow it with the camera icon in the address bar, then press Try again.';
+  if (n === 'NotFoundError' || n === 'DevicesNotFoundError' || n === 'OverconstrainedError') return 'I could not find a camera. Plug one in and press Try again.';
+  if (n === 'NotReadableError' || n === 'TrackStartError' || n === 'AbortError') return 'Another app is using the camera. Close it and press Try again.';
+  if (n === 'model') return 'The movement helper could not load. Check the internet connection and press Try again.';
+  return 'Something went wrong while starting the camera. Press Try again.';
+}
+
+function detectPose(ts) {
+  if (video.currentTime === G.lastVideoTime) return;
+  G.lastVideoTime = video.currentTime;
+  let res;
+  try { res = G.landmarker.detectForVideo(video, ts); } catch (e) { console.warn(e); return; }
+  const lm = res && res.landmarks && res.landmarks[0];
+  if (lm && lm.length) {
+    const mirrored = lm.map(p => ({ x: 1 - p.x, y: p.y, vis: p.visibility ?? 1 }));
+    G.smoothLms = Core.smoothLandmarks(G.smoothLms, mirrored, 0.4);
+    G.lastPoseAt = ts / 1000;
+  } else G.smoothLms = null;
+  G.poseFrame++;
+  drawPosePreview();
+}
+
+function drawPosePreview() {
+  const w = video.videoWidth || 640, h = video.videoHeight || 480;
+  if (poseCanvas.width !== w || poseCanvas.height !== h) { poseCanvas.width = w; poseCanvas.height = h; }
+  pctx.clearRect(0, 0, w, h);
+  const lms = G.smoothLms;
+  const info = lms ? Core.sampleInfo(lms) : { ok: false };
+  if (G.calib && G.mode === 'playing') {   // neutral zone band: inside it the bee does not steer
+    const sw = info.ok ? info.sw : G.calib.sw, half = Core.DZ_LEAN * sw * w, cx = G.calib.cx * w;
+    pctx.fillStyle = 'rgba(255,210,63,0.18)'; pctx.fillRect(cx - half, 0, half * 2, h);
+    pctx.strokeStyle = 'rgba(255,210,63,0.9)'; pctx.lineWidth = 2; pctx.setLineDash([8, 8]);
+    pctx.beginPath(); pctx.moveTo(cx, 0); pctx.lineTo(cx, h); pctx.stroke(); pctx.setLineDash([]);
+  }
+  if (!lms) { setChip('🙈 Looking for you'); return; }
+  pctx.lineWidth = Math.max(3, w / 120); pctx.lineCap = 'round';
+  pctx.strokeStyle = info.ok ? '#7CFC00' : '#ffa94d';
+  for (const [a, b] of BONES) {
+    const p = lms[a], q = lms[b];
+    if (Core.vis(p) < 0.35 || Core.vis(q) < 0.35) continue;
+    pctx.beginPath(); pctx.moveTo(p.x * w, p.y * h); pctx.lineTo(q.x * w, q.y * h); pctx.stroke();
+  }
+  pctx.fillStyle = '#ffd23f';
+  for (const i of [0, 15, 16]) {
+    const p = lms[i]; if (Core.vis(p) < 0.35) continue;
+    pctx.beginPath(); pctx.arc(p.x * w, p.y * h, w / 60, 0, Math.PI * 2); pctx.fill();
+  }
+  setChip(info.ok ? '👀 I can see you' : '🙈 Show me your shoulders');
+}
+
+/* ---------- game flow ---------- */
+async function startGame(mode) {
+  if (G.mode === 'loading') return;
+  Sfx.init();
+  if ('speechSynthesis' in window) speechSynthesis.speak(new SpeechSynthesisUtterance(''));  // unlock voice on tap
+  clearTimers(); G.manualPause = false; G.lostPause = false; G.totalScore = 0; G.fx = [];
+  if (mode === 'keyboard') {
+    G.inputMode = 'keyboard'; previewEl.classList.add('hidden'); previewEl.classList.remove('big');
+    beginStage(0); return;
+  }
+  G.inputMode = 'camera'; G.mode = 'loading'; updateButtons();
+  showOverlay('loading', { text: 'Asking for the camera...' });
+  try {
+    if (!G.stream) await setupCamera();
+    const lt = $('#loadText'); if (lt) lt.textContent = 'Waking up the bee helper...';
+    await loadModel();
+  } catch (err) {
+    G.mode = 'error'; updateButtons(); showOverlay('error', { msg: errorMessage(err) }); return;
+  }
+  previewEl.classList.remove('hidden');
+  beginCalibration(false);
+}
+
+function beginCalibration(resume) {
+  G.mode = 'calibrating'; G.manualPause = false; G.lostPause = false;
+  G.calibState = { samples: [], cxs: [], lastFrame: -1, resume: !!resume };
+  G.track = Core.createTracking();
+  previewEl.classList.remove('hidden'); previewEl.classList.add('big');
+  showOverlay('calibrate'); updateButtons();
+  Voice.say('Stand in the middle and put your arms down. Hold still like a statue!', true);
+}
+
+function calibStep() {
+  const c = G.calibState;
+  if (!c || c.lastFrame === G.poseFrame) return;
+  c.lastFrame = G.poseFrame;
+  const info = G.smoothLms ? Core.sampleInfo(G.smoothLms) : { ok: false };
+  let hint;
+  const reset = () => { c.samples.length = 0; c.cxs.length = 0; };
+  if (!info.ok) { reset(); hint = 'I need to see your shoulders. Stand in front of the camera.'; }
+  else if (info.hint === 'closer') { reset(); hint = 'Come a little closer.'; }
+  else if (info.hint === 'back') { reset(); hint = 'Take a step back.'; }
+  else if (c.cxs.length && Math.abs(info.cx - c.cxs.reduce((a, v) => a + v, 0) / c.cxs.length) > 0.06) {
+    reset(); hint = 'Hold still like a statue.';
+  } else {
+    c.samples.push(G.smoothLms.map(p => ({ ...p }))); c.cxs.push(info.cx);
+    hint = 'Great! Arms down and stay still...';
+  }
+  const ring = $('#calRing'), hintEl = $('#calHint');
+  if (ring) ring.style.setProperty('--p', Math.min(1, c.samples.length / CALIB_FRAMES));
+  if (hintEl && hintEl.textContent !== hint) hintEl.textContent = hint;
+  if (c.samples.length >= CALIB_FRAMES) {
+    const cal = Core.calibrate(c.samples);
+    if (cal) finishCalibration(cal); else reset();
+  }
+}
+
+function finishCalibration(cal) {
+  G.calib = cal; G.track = Core.createTracking();
+  previewEl.classList.remove('big');
+  const resume = G.calibState && G.calibState.resume;
+  G.calibState = null; Sfx.collect();
+  if (resume && G.world && !G.world.complete) {
+    G.mode = 'playing'; hideOverlay(); updateButtons(); talk("All set! Let's keep flying!", true);
+  } else beginStage(0);
+}
+
+function stageIntro(i, w) {
+  const how = G.inputMode === 'keyboard' ? 'Use the arrow keys to fly. ' : 'Lean left and right to fly. Raise your hands to fly up high. ';
+  if (i === 0) return `Stage one! ${how}Let's collect 5 flowers!`;
+  if (i === 1) return `Stage two! Can you find 3 ${w.targetColor} flowers?`;
+  return 'Stage three! Collect 3 flowers, then fly home to the hive!';
+}
+
+function beginStage(i) {
+  clearTimers();
+  G.stageIndex = i; G.world = Core.createWorld(i, Math.random);
+  G.mode = 'playing'; G.manualPause = false; G.lostPause = false;
+  G.lastCollectAt = 0; G.lastIdleHint = 0; G.ctrl.steer = 0; G.ctrl.lift = 0;
+  G.calibState = null; previewEl.classList.remove('big');
+  G.track = Core.createTracking();
+  hideOverlay(); updateHUD(); updateButtons();
+  talk(stageIntro(i, G.world), true);
+}
+
+function onStageComplete() {
+  G.mode = 'stage'; Sfx.win(); confetti(); updateHUD();
+  const last = G.stageIndex >= Core.STAGES.length - 1;
+  if (last) {
+    G.mode = 'finished'; showOverlay('finished');
+    talk('Hooray! You are a super bee! The hive is full of yummy pollen. Thank you for helping!', true);
+  } else {
+    const msgs = [
+      ['You collected 5 flowers! Next: find flowers of one special color.', 'Hooray! Stage one is done! Next, we look for one special color.'],
+      [`You found all the ${G.world.targetColor} flowers! Next: bring pollen home to the hive.`, `Amazing! You found the ${G.world.targetColor} flowers! Next, we bring pollen home to the hive.`],
+    ][G.stageIndex];
+    showOverlay('stage', { text: msgs[0] }); talk(msgs[1], true);
+    later(nextStage, 7000);
+  }
+  updateButtons();
+}
+function nextStage() { if (G.mode === 'stage') beginStage(G.stageIndex + 1); }
+
+function togglePause(force) {
+  if (G.mode !== 'playing') return;
+  const want = typeof force === 'boolean' ? force : !G.manualPause;
+  if (want === G.manualPause) return;
+  G.manualPause = want;
+  if (want) { Voice.stop(); showOverlay('paused'); }
+  else if (G.lostPause) showOverlay('lost');
+  else { hideOverlay(); talk("Let's fly!", true); }
+  updateButtons();
+}
+
+function restartGame() {
+  if (G.mode === 'loading') return;
+  clearTimers(); Voice.stop(); G.fx = []; G.totalScore = 0;
+  if (G.mode === 'idle' || G.mode === 'error' || !G.inputMode) { startGame('camera'); return; }
+  if (G.inputMode === 'camera' && !G.calib) { beginCalibration(false); return; }
+  beginStage(0);
+}
+
+/* ---------- controls ---------- */
+function updateControls(dt, now) {
+  let steer = 0, lift = 0, valid = false;
+  if (G.inputMode === 'camera') {
+    const fresh = G.smoothLms && (now - G.lastPoseAt) < 0.6;
+    const c = fresh ? Core.computeControls(G.smoothLms, G.calib) : null;
+    if (c && c.valid) { valid = true; steer = c.steer; lift = c.lift; }
+  } else if (G.inputMode === 'keyboard') valid = true;
+  const k = G.keys;
+  if (k.left || k.right || k.up || G.inputMode === 'keyboard') {   // keys also work as a grown-up override
+    steer = (k.right ? 1 : 0) - (k.left ? 1 : 0);
+    lift = k.up ? 1 : 0;
+  }
+  G.ctrlValid = valid;
+  // second smoothing layer on the control outputs, frame-rate independent
+  G.ctrl.steer += (steer - G.ctrl.steer) * (1 - Math.exp(-dt * 9));
+  G.ctrl.lift += (lift - G.ctrl.lift) * (1 - Math.exp(-dt * 5));
+}
+
+const KEYMAP = { ArrowLeft: 'left', a: 'left', A: 'left', ArrowRight: 'right', d: 'right', D: 'right', ArrowUp: 'up', w: 'up', W: 'up' };
+addEventListener('keydown', e => {
+  const k = KEYMAP[e.key];
+  if (k) { G.keys[k] = true; e.preventDefault(); }
+  else if (e.key === ' ' || e.key === 'p' || e.key === 'P') { e.preventDefault(); togglePause(); }
+  else if (e.key === 'Enter' && G.mode === 'idle') startGame('camera');
+});
+addEventListener('keyup', e => { const k = KEYMAP[e.key]; if (k) G.keys[k] = false; });
+addEventListener('blur', () => { G.keys = { left: false, right: false, up: false }; });
+document.addEventListener('visibilitychange', () => { if (document.hidden) togglePause(true); });
+
+/* ---------- per-frame play logic ---------- */
+function idleHint() {
+  const w = G.world, st = w.stage;
+  if (st.type === 'hive' && w.progress >= st.need) return 'The hive is up by the big tree. Raise your hands and fly to it!';
+  if (G.inputMode === 'keyboard') return 'Use the arrow keys to fly to a flower!';
+  G.idleHintToggle = !G.idleHintToggle;
+  return G.idleHintToggle ? 'Lean to the side to fly to a flower!' : 'Raise your hands to fly up. Put them down to fly low!';
+}
+
+function handleEvent(e) {
+  const w = G.world, st = w.stage;
+  if (e.type === 'collect') {
+    G.totalScore++; G.lastCollectAt = w.time;
+    Sfx.collect(); burst(e.flower.x, e.flower.y, Core.COLORS[e.flower.color]); updateHUD();
+    const left = st.need - e.progress;
+    if (st.type === 'hive' && left <= 0) talk('Your bee is full of pollen! Fly home to the hive!', true);
+    else if (left === 1) talk(`${pick(PRAISE)} Just one more!`);
+    else if (left > 1) talk(`${pick(PRAISE)} That's ${NUMBERS[e.progress]}!`);
+  } else if (e.type === 'wrongColor') { Sfx.nope(); talk(`That one is ${e.color}. Can you find a ${w.targetColor} flower?`); }
+  else if (e.type === 'cloud') { Sfx.bump(); talk('Whoops, a fluffy cloud! Fly around it.'); }
+  else if (e.type === 'full') talk('Your bee is full! Fly home to the hive.');
+  else if (e.type === 'hiveEarly') talk(`Find ${NUMBERS[e.remaining]} more ${e.remaining === 1 ? 'flower' : 'flowers'} first!`);
+}
+
+function playStep(dt, now) {
+  if (G.inputMode === 'camera') {
+    const ev = Core.updateTracking(G.track, G.ctrlValid, now);
+    if (ev === 'lost') {
+      G.lostPause = true; G.ctrl.steer = 0;
+      if (!G.manualPause) showOverlay('lost');
+      Voice.say('Where did you go? Come back so I can see you!', true);
+    } else if (ev === 'recovered') {
+      G.lostPause = false;
+      if (!G.manualPause) { hideOverlay(); talk("There you are! Let's fly!", true); }
+    }
+  }
+  if (G.manualPause || G.lostPause) return;
+  const events = Core.stepWorld(G.world, G.ctrl, dt, Math.random);
+  for (const e of events) handleEvent(e);
+  const w = G.world;
+  if (!w.complete && w.time - G.lastCollectAt > 14 && w.time - G.lastIdleHint > 14) {
+    G.lastIdleHint = w.time; talk(idleHint());
+  }
+  if (w.complete && G.mode === 'playing') onStageComplete();
+}
+
+/* ---------- effects ---------- */
+function burst(x, y, color) {
+  for (let i = 0; i < 14; i++) {
+    const a = Math.random() * Math.PI * 2, s = 60 + Math.random() * 160;
+    G.fx.push({ kind: 'dot', x, y, vx: Math.cos(a) * s, vy: Math.sin(a) * s - 60, life: 0, max: 0.9, color, size: 4 + Math.random() * 5 });
+  }
+  G.fx.push({ kind: 'text', x, y: y - 50, vx: 0, vy: -55, life: 0, max: 1.2, text: '+1' });
+}
+function confetti() {
+  const cols = [...Object.values(Core.COLORS), '#ffb703'];
+  for (let i = 0; i < 90; i++) G.fx.push({ kind: 'conf', x: Math.random() * Core.W, y: -30 - Math.random() * 250,
+    vx: (Math.random() - 0.5) * 60, vy: 120 + Math.random() * 120, rot: Math.random() * 6, life: 0, max: 4.5, color: pick(cols), size: 8 + Math.random() * 8 });
+}
+function updateFx(dt) {
+  for (let i = G.fx.length - 1; i >= 0; i--) {
+    const p = G.fx[i];
+    p.life += dt; p.x += p.vx * dt; p.y += p.vy * dt;
+    if (p.kind === 'dot') p.vy += 220 * dt;
+    if (p.kind === 'conf') p.rot += dt * 4;
+    if (p.life > p.max) G.fx.splice(i, 1);
+  }
+}
+
+/* ---------- drawing ---------- */
+const view = { cw: 0, ch: 0, dpr: 1, s: 1, ox: 0, oy: 0 };
+function resize() {
+  view.dpr = Math.min(2, window.devicePixelRatio || 1);
+  view.cw = innerWidth; view.ch = innerHeight;
+  canvas.width = Math.round(view.cw * view.dpr); canvas.height = Math.round(view.ch * view.dpr);
+  view.s = Math.min(view.cw / Core.W, view.ch / Core.H);
+  view.ox = (view.cw - Core.W * view.s) / 2; view.oy = (view.ch - Core.H * view.s) / 2;
+}
+addEventListener('resize', resize); resize();
+
+function el(ctx, x, y, rx, ry, rot = 0) { ctx.beginPath(); ctx.ellipse(x, y, Math.max(0.1, rx), Math.max(0.1, ry), rot, 0, Math.PI * 2); }
+function circ(ctx, x, y, r) { ctx.beginPath(); ctx.arc(x, y, Math.max(0.1, r), 0, Math.PI * 2); }
+function hexToRgb(h) { const n = parseInt(h.slice(1), 16); return [(n >> 16) & 255, (n >> 8) & 255, n & 255]; }
+function mix(a, b, t) { const A = hexToRgb(a), B = hexToRgb(b); return `rgb(${A.map((v, i) => Math.round(v + (B[i] - v) * t)).join(',')})`; }
+function easeOutBack(x) { const c1 = 1.70158, c3 = c1 + 1; return 1 + c3 * Math.pow(x - 1, 3) + c1 * Math.pow(x - 1, 2); }
+const TUFTS = Array.from({ length: 80 }, (_, i) => ({ x: -900 + i * 45 + ((i * 37) % 20), h: 10 + ((i * 53) % 14) }));
+
+function drawScenery(ctx, t) {
+  const GR = Core.GROUND;
+  ctx.save(); ctx.translate(1460, 170); ctx.rotate(t * 0.15);
+  ctx.strokeStyle = '#ffd84d'; ctx.lineWidth = 8; ctx.lineCap = 'round';
+  for (let i = 0; i < 12; i++) { ctx.rotate(Math.PI / 6); ctx.beginPath(); ctx.moveTo(74, 0); ctx.lineTo(96, 0); ctx.stroke(); }
+  ctx.restore();
+  ctx.fillStyle = '#ffe066'; circ(ctx, 1460, 170, 60); ctx.fill();
+  ctx.fillStyle = '#7a5a12'; circ(ctx, 1444, 160, 5); ctx.fill(); circ(ctx, 1476, 160, 5); ctx.fill();
+  ctx.strokeStyle = '#7a5a12'; ctx.lineWidth = 4; ctx.beginPath(); ctx.arc(1460, 176, 16, 0.15 * Math.PI, 0.85 * Math.PI); ctx.stroke();
+
+  ctx.fillStyle = '#a8e38b';
+  el(ctx, 300, GR + 40, 700, 260); ctx.fill(); el(ctx, 1300, GR + 60, 800, 300); ctx.fill();
+  ctx.fillStyle = '#8fd672';
+  el(ctx, -300, GR + 50, 600, 200); ctx.fill(); el(ctx, 850, GR + 80, 600, 220); ctx.fill(); el(ctx, 2000, GR + 60, 700, 240); ctx.fill();
+}
+function drawGround(ctx) {
+  const GR = Core.GROUND;
+  ctx.fillStyle = '#6cc551'; ctx.fillRect(-4000, GR, Core.W + 8000, 4000);
+  ctx.fillStyle = '#5bb043'; ctx.fillRect(-4000, GR, Core.W + 8000, 10);
+  ctx.fillStyle = '#4ea83f';
+  for (const tf of TUFTS) {
+    ctx.beginPath(); ctx.moveTo(tf.x, GR + 30); ctx.lineTo(tf.x + 6, GR + 30 - tf.h); ctx.lineTo(tf.x + 12, GR + 30); ctx.fill();
+  }
+}
+function drawTree(ctx) {
+  const GR = Core.GROUND;
+  ctx.fillStyle = '#8b5a2b'; ctx.beginPath();
+  if (ctx.roundRect) ctx.roundRect(64, 240, 50, GR - 230, 14); else ctx.rect(64, 240, 50, GR - 230);
+  ctx.fill();
+  ctx.strokeStyle = '#8b5a2b'; ctx.lineWidth = 18; ctx.lineCap = 'round';
+  ctx.beginPath(); ctx.moveTo(100, 310); ctx.quadraticCurveTo(160, 288, 236, 294); ctx.stroke();
+  for (const [x, y, r, c] of [[-30, 190, 80, '#4caf50'], [60, 150, 90, '#5cc160'], [150, 190, 80, '#4caf50'], [30, 240, 70, '#66c96a'], [200, 240, 52, '#5cc160']]) {
+    ctx.fillStyle = c; circ(ctx, x, y, r); ctx.fill();
+  }
+}
+function drawHive(ctx, t, w) {
+  const isHive = w.stage.type === 'hive', ready = isHive && w.progress >= w.stage.need;
+  const bob = ready ? Math.sin(t * 4) * 4 : 0, { x, y } = Core.HIVE;
+  ctx.strokeStyle = '#5b3a12'; ctx.lineWidth = 4; ctx.beginPath(); ctx.moveTo(x, 296); ctx.lineTo(x, y - 60 + bob); ctx.stroke();
+  if (ready) {
+    const r = 100 + Math.sin(t * 5) * 8, g = ctx.createRadialGradient(x, y, 10, x, y, r);
+    g.addColorStop(0, 'rgba(255,215,0,0.6)'); g.addColorStop(1, 'rgba(255,215,0,0)');
+    ctx.fillStyle = g; circ(ctx, x, y + bob, r); ctx.fill();
+  }
+  for (const [dy, rx] of [[-46, 30], [-24, 46], [0, 56], [24, 54], [46, 42]]) {
+    ctx.fillStyle = '#f6b73c'; ctx.strokeStyle = '#b7791f'; ctx.lineWidth = 3;
+    el(ctx, x, y + dy + bob, rx, 15); ctx.fill(); ctx.stroke();
+  }
+  ctx.fillStyle = '#4a2c0a'; el(ctx, x, y + 40 + bob, 13, 9); ctx.fill();
+  if (ready) {
+    const ax = x + 100 + Math.sin(t * 6) * 10;
+    ctx.fillStyle = '#ff6f3c'; ctx.strokeStyle = '#3b2a1a'; ctx.lineWidth = 3;
+    ctx.beginPath(); ctx.moveTo(ax, y); ctx.lineTo(ax + 36, y - 24); ctx.lineTo(ax + 36, y - 9); ctx.lineTo(ax + 70, y - 9);
+    ctx.lineTo(ax + 70, y + 9); ctx.lineTo(ax + 36, y + 9); ctx.lineTo(ax + 36, y + 24); ctx.closePath(); ctx.fill(); ctx.stroke();
+  }
+}
+function drawCloud(ctx, c, wt) {
+  const bumped = wt - c.bumpedAt < 1.0;
+  ctx.save(); ctx.translate(c.x, c.cy);
+  const blobs = [[-48, 10, 36], [-20, -12, 40], [20, -16, 44], [50, 6, 34], [0, 14, 46]];
+  ctx.fillStyle = 'rgba(110,150,200,0.22)'; for (const [x, y, r] of blobs) { circ(ctx, x, y + 8, r); ctx.fill(); }
+  ctx.fillStyle = '#ffffff'; for (const [x, y, r] of blobs) { circ(ctx, x, y, r); ctx.fill(); }
+  ctx.fillStyle = '#5b6b80'; circ(ctx, -14, 2, 4); ctx.fill(); circ(ctx, 14, 2, 4); ctx.fill();
+  ctx.strokeStyle = '#5b6b80'; ctx.lineWidth = 2.5;
+  if (bumped) { circ(ctx, 0, 16, 6); ctx.stroke(); }
+  else { ctx.beginPath(); ctx.arc(0, 10, 8, 0.15 * Math.PI, 0.85 * Math.PI); ctx.stroke(); }
+  ctx.fillStyle = 'rgba(255,140,170,0.45)'; circ(ctx, -24, 12, 6); ctx.fill(); circ(ctx, 24, 12, 6); ctx.fill();
+  ctx.restore();
+}
+function drawPetals(ctx, col, sc, rot, alpha) {
+  ctx.save(); ctx.globalAlpha = alpha; ctx.rotate(rot); ctx.scale(sc, sc);
+  ctx.fillStyle = col; ctx.strokeStyle = col.startsWith('#') ? mix(col, '#3b2a1a', 0.3) : 'rgba(80,60,40,0.45)'; ctx.lineWidth = 3;
+  for (let i = 0; i < 6; i++) { ctx.save(); ctx.rotate(i * Math.PI / 3); el(ctx, 0, -28, 15, 22); ctx.fill(); ctx.stroke(); ctx.restore(); }
+  ctx.restore();
+}
+function drawCenter(ctx, sc, happy, sleepy) {
+  ctx.save(); ctx.scale(sc, sc);
+  ctx.fillStyle = sleepy ? '#d9c49a' : '#ffb703'; ctx.strokeStyle = '#b7791f'; ctx.lineWidth = 3;
+  circ(ctx, 0, 0, 19); ctx.fill(); ctx.stroke();
+  ctx.strokeStyle = '#3b2a1a'; ctx.fillStyle = '#3b2a1a'; ctx.lineWidth = 2.5;
+  if (happy) {
+    circ(ctx, -6, -4, 2.6); ctx.fill(); circ(ctx, 6, -4, 2.6); ctx.fill();
+    ctx.beginPath(); ctx.arc(0, 2, 7, 0.15 * Math.PI, 0.85 * Math.PI); ctx.stroke();
+  } else if (sleepy) {
+    ctx.beginPath(); ctx.moveTo(-9, -3); ctx.lineTo(-3, -3); ctx.moveTo(3, -3); ctx.lineTo(9, -3); ctx.stroke();
+  }
+  ctx.restore();
+}
+function drawFlower(ctx, f, w, t) {
+  const GR = Core.GROUND, sway = Math.sin(t * 1.3 + f.phase) * 4, hx = f.x + sway, hy = f.y, midY = (GR + hy) / 2;
+  ctx.lineCap = 'round'; ctx.strokeStyle = '#3c9a47'; ctx.lineWidth = 8;
+  ctx.beginPath(); ctx.moveTo(f.x, GR + 6); ctx.quadraticCurveTo(f.x - 12, midY, hx, hy + 12); ctx.stroke();
+  ctx.fillStyle = '#4cb75a'; el(ctx, f.x + 12, midY + 18, 20, 8, -0.5); ctx.fill();
+  const col = Core.COLORS[f.color];
+  const isTarget = w.stage.type !== 'color' || f.color === w.targetColor;
+  ctx.save(); ctx.translate(hx, hy);
+  if (f.state === 'bud') {
+    const soon = Math.max(0, 1 - (f.budUntil - w.time));
+    ctx.rotate(Math.sin(t * 14) * 0.12 * soon);
+    ctx.fillStyle = '#5cb85c'; ctx.strokeStyle = '#2f7a3a'; ctx.lineWidth = 3; el(ctx, 0, 4, 15, 22); ctx.fill(); ctx.stroke();
+    ctx.fillStyle = col; el(ctx, 0, -12, 9, 11); ctx.fill();
+  } else if (f.state === 'opening') {
+    const p = easeOutBack(Math.min(1, (w.time - f.openStart) / Core.OPEN_TIME));
+    drawPetals(ctx, col, 0.3 + 0.7 * p, (1 - p) * 1.4, 1);
+    drawCenter(ctx, Math.max(0.3, p), false, false);
+    ctx.fillStyle = 'rgba(255,255,255,0.9)';
+    for (let i = 0; i < 4; i++) { const a = t * 3 + i * 1.57; circ(ctx, Math.cos(a) * 58 * p, Math.sin(a) * 58 * p, 4); ctx.fill(); }
+  } else if (f.state === 'open') {
+    if (isTarget) { ctx.fillStyle = 'rgba(255,255,255,0.38)'; circ(ctx, 0, 0, 60 + Math.sin(t * 3 + f.phase) * 6); ctx.fill(); }
+    const nd = w.time - f.nudgedAt;
+    if (nd < 0.7) ctx.rotate(Math.sin(nd * 35) * 0.3 * (1 - nd / 0.7));
+    drawPetals(ctx, col, 1 + Math.sin(t * 3 + f.phase) * 0.03, Math.sin(t * 0.8 + f.phase) * 0.1, 1);
+    drawCenter(ctx, 1, true, false);
+  } else {
+    const k = Math.min(1, (w.time - f.collectedAt) / Core.COOLDOWN);
+    ctx.save(); ctx.translate(0, 10); ctx.rotate(0.35);
+    drawPetals(ctx, mix(col, '#cfc6b8', 0.65), 0.75, 0, 0.85);
+    drawCenter(ctx, 0.8, false, true);
+    ctx.restore();
+    ctx.strokeStyle = 'rgba(255,255,255,0.9)'; ctx.lineWidth = 5; ctx.setLineDash([6, 8]);
+    ctx.beginPath(); ctx.arc(0, 0, 58, -Math.PI / 2, -Math.PI / 2 + k * Math.PI * 2); ctx.stroke(); ctx.setLineDash([]);
+  }
+  ctx.restore();
+}
+function drawBee(ctx, b, t, pollen) {
+  ctx.save(); ctx.translate(b.x, b.y + Math.sin(t * 3) * 3);
+  ctx.rotate(Math.max(-0.3, Math.min(0.3, b.vy / 1000)) * b.face); ctx.scale(b.face, 1);
+  const flap = 0.45 + 0.55 * Math.abs(Math.sin(t * 20));
+  ctx.fillStyle = 'rgba(225,243,255,0.85)'; ctx.strokeStyle = '#8fbfe0'; ctx.lineWidth = 2.5;
+  el(ctx, -10, -32, 17, 30 * flap, -0.35); ctx.fill(); ctx.stroke();
+  el(ctx, 10, -34, 15, 27 * flap, 0.3); ctx.fill(); ctx.stroke();
+  ctx.fillStyle = '#3b2a1a'; ctx.beginPath(); ctx.moveTo(-46, -2); ctx.lineTo(-62, 4); ctx.lineTo(-45, 10); ctx.closePath(); ctx.fill();
+  ctx.strokeStyle = '#3b2a1a'; ctx.lineWidth = 3;
+  for (const lx of [-14, 0, 14]) { ctx.beginPath(); ctx.moveTo(lx, 34); ctx.lineTo(lx - 4, 44); ctx.stroke(); }
+  for (let i = 0; i < Math.min(pollen, 5); i++) { ctx.fillStyle = i % 2 ? '#ff9f1c' : '#ffbf00'; circ(ctx, -16 + i * 8, 44 + (i % 2) * 3, 6); ctx.fill(); }
+  ctx.fillStyle = '#ffd23f'; el(ctx, 0, 4, 48, 36); ctx.fill();
+  ctx.save(); el(ctx, 0, 4, 48, 36); ctx.clip(); ctx.fillStyle = '#3b2a1a'; ctx.fillRect(-30, -40, 12, 90); ctx.fillRect(-6, -40, 12, 90); ctx.restore();
+  ctx.strokeStyle = '#3b2a1a'; ctx.lineWidth = 3; el(ctx, 0, 4, 48, 36); ctx.stroke();
+  ctx.fillStyle = '#ffd23f'; circ(ctx, 40, -6, 24); ctx.fill(); ctx.stroke();
+  ctx.fillStyle = '#fff'; circ(ctx, 47, -12, 8.5); ctx.fill();
+  ctx.fillStyle = '#3b2a1a'; circ(ctx, 49, -12, 4.8); ctx.fill();
+  ctx.fillStyle = '#fff'; circ(ctx, 50.5, -13.5, 1.6); ctx.fill();
+  ctx.strokeStyle = '#3b2a1a'; ctx.lineWidth = 2.5; ctx.beginPath(); ctx.arc(45, 0, 9, 0.15 * Math.PI, 0.85 * Math.PI); ctx.stroke();
+  ctx.fillStyle = 'rgba(255,120,150,0.55)'; circ(ctx, 34, 4, 5); ctx.fill();
+  ctx.beginPath(); ctx.moveTo(42, -28); ctx.quadraticCurveTo(46, -44, 56, -48); ctx.moveTo(34, -28); ctx.quadraticCurveTo(34, -46, 42, -54); ctx.stroke();
+  ctx.fillStyle = '#3b2a1a'; circ(ctx, 56, -48, 4); ctx.fill(); circ(ctx, 42, -54, 4); ctx.fill();
+  ctx.restore();
+}
+function drawFx(ctx) {
+  for (const p of G.fx) {
+    ctx.globalAlpha = Math.max(0, 1 - p.life / p.max);
+    if (p.kind === 'dot') { ctx.fillStyle = p.color; circ(ctx, p.x, p.y, p.size); ctx.fill(); }
+    else if (p.kind === 'text') {
+      ctx.font = 'bold 46px "Comic Sans MS", sans-serif'; ctx.textAlign = 'center';
+      ctx.lineWidth = 6; ctx.strokeStyle = '#fff'; ctx.strokeText(p.text, p.x, p.y);
+      ctx.fillStyle = '#ff8c00'; ctx.fillText(p.text, p.x, p.y);
+    } else {
+      ctx.save(); ctx.translate(p.x, p.y); ctx.rotate(p.rot); ctx.fillStyle = p.color;
+      ctx.fillRect(-p.size / 2, -p.size / 4, p.size, p.size / 2); ctx.restore();
+    }
+  }
+  ctx.globalAlpha = 1;
+}
+function render(t) {
+  const ctx = gctx, { dpr, cw, ch, s, ox, oy } = view;
+  ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+  const g = ctx.createLinearGradient(0, 0, 0, ch);
+  g.addColorStop(0, '#7cc8ff'); g.addColorStop(0.7, '#d8f1ff'); g.addColorStop(1, '#eafff0');
+  ctx.fillStyle = g; ctx.fillRect(0, 0, cw, ch);
+  ctx.setTransform(dpr * s, 0, 0, dpr * s, dpr * ox, dpr * oy);
+  const w = G.world;
+  drawScenery(ctx, t);
+  for (const c of w.clouds) drawCloud(ctx, c, w.time);
+  drawGround(ctx); drawTree(ctx); drawHive(ctx, t, w);
+  for (const f of w.flowers) drawFlower(ctx, f, w, t);
+  drawBee(ctx, w.bee, t, w.progress);
+  drawFx(ctx);
+}
+
+/* ---------- main loop ---------- */
+let lastTs = performance.now();
+function frame(ts) {
+  requestAnimationFrame(frame);
+  const dt = Math.min(0.05, Math.max(0, (ts - lastTs) / 1000)); lastTs = ts;
+  const now = ts / 1000;
+  if (G.inputMode === 'camera' && G.landmarker && video.readyState >= 2) detectPose(ts);
+  if (G.inputMode === 'keyboard') setChip('⌨️ Keyboard');
+  updateControls(dt, now);
+  if (G.mode === 'idle') for (const c of G.world.clouds) { c.x += c.vx * dt; if (c.x > Core.W + 160) c.x = -160; else if (c.x < -160) c.x = Core.W + 160; }
+  if (G.mode === 'calibrating') calibStep();
+  if (G.mode === 'playing') playStep(dt, now);
+  updateFx(dt);
+  render(now);
+}
+
+/* =====================================================================
+   SELF-TESTS  (open the page with ?test, or use the link on the start screen)
+   ===================================================================== */
+function runTests() {
+  const C = Core, R = [];
+  const test = (name, fn) => { try { fn(); R.push({ name, ok: true }); } catch (e) { R.push({ name, ok: false, msg: e.message }); } };
+  const assert = (c, m) => { if (!c) throw new Error(m || 'assertion failed'); };
+  const near = (a, b, eps, m) => assert(Math.abs(a - b) <= eps, `${m || ''} expected about ${b}, got ${a}`);
+  const pose = ({ cx = 0.5, sw = 0.25, sy = 0.4, lift = -1.4, vis = 1, wristVis = 1, elbowUp = false } = {}) => {
+    const p = Array.from({ length: 33 }, () => ({ x: 0.5, y: 0.9, vis: 0 }));
+    const l = { x: cx - sw / 2, y: sy, vis }, r = { x: cx + sw / 2, y: sy, vis };
+    p[11] = l; p[12] = r; p[0] = { x: cx, y: sy - 0.6 * sw, vis: 1 };
+    const wy = sy - lift * sw;
+    p[15] = { x: l.x, y: wy, vis: wristVis }; p[16] = { x: r.x, y: wy, vis: wristVis };
+    const ey = elbowUp ? sy - 0.6 * sw : (sy + wy) / 2;
+    p[13] = { x: l.x, y: ey, vis: 1 }; p[14] = { x: r.x, y: ey, vis: 1 };
+    return p;
+  };
+  const calib = C.calibrate(Array.from({ length: 20 }, () => pose()));
+  const N = { steer: 0, lift: 0 };
+  const run = (w, ctrl, sec, rand = () => 0, dt = 1 / 60) => {
+    const ev = []; const n = Math.round(sec / dt);
+    for (let i = 0; i < n; i++) ev.push(...C.stepWorld(w, ctrl, dt, rand));
+    return ev;
+  };
+  const bare = (i = 0, color) => { const w = C.createWorld(i, C.makeRng(7), color); w.flowers = []; w.clouds = []; return w; };
+  const flowerAt = (w, x, y, color = 'yellow', state = 'open') => {
+    const f = C.makeFlower(w.flowers.length, x, y, color, state === 'bud' ? 5 : 0, 0);
+    if (state === 'opening') { f.state = 'opening'; f.openStart = w.time; }
+    w.flowers.push(f); return f;
+  };
+  const count = (ev, type) => ev.filter(e => e.type === type).length;
+
+  test('Dead zone ignores small leans and keeps direction', () => {
+    assert(C.deadZone(0.1, 0.18, 0.7) === 0 && C.deadZone(-0.17, 0.18, 0.7) === 0, 'small values must be 0');
+    near(C.deadZone(0.7, 0.18, 0.7), 1, 1e-9); near(C.deadZone(-0.44, 0.18, 0.7), -0.5, 1e-9);
+    assert(C.deadZone(3, 0.18, 0.7) === 1, 'must clamp at 1');
+  });
+  test('Smoothing plus dead zone removes webcam jitter', () => {
+    let sm = null, rawMoved = false, smoothMoved = false;
+    for (let i = 0; i < 40; i++) {
+      const noisy = pose({ cx: 0.5 + (i % 2 ? 0.06 : -0.06) });
+      if (C.computeControls(noisy, calib).steer !== 0) rawMoved = true;
+      sm = C.smoothLandmarks(sm, noisy, 0.4);
+      if (i >= 10 && C.computeControls(sm, calib).steer !== 0) smoothMoved = true;
+    }
+    assert(rawMoved, 'raw jitter should exceed the dead zone in this test');
+    assert(!smoothMoved, 'smoothed jitter must not steer');
+  });
+  test('Neutral pose gives no movement', () => {
+    const c = C.computeControls(pose(), calib);
+    assert(c.valid && c.steer === 0 && c.lift === 0, JSON.stringify(c));
+  });
+  test('Leaning steers left and right in mirrored view', () => {
+    assert(C.computeControls(pose({ cx: 0.5 - 0.125 }), calib).steer < -0.3, 'lean left');
+    assert(C.computeControls(pose({ cx: 0.5 + 0.125 }), calib).steer > 0.3, 'lean right');
+  });
+  test('Raising both hands lifts, lowering them descends', () => {
+    assert(C.computeControls(pose({ lift: 1.0 }), calib).lift >= 0.95, 'hands up');
+    const mid = C.computeControls(pose({ lift: 0 }), calib).lift;
+    assert(mid > 0.3 && mid < 0.8, 'hands at shoulders gives medium height, got ' + mid);
+    assert(C.computeControls(pose({ lift: -1.4 }), calib).lift === 0, 'hands down');
+  });
+  test('Hands above the frame still count as hands up (elbow fallback)', () => {
+    assert(C.computeControls(pose({ lift: 1.2, wristVis: 0, elbowUp: true }), calib).lift >= 0.95);
+  });
+  test('Missing shoulders marks tracking invalid', () => {
+    assert(!C.computeControls(pose({ vis: 0.2 }), calib).valid);
+    assert(!C.computeControls(null, calib).valid);
+  });
+  test('Calibration averages the pose and guards against raised arms', () => {
+    near(calib.cx, 0.5, 1e-9); near(calib.sw, 0.25, 1e-9); near(calib.restLift, -1.4, 1e-9);
+    const up = C.calibrate(Array.from({ length: 20 }, () => pose({ lift: 0.5 })));
+    assert(up.restLift <= -0.8, 'restLift should be clamped');
+    assert(C.calibrate(Array.from({ length: 5 }, () => pose())) === null, 'too few samples');
+    assert(C.sampleInfo(pose({ sw: 0.05 })).hint === 'closer' && C.sampleInfo(pose({ sw: 0.6 })).hint === 'back');
+  });
+  test('Bee steers gently, respects the speed limit and the walls', () => {
+    const w = bare(0), b = w.bee, x0 = b.x;
+    for (let i = 0; i < 60; i++) { C.stepWorld(w, { steer: 1, lift: 0 }, 1 / 60); assert(Math.abs(b.vx) <= C.MAX_VX + 1e-6, 'speed limit'); }
+    assert(b.x - x0 > 150 && b.x - x0 <= C.MAX_VX, 'moved ' + (b.x - x0));
+    run(w, { steer: -1, lift: 0 }, 5);
+    assert(b.x === C.BOUNDS.xMin, 'clamped at left wall, x=' + b.x);
+  });
+  test('Bee climbs with hands up and descends with hands down', () => {
+    const w = bare(0), b = w.bee;
+    run(w, { steer: 0, lift: 1 }, 4); assert(b.y <= C.BOUNDS.yTop + 5, 'top, y=' + b.y);
+    run(w, N, 4); assert(b.y >= C.BOUNDS.yBottom - 5, 'bottom, y=' + b.y);
+  });
+  test('Circle collision', () => {
+    assert(C.hit(0, 0, 10, 15, 0, 10) && C.hit(0, 0, 10, 20, 0, 10) && !C.hit(0, 0, 10, 25, 0, 10));
+  });
+  test('Hovering on a flower scores exactly once', () => {
+    const w = bare(0); w.bee.x = 500; w.bee.y = 760; const f = flowerAt(w, 500, 760);
+    const ev = run(w, N, 2);
+    assert(count(ev, 'collect') === 1 && w.progress === 1 && f.state === 'collected', `collects=${count(ev, 'collect')} progress=${w.progress}`);
+  });
+  test('Collected flower rests, regrows as a bud, opens, then can score again', () => {
+    const w = bare(0); w.bee.x = 500; w.bee.y = 760; const f = flowerAt(w, 500, 760);
+    run(w, N, 0.5); assert(w.progress === 1 && f.state === 'collected');
+    run(w, N, 6.0); assert(f.state === 'collected' && w.progress === 1, 'still resting at 6.5s');
+    run(w, N, 1.0); assert(f.state === 'bud', 'bud at 7.5s, got ' + f.state);
+    run(w, N, 0.6); assert(f.state === 'opening' && w.progress === 1, 'opening at 8.1s, got ' + f.state);
+    run(w, N, 1.3); assert(w.progress === 2 && f.timesCollected === 2, 'scores again after reopening');
+  });
+  test('Buds and opening flowers cannot be collected', () => {
+    const w = bare(0); w.bee.x = 500; w.bee.y = 760; const f = flowerAt(w, 500, 760, 'yellow', 'bud');
+    run(w, N, 1); assert(w.progress === 0 && f.state === 'bud');
+    const w2 = bare(0); w2.bee.x = 500; w2.bee.y = 760; const g = flowerAt(w2, 500, 760, 'yellow', 'opening');
+    run(w2, N, 1.0); assert(w2.progress === 0 && g.state === 'opening', 'still opening');
+    run(w2, N, 0.6); assert(w2.progress === 1, 'collectible once fully open');
+  });
+  test('Color stage only counts the requested color', () => {
+    const w = bare(1, 'pink'); assert(w.targetColor === 'pink');
+    w.bee.x = 500; w.bee.y = 760; const blue = flowerAt(w, 500, 760, 'blue');
+    const ev = run(w, N, 1);
+    assert(w.progress === 0 && blue.state === 'open' && count(ev, 'wrongColor') === 1, 'wrong color ignored, hint throttled');
+    const pink = flowerAt(w, 500, 760, 'pink'); run(w, N, 0.2);
+    assert(w.progress === 1 && pink.state === 'collected' && blue.state === 'open');
+  });
+  test('Stage 1 completes at exactly 5 flowers', () => {
+    const w = bare(0); w.bee.x = 500; w.bee.y = 760;
+    for (let i = 0; i < 7; i++) flowerAt(w, 500, 760);
+    const ev = run(w, N, 0.2);
+    assert(w.complete && w.progress === 5 && count(ev, 'collect') === 5 && count(ev, 'complete') === 1);
+    assert(w.flowers.filter(f => f.state === 'collected').length === 5);
+  });
+  test('Stage 3 needs full pollen, then a visit to the hive', () => {
+    const B = C.BOUNDS, hover = { steer: 0, lift: (B.yBottom - C.HIVE.y) / (B.yBottom - B.yTop) };
+    const w = bare(2); w.bee.x = C.HIVE.x; w.bee.y = C.HIVE.y;
+    let ev = run(w, hover, 0.5); assert(!w.complete && count(ev, 'hiveEarly') === 1, 'too early');
+    w.bee.x = 900; w.bee.y = 760; for (let i = 0; i < 4; i++) flowerAt(w, 900, 760);
+    ev = run(w, N, 0.3);
+    assert(w.progress === 3 && count(ev, 'full') >= 1 && w.flowers.filter(f => f.state === 'open').length === 1 && !w.complete, 'bee full');
+    w.bee.x = C.HIVE.x; w.bee.y = C.HIVE.y; ev = run(w, hover, 0.3);
+    assert(w.complete && count(ev, 'complete') === 1, 'completes at hive');
+  });
+  test('Clouds gently push the bee away without affecting the score', () => {
+    const w = bare(0); w.bee.x = 800; w.bee.y = 400;
+    w.clouds.push({ x: 800, y: 420, cy: 420, r: 70, vx: 0, phase: 0, bumpedAt: -99 });
+    const ev = C.stepWorld(w, N, 1 / 60), c = w.clouds[0];
+    assert(Math.hypot(w.bee.x - c.x, w.bee.y - c.cy) >= C.BEE_R + c.r * 0.85 - 0.01, 'pushed out');
+    assert(count(ev, 'cloud') === 1 && w.progress === 0);
+  });
+  test('Tracking loss pauses after a short gap and recovers after a steady return', () => {
+    const tr = C.createTracking(), u = (v, t) => C.updateTracking(tr, v, t);
+    u(true, 0); assert(u(false, 1.0) === null && u(false, 1.5) === null && tr.status === 'ok');
+    assert(u(false, 1.9) === 'lost');
+    u(true, 2.0); u(false, 2.3); u(true, 2.4); assert(u(true, 3.0) === null && tr.status === 'lost', 'flicker must not recover');
+    assert(u(true, 3.4) === 'recovered');
+    u(false, 5.0); assert(u(true, 5.3) === null && tr.status === 'ok', 'short blip ignored');
+  });
+  test('Stage layouts are wide, reachable and cloud-free', () => {
+    for (let seed = 1; seed <= 25; seed++) for (let i = 0; i < 3; i++) {
+      const w = C.createWorld(i, C.makeRng(seed)), xs = w.flowers.map(f => f.x).sort((a, b) => a - b);
+      for (let k = 1; k < xs.length; k++) assert(xs[k] - xs[k - 1] >= 100, 'flowers too close');
+      const minY = Math.min(...w.flowers.map(f => f.y));
+      for (const f of w.flowers) assert(f.x >= C.BOUNDS.xMin && f.x <= C.BOUNDS.xMax && f.y >= C.BOUNDS.yTop && f.y <= C.BOUNDS.yBottom, 'reachable');
+      for (const c of w.clouds) assert(c.y + c.r * 0.85 + 2 * C.BEE_R < Math.min(minY, C.HIVE.y + C.HIVE.r + C.BEE_R), 'cloud blocks route');
+      if (w.stage.type === 'color') assert(w.flowers.filter(f => f.color === w.targetColor).length >= 4, 'enough target flowers');
+      assert(w.flowers.filter(f => f.state === 'bud').length === w.stage.buds, 'bud count');
+    }
+  });
+  test('Three stages: collect, color, hive', () => {
+    assert(C.STAGES.map(s => s.type).join() === 'collect,color,hive' && C.STAGES.every(s => s.need > 0));
+  });
+  test('Zero time step (paused) changes nothing', () => {
+    const w = C.createWorld(0, C.makeRng(3)), before = JSON.stringify(w);
+    C.stepWorld(w, { steer: 1, lift: 1 }, 0);
+    assert(JSON.stringify(w) === before);
+  });
+  return R;
+}
+const esc = s => String(s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+function showTests() {
+  const res = runTests(), pass = res.filter(r => r.ok).length, box = $('#tests');
+  box.hidden = false;
+  box.innerHTML = `<h2>Self-tests: ${pass}/${res.length} passed</h2><ul>${res.map(r =>
+    `<li class="${r.ok ? 'pass' : 'fail'}">${r.ok ? '✔' : '✘'} ${esc(r.name)}${r.ok ? '' : ' : ' + esc(r.msg)}</li>`).join('')}</ul><button id="closeTests">Close</button>`;
+  $('#closeTests').onclick = () => { box.hidden = true; };
+  console.table(res);
+  return res;
+}
+window.runBeehiveTests = showTests;
+
+/* ---------- boot ---------- */
+updateHUD(); updateButtons(); showOverlay('start');
+if (/test/i.test(location.search + location.hash)) showTests();
+requestAnimationFrame(frame);
+</script>
+</body>
+</html>
