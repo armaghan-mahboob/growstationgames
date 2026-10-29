@@ -1,0 +1,781 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Parcel Pals Delivery Dash</title>
+<style>
+:root{--bg:#fdf6e3;--ink:#2b2b2b;--accent:#ff8c42;--good:#2ecc71}
+*{box-sizing:border-box}
+html,body{margin:0;height:100%;font-family:"Comic Sans MS","Chalkboard SE","Segoe UI",system-ui,sans-serif;background:var(--bg);color:var(--ink)}
+#app{display:flex;flex-direction:column;height:100%}
+header{display:flex;align-items:center;gap:8px;padding:8px 12px;background:#ffd166;flex-wrap:wrap}
+header h1{font-size:1.25rem;margin:0;flex:1;white-space:nowrap}
+header label{font-size:.85rem;display:flex;align-items:center;gap:4px}
+button{font:inherit;font-size:1rem;padding:8px 14px;border:0;border-radius:12px;background:var(--accent);color:#fff;cursor:pointer;box-shadow:0 3px 0 #c9641e}
+button:active{transform:translateY(2px);box-shadow:none}
+button.secondary{background:#4ea8de;box-shadow:0 3px 0 #2a6f9e}
+button:disabled{opacity:.45;cursor:default}
+main{flex:1;display:flex;min-height:0}
+#stage{flex:1;position:relative;min-width:0;background:#8fd36a}
+canvas#game{width:100%;height:100%;display:block;touch-action:none}
+#hud{width:260px;padding:10px;display:flex;flex-direction:column;gap:10px;background:#fff8e7;overflow:auto}
+.panel{background:#fff;border-radius:14px;padding:10px;box-shadow:0 2px 6px rgba(0,0,0,.08)}
+.panel h2{font-size:.9rem;margin:0 0 6px;color:#777;text-transform:uppercase;letter-spacing:.04em}
+#nextIcon{display:block;margin:0 auto}
+#nextLabel{font-size:1.5rem;text-align:center;font-weight:bold;min-height:1.8rem}
+#vanParcels{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+#vanParcels canvas{border-radius:10px;background:#f3f3f3;display:block}
+#vanParcels canvas.front{outline:4px solid var(--good);background:#eafff1}
+#vanParcels .ready{font-size:.8rem;color:#2a9d5c;font-weight:bold}
+#routeMap{display:flex;align-items:center;gap:2px;justify-content:space-between;flex-wrap:wrap;font-size:1rem}
+#routeMap>span{font-size:.8rem}
+.mapHouse{display:flex;flex-direction:column;align-items:center;font-size:1.05rem;position:relative;opacity:.4;line-height:1}
+.mapHouse canvas{display:block;width:24px;height:24px}
+.mapHouse.done{opacity:1}
+.mapHouse.current{opacity:1;transform:scale(1.2)}
+.mapHouse .tick{position:absolute;right:-8px;top:-6px;font-size:.9rem}
+#score{font-size:1.3rem;font-weight:bold}
+#deliverBtn{width:100%;background:var(--good);box-shadow:0 3px 0 #1e8c4c;font-size:1.1rem}
+#cam{position:absolute;left:10px;bottom:10px;width:170px;border-radius:12px;overflow:hidden;background:#000;box-shadow:0 2px 8px rgba(0,0,0,.3)}
+#cam video{width:100%;aspect-ratio:4/3;object-fit:cover;display:block;transform:scaleX(-1)}
+#cam canvas{position:absolute;inset:0;width:100%;height:100%;transform:scaleX(-1)}
+#camStatus{position:absolute;left:0;right:0;bottom:0;font-size:.7rem;background:rgba(0,0,0,.55);color:#fff;padding:3px 6px}
+#overlay{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;background:rgba(40,30,60,.55);padding:16px}
+#overlay.hidden{display:none}
+.card{background:#fff;border-radius:20px;padding:22px;max-width:470px;width:100%;text-align:center;box-shadow:0 10px 30px rgba(0,0,0,.3)}
+.card h2{margin:0 0 10px;font-size:1.6rem}
+.card p{margin:8px 0;font-size:1.05rem}
+.card .big{font-size:3.2rem;margin:6px 0}
+.card .row{display:flex;gap:10px;justify-content:center;flex-wrap:wrap;margin-top:12px}
+.card .how{display:flex;justify-content:space-around;margin:10px 0;font-size:.95rem}
+.card .how span{display:block;font-size:2.2rem}
+#dev{font-size:.85rem;padding:6px 12px;background:#eee}
+#dev pre{white-space:pre-wrap;margin:6px 0;font-size:.8rem;background:#fff;padding:6px;border-radius:8px}
+#app{height:100%}
+.opts,.btns{display:contents}
+@media (max-width:760px){
+  /* Keep the game, camera preview and controls in separate, predictable areas. */
+  html,body{height:100%;min-height:100%;overflow:hidden}
+  #app{height:100vh;height:100dvh;min-height:0;overflow:hidden}
+  header{flex:0 0 auto;padding:7px 10px;gap:7px 8px;flex-wrap:wrap;align-items:center}
+  header h1{font-size:clamp(.88rem,3.8vw,1.05rem);line-height:1.2;flex:1 1 150px;min-width:0;white-space:normal;overflow-wrap:anywhere;order:1}
+  .btns{display:flex;gap:6px;order:2;flex:0 0 auto}
+  .opts{display:flex;gap:5px 12px;flex:1 1 100%;order:3;flex-wrap:wrap;align-items:center}
+  header label{font-size:.78rem;white-space:nowrap}
+  .tx{display:none}
+  header button{padding:0 10px;min-width:40px;height:36px;font-size:1rem;border-radius:10px}
+  main{flex:1 1 auto;flex-direction:column;min-height:0;overflow:hidden}
+  #stage{flex:1 1 auto;min-width:0;min-height:150px}
+  #hud{width:100%;flex:0 0 auto;display:grid;grid-template-columns:repeat(2,minmax(0,1fr));align-content:start;gap:6px;padding:6px 8px max(8px,env(safe-area-inset-bottom));overflow-x:hidden;overflow-y:auto;background:#fff8e7}
+  #hud .panel{padding:7px 8px;min-width:0;max-width:100%;border-radius:12px;overflow:hidden}
+  #hud .panel h2{font-size:.65rem;line-height:1.2;margin:0 0 4px}
+  #hud .panel:nth-child(3),#hud .panel:nth-child(4),#hud .panel:nth-child(5){grid-column:1 / -1}
+  #nextIcon{width:44px;height:44px}
+  #nextLabel{font-size:.9rem;line-height:1.2;min-height:0;overflow-wrap:anywhere}
+  #vanParcels{gap:4px;flex-wrap:wrap;align-items:center;min-height:44px}
+  #vanParcels canvas{width:34px;height:34px;max-width:34px}
+  #vanParcels canvas.front{width:44px;height:44px;max-width:44px;outline-width:2px}
+  #vanParcels .ready{display:none}
+  #routeMap{display:flex;flex-wrap:nowrap;justify-content:space-between;gap:2px;min-width:0;overflow:hidden;font-size:.8rem}
+  #routeMap>span{flex:0 0 auto;font-size:.75rem}
+  #routeMap .arr{display:none}
+  #routeMap .mapHouse{font-size:.9rem;min-width:0}
+  #routeMap .mapHouse canvas{width:20px;height:20px}
+  #routeMap .mapHouse .tick{right:-5px;top:-5px;font-size:.7rem}
+  #hud .panel:nth-child(3) h2{display:block}
+  #hud .panel:nth-child(4){display:flex;align-items:center;gap:6px 10px;flex-wrap:wrap;padding:6px 10px}
+  #hud .panel:nth-child(4) h2{display:block;font-size:.65rem}
+  #score{font-size:1rem;line-height:1.2}
+  #routeName{font-size:.75rem!important;overflow-wrap:anywhere}
+  #hud .panel:nth-child(5){display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:7px;padding:7px}
+  #hud .panel:nth-child(5) button{min-width:0;min-height:44px;height:auto;flex:initial;margin:0!important;width:100%!important;font-size:clamp(.7rem,2.8vw,.9rem);line-height:1.15;padding:7px 5px;white-space:normal;overflow-wrap:anywhere}
+  #cam{left:auto;right:7px;top:7px;bottom:auto;width:clamp(76px,22vw,100px);max-width:28%;border-radius:10px;opacity:.96;z-index:2}
+  #camStatus{font-size:.56rem;padding:3px 4px;line-height:1.15}
+  #overlay{padding:10px;align-items:center;justify-content:center;overflow:auto;z-index:5}
+  .card{padding:14px;border-radius:16px;margin:auto;max-height:100%;overflow-y:auto}
+  .card h2{font-size:1.2rem;line-height:1.2;margin-bottom:6px}
+  .card p{font-size:.9rem;line-height:1.35;margin:6px 0}
+  .card .big{font-size:2.2rem;margin:2px 0}
+  .card .how{display:flex;justify-content:space-around;flex-wrap:wrap;font-size:.78rem;gap:8px;margin:7px 0}
+  .card .how>div{flex:1 1 110px;min-width:0}
+  .card .how span{font-size:1.5rem}
+  .card .row{gap:7px}
+  .card .row button{flex:1 1 140px;min-width:0;padding:9px 10px;font-size:.88rem;white-space:normal}
+  #dev{display:none}
+}
+@media (max-width:380px){
+  header{padding:6px 7px;gap:6px}
+  header h1{font-size:.86rem;flex-basis:125px}
+  .btns{gap:4px}
+  header button{min-width:36px;padding:0 7px}
+  .opts{gap:5px 9px}
+  #hud{gap:5px;padding:5px 6px max(7px,env(safe-area-inset-bottom))}
+  #hud .panel{padding:6px}
+  #vanParcels canvas{width:29px;height:29px;max-width:29px}
+  #vanParcels canvas.front{width:38px;height:38px;max-width:38px}
+  #hud .panel:nth-child(5) button{font-size:.7rem}
+}
+
+@media (max-height:520px) and (orientation:landscape){
+  header{padding:4px 10px;flex-wrap:nowrap}
+  header h1{flex:1 1 auto;order:0;font-size:.95rem;white-space:nowrap}
+  .opts{flex:0 0 auto;order:1;flex-wrap:nowrap}
+  .btns{order:2}
+  main{flex-direction:row}
+  #hud{width:230px;flex:none;display:flex;flex-direction:column;gap:5px;padding:5px 6px;overflow:auto}
+  #hud .panel{flex:0 0 auto}
+  #cam{width:96px}
+  .card{padding:10px}
+  .card .how{display:none}
+}
+</style>
+</head>
+<body>
+<div id="app">
+  <header>
+    <h1>🚚 Parcel Pals Delivery Dash</h1>
+    <div class="opts">
+      <label><input type="checkbox" id="voiceChk" checked> Voice</label>
+      <label><input type="checkbox" id="musicChk" checked> 🎵 Music</label>
+      <label><input type="checkbox" id="flipChk"> Flip<span class="tx"> steering</span></label>
+    </div>
+    <div class="btns">
+      <button id="startBtn" aria-label="Start">▶<span class="tx"> Start</span></button>
+      <button id="pauseBtn" class="secondary" aria-label="Pause" disabled>⏸<span class="tx"> Pause</span></button>
+      <button id="restartBtn" class="secondary" aria-label="Restart" disabled>🔄<span class="tx"> Restart</span></button>
+    </div>
+  </header>
+  <main>
+    <div id="stage">
+      <canvas id="game"></canvas>
+      <div id="cam"><video id="camVideo" playsinline muted></video><canvas id="camCanvas"></canvas><div id="camStatus">Camera off</div></div>
+      <div id="overlay"></div>
+    </div>
+    <aside id="hud">
+      <div class="panel"><h2>Next house wants</h2><canvas id="nextIcon" width="110" height="110"></canvas><div id="nextLabel">–</div></div>
+      <div class="panel"><h2>In your van</h2><div id="vanParcels"></div></div>
+      <div class="panel"><h2>Route map</h2><div id="routeMap"></div></div>
+      <div class="panel"><h2>Score</h2><div id="score">0</div><div id="routeName" style="color:#777;font-size:.9rem"></div></div>
+      <div class="panel"><button id="switchBtn" class="secondary" style="width:100%;margin-bottom:8px">🔄 Switch parcel (or raise left hand)</button><button id="deliverBtn">📦 Deliver (or raise right hand)</button></div>
+    </aside>
+  </main>
+  <details id="dev"><summary>Developer: self-tests</summary>
+    <button id="testBtn" class="secondary">Run self-tests</button><pre id="testOut">Tests check steering, delivery-zone detection, parcel matching, duplicate prevention, route completion and restart.</pre>
+  </details>
+</div>
+
+<script type="module">
+/* ============ DATA ============ */
+const COLORS={red:'#e63946',blue:'#3a86ff',yellow:'#ffd60a',green:'#2dc653',purple:'#9d4edd',pink:'#ff70a6'};
+const P=(id,label,color,shape,glyph)=>({id,label,color,shape,glyph});
+const OBST=['cone','puddle','cat','log'];
+const ROUTES=[
+ {name:'Colour Street',hint:'Match the colour!',speed:115,gap:540,tol:0.145,types:2,double:0,stops:[
+   {parcel:P('red','Red',COLORS.red,'circle'),lane:0,house:'#ffb4a2'},
+   {parcel:P('blue','Blue',COLORS.blue,'circle'),lane:2,house:'#bde0fe'},
+   {parcel:P('yellow','Yellow',COLORS.yellow,'circle'),lane:1,house:'#fff3b0'},
+   {parcel:P('green','Green',COLORS.green,'circle'),lane:0,house:'#b7efc5'},
+   {parcel:P('pink','Pink',COLORS.pink,'circle'),lane:2,house:'#ffc8dd'}]},
+ {name:'Shape Avenue',hint:'Match the shape!',speed:125,gap:490,tol:0.14,types:3,double:0,stops:[
+   {parcel:P('star','Star',COLORS.purple,'star'),lane:2,house:'#e0bbff'},
+   {parcel:P('heart','Heart',COLORS.purple,'heart'),lane:0,house:'#ffc8dd'},
+   {parcel:P('triangle','Triangle',COLORS.purple,'triangle'),lane:1,house:'#caffbf'},
+   {parcel:P('circle','Circle',COLORS.purple,'circle'),lane:2,house:'#bde0fe'},
+   {parcel:P('square','Square',COLORS.purple,'square'),lane:0,house:'#fff3b0'}]},
+ {name:'Picture Lane',hint:'Match the picture!',speed:135,gap:450,tol:0.135,types:4,double:0,stops:[
+   {parcel:P('apple','Apple',COLORS.green,'emoji','🍎'),lane:1,house:'#ffd6a5'},
+   {parcel:P('fish','Fish',COLORS.blue,'emoji','🐟'),lane:0,house:'#a0c4ff'},
+   {parcel:P('flower','Flower',COLORS.pink,'emoji','🌼'),lane:2,house:'#fdffb6'},
+   {parcel:P('dog','Dog','#ff8c42','emoji','🐶'),lane:1,house:'#ffe5d9'},
+   {parcel:P('sun','Sun',COLORS.yellow,'emoji','☀️'),lane:0,house:'#caf0f8'}]},
+ {name:'Double Trouble Drive',hint:'Match the colour AND the shape!',speed:145,gap:410,tol:0.13,types:4,double:0.3,stops:[
+   {parcel:P('red-star','Red Star',COLORS.red,'star'),lane:1,house:'#ffb4a2'},
+   {parcel:P('red-heart','Red Heart',COLORS.red,'heart'),lane:0,house:'#ffc8dd'},
+   {parcel:P('blue-heart','Blue Heart',COLORS.blue,'heart'),lane:2,house:'#bde0fe'},
+   {parcel:P('blue-circle','Blue Circle',COLORS.blue,'circle'),lane:1,house:'#a0c4ff'},
+   {parcel:P('green-circle','Green Circle',COLORS.green,'circle'),lane:0,house:'#b7efc5'}]},
+ {name:'Super Mix Boulevard',hint:'Colours, shapes, pictures and letters!',speed:155,gap:370,tol:0.125,types:4,double:0.45,stops:[
+   {parcel:P('pink-heart','Pink Heart',COLORS.pink,'heart'),lane:2,house:'#ffc8dd'},
+   {parcel:P('rocket','Rocket',COLORS.purple,'emoji','🚀'),lane:0,house:'#e0bbff'},
+   {parcel:P('letter-b','Letter B',COLORS.blue,'text','B'),lane:1,house:'#bde0fe'},
+   {parcel:P('yellow-square','Yellow Square',COLORS.yellow,'square'),lane:2,house:'#fff3b0'},
+   {parcel:P('turtle','Turtle',COLORS.green,'emoji','🐢'),lane:0,house:'#caffbf'}]}
+];
+const LANES=3;
+const laneFrac=l=>(l+0.5)/LANES;
+const clamp=(v,a,b)=>Math.max(a,Math.min(b,v));
+
+/* ============ PURE GAME LOGIC (testable) ============ */
+const Logic={
+  steerFromLean(dx,dead=0.02,full=0.12){
+    const a=Math.abs(dx); if(a<=dead) return 0;
+    return Math.sign(dx)*Math.min(1,(a-dead)/(full-dead));
+  },
+  vanInZone(vanX,lane,tol=0.14){ return Math.abs(vanX-laneFrac(lane))<tol; },
+  parcelsMatch(a,b){ return !!a&&!!b&&a.id===b.id; },
+  newRouteState(routeIndex,rng=Math.random){
+    const route=ROUTES[routeIndex];
+    const stops=route.stops.map((s,i)=>({parcel:s.parcel,lane:s.lane,house:s.house,d:1000+i*1500,delivered:false,tries:0}));
+    const obstacles=[], types=OBST.slice(0,route.types||4);
+    stops.forEach((s,i)=>{
+      const start=i===0?300:stops[i-1].d+400;
+      for(let d=start; d<s.d-400; d+=(route.gap||430)){
+        const lane=Math.floor(rng()*LANES);
+        obstacles.push({d,lane,type:types[Math.floor(rng()*types.length)],hit:false});
+        if(route.double&&rng()<route.double){ // later stages: two blocked lanes, one always stays free
+          const l2=(lane+1+Math.floor(rng()*2))%LANES;
+          obstacles.push({d,lane:l2,type:types[Math.floor(rng()*types.length)],hit:false});
+        }
+      }
+    });
+    const parcels=stops.map(s=>s.parcel);
+    for(let i=parcels.length-1;i>0;i--){const j=Math.floor(rng()*(i+1));[parcels[i],parcels[j]]=[parcels[j],parcels[i]];}
+    return {routeIndex,stops,obstacles,parcels,delivered:new Set(),stopIdx:0,dist:0,
+            finishD:stops[stops.length-1].d+900,vanX:0.5,steer:0,waiting:false,lastInZone:null,
+            cooldownUntil:0,slowUntil:0,bumpUntil:0,score:0,speed:route.speed||130,tol:route.tol||0.14};
+  },
+  attemptDelivery(st,now){
+    const stop=st.stops[st.stopIdx];
+    if(!stop) return 'noStop';
+    if(now<st.cooldownUntil) return 'cooldown';
+    if(stop.delivered||st.delivered.has(stop.parcel.id)) return 'duplicate';
+    if(!st.waiting) return 'notAtHouse';
+    if(!Logic.vanInZone(st.vanX,stop.lane,st.tol)) return 'notInZone';
+    st.cooldownUntil=now+1500;
+    const front=st.parcels[0];
+    if(Logic.parcelsMatch(front,stop.parcel)){
+      stop.delivered=true; st.delivered.add(front.id); st.parcels.shift();
+      st.score+=stop.tries===0?15:10; st.stopIdx++; st.waiting=false; st.lastInZone=null;
+      return 'delivered';
+    }
+    stop.tries++; // wrong parcel stays in front until the player switches parcels
+    return 'wrong';
+  },
+  switchParcel(st){
+    if(st.parcels.length<2) return false;
+    st.parcels.push(st.parcels.shift()); // front parcel goes to the back, next one is ready
+    return true;
+  },
+  advance(st,dt,now,base=st.speed||130){
+    const sp=base*(now<st.slowUntil?0.35:1);
+    const stop=st.stops[st.stopIdx];
+    if(stop&&st.dist+sp*dt>=stop.d){ st.dist=stop.d; st.waiting=true; return 'waiting'; }
+    st.dist+=sp*dt;
+    if(!stop&&st.dist>=st.finishD) return 'finished';
+    return 'driving';
+  },
+  checkObstacles(st,now){
+    for(const o of st.obstacles){
+      if(!o.hit&&Math.abs(o.d-st.dist)<40&&Math.abs(st.vanX-laneFrac(o.lane))<0.12){
+        o.hit=true; st.slowUntil=now+1000; st.bumpUntil=now+700; return o;
+      }
+    }
+    return null;
+  },
+  isRouteComplete(st){ return st.stops.every(s=>s.delivered); }
+};
+
+/* ============ DOM / STATE ============ */
+const $=s=>document.querySelector(s);
+const cv=$('#game'), ctx=cv.getContext('2d'), stage=$('#stage'), overlay=$('#overlay');
+let W=800,H=600; const VAN_Y=()=>H-130;
+const G={st:null,route:0,total:0,screen:'menu',msg:null,particles:[],last:0,kb:0,hudDirty:true,finaleBurst:0};
+const idle=Logic.newRouteState(0);
+
+function resize(){
+  const r=stage.getBoundingClientRect(), dpr=Math.min(2,window.devicePixelRatio||1);
+  cv.width=Math.round(r.width*dpr); cv.height=Math.round(r.height*dpr);
+  ctx.setTransform(dpr,0,0,dpr,0,0); W=r.width; H=r.height;
+}
+addEventListener('resize',resize); resize();
+if(window.ResizeObserver) new ResizeObserver(()=>resize()).observe(stage);
+const road=()=>{const w=Math.min(W*0.62,540),left=(W-w)/2;return {left,w,laneW:w/3};};
+
+/* ============ AUDIO / VOICE ============ */
+let AC;
+function beep(f,d=0.15,type='sine',g=0.18){
+  try{ AC=AC||new (window.AudioContext||window.webkitAudioContext)();
+    const o=AC.createOscillator(), ga=AC.createGain(); o.type=type; o.frequency.value=f; ga.gain.value=g;
+    o.connect(ga).connect(AC.destination); o.start();
+    ga.gain.exponentialRampToValueAtTime(0.001,AC.currentTime+d); o.stop(AC.currentTime+d);
+  }catch(e){}
+}
+const jingle=()=>[523,659,784,1047].forEach((f,i)=>setTimeout(()=>beep(f,0.22),i*110));
+function speak(t){
+  if(!$('#voiceChk').checked||!('speechSynthesis' in window)) return;
+  try{ speechSynthesis.cancel(); const u=new SpeechSynthesisUtterance(t.replace(/[^\p{L}\p{N}\s.,!?']/gu,'')); u.rate=0.95; u.pitch=1.15; speechSynthesis.speak(u); }catch(e){}
+}
+function say(text,ms=2500,voice=false){ G.msg={text,until:performance.now()+ms}; if(voice) speak(text); }
+
+
+/* ============ MUSIC (soft generated background tunes, one per stage) ============ */
+const mtof=m=>440*Math.pow(2,(m-69)/12);
+function unlockAudio(){ try{ AC=AC||new (window.AudioContext||window.webkitAudioContext)(); if(AC.state==='suspended') AC.resume(); }catch(e){} }
+const Music={
+  vol:0.5, bus:null, timer:null, key:null, step:0, nextT:0, running:false,
+  // chords: [root offset from key, isMinor]; arp: chord-tone pattern per 8 steps; mel: 32-step melody (semitones above key, null = rest)
+  themes:{
+    0:{bpm:100,root:60,chords:[[0,0],[5,0],[-3,1],[-5,0]],arp:[0,1,2,1,0,1,2,1],tick:false,
+       mel:[7,null,9,null,12,null,9,null, 9,null,7,null,4,null,null,null, 4,null,7,null,9,null,7,null, 2,null,4,null,0,null,null,null]},
+    1:{bpm:108,root:67,chords:[[0,0],[5,0],[-3,1],[-5,0]],arp:[0,2,1,2,0,2,1,2],tick:false,
+       mel:[4,null,7,9,12,null,9,7, 9,null,7,null,4,2,0,null, 7,null,9,12,14,null,12,9, 7,null,9,null,7,null,null,null]},
+    2:{bpm:114,root:65,chords:[[0,0],[5,0],[-3,1],[-5,0]],arp:[0,1,2,3,2,1,2,1],tick:false,
+       mel:[12,null,9,7,9,null,4,null, 9,null,12,null,9,null,7,null, 4,null,7,4,2,null,0,null, 2,4,7,null,4,null,null,null]},
+    3:{bpm:122,root:69,chords:[[0,1],[-4,0],[3,0],[-2,0]],arp:[0,null,2,1,0,null,2,3],tick:true,
+       mel:[12,null,10,null,7,null,10,null, 15,null,12,null,15,null,12,null, 7,null,10,12,10,null,7,null, 10,null,7,null,5,null,7,null]},
+    4:{bpm:130,root:62,chords:[[0,0],[5,0],[-3,1],[-5,0]],arp:[0,1,2,3,4,3,2,1],tick:true,
+       mel:[14,null,12,null,9,null,12,14, 16,null,14,null,12,null,9,null, 14,null,12,9,7,null,9,null, 12,null,9,null,7,null,4,null]},
+    finale:{bpm:132,root:60,chords:[[0,0],[5,0],[-5,0],[0,0]],arp:[0,1,2,3,2,1,2,3],tick:true,
+       mel:[12,14,16,14,12,null,9,null, 12,null,9,12,14,null,null,null, 16,14,12,14,16,16,16,null, 14,null,12,null,12,null,null,null]}
+  },
+  note(m,t,d,type,g){
+    const o=AC.createOscillator(), ga=AC.createGain(); o.type=type; o.frequency.value=mtof(m);
+    ga.gain.setValueAtTime(0.0001,t); ga.gain.exponentialRampToValueAtTime(g,t+0.03); ga.gain.exponentialRampToValueAtTime(0.0001,t+d);
+    o.connect(ga).connect(this.bus); o.start(t); o.stop(t+d+0.05);
+  },
+  schedule(step,t){
+    const th=this.themes[this.key], sd=60/th.bpm/2, ch=th.chords[Math.floor(step/8)%th.chords.length], s8=step%8;
+    const tones=ch[1]?[0,3,7]:[0,4,7], base=th.root+ch[0];
+    if(s8===0) tones.forEach(x=>this.note(base+x,t,sd*7,'sine',0.02));                 // warm pad
+    if(s8===0) this.note(base-12,t,sd*3.6,'sine',0.07);                                  // bass
+    if(s8===4) this.note(base-12+7,t,sd*3.2,'sine',0.05);
+    const a=th.arp[s8]; if(a!==null) this.note(base+12+tones[a%3]+12*Math.floor(a/3),t,sd*1.7,'triangle',0.04); // gentle arpeggio
+    const m=th.mel[step%th.mel.length]; if(m!==null) this.note(th.root+12+m,t,sd*2,'triangle',0.045);           // tune
+    if(th.tick&&s8%2===1) this.note(96,t,0.04,'square',0.006);                                                   // faint tick for later stages
+  },
+  pump(){
+    if(!this.running||!AC) return;
+    const th=this.themes[this.key], sd=60/th.bpm/2;
+    while(this.nextT<AC.currentTime+0.2){ this.schedule(this.step,this.nextT); this.step=(this.step+1)%32; this.nextT+=sd; }
+  },
+  play(key){
+    this.pendingKey=key;
+    if(!$('#musicChk').checked) return;
+    try{
+      unlockAudio(); if(!AC) return;
+      if(this.running&&this.key===key) return;
+      if(this.running) this.stop(true);
+      if(this.key!==key) this.step=0;
+      this.key=key; this.running=true;
+      const lp=AC.createBiquadFilter(); lp.type='lowpass'; lp.frequency.value=2400;
+      this.bus=AC.createGain(); this.bus.gain.setValueAtTime(0.0001,AC.currentTime);
+      this.bus.gain.linearRampToValueAtTime(this.vol,AC.currentTime+0.8);
+      this.bus.connect(lp).connect(AC.destination); this.busLp=lp;
+      this.nextT=AC.currentTime+0.1; this.pump(); this.timer=setInterval(()=>this.pump(),60);
+    }catch(e){ console.warn('music',e); }
+  },
+  stop(quick){
+    this.running=false; clearInterval(this.timer); this.timer=null;
+    const bus=this.bus, lp=this.busLp; this.bus=null;
+    if(bus&&AC){ const f=quick?0.1:0.5; bus.gain.cancelScheduledValues(AC.currentTime); bus.gain.setValueAtTime(bus.gain.value,AC.currentTime); bus.gain.linearRampToValueAtTime(0.0001,AC.currentTime+f);
+      setTimeout(()=>{ try{ bus.disconnect(); lp.disconnect(); }catch(e){} },f*1000+150); }
+  }
+};
+
+/* ============ DRAW HELPERS ============ */
+function rr(c,x,y,w,h,r){ c.beginPath(); c.moveTo(x+r,y); c.arcTo(x+w,y,x+w,y+h,r); c.arcTo(x+w,y+h,x,y+h,r); c.arcTo(x,y+h,x,y,r); c.arcTo(x,y,x+w,y,r); c.closePath(); }
+function drawShape(c,shape,x,y,s,fill){
+  c.save(); c.translate(x,y); c.fillStyle=fill; c.beginPath(); const r=s/2;
+  if(shape==='circle') c.arc(0,0,r,0,Math.PI*2);
+  else if(shape==='square') c.rect(-r*0.85,-r*0.85,r*1.7,r*1.7);
+  else if(shape==='triangle'){ c.moveTo(0,-r); c.lineTo(r,r*0.8); c.lineTo(-r,r*0.8); c.closePath(); }
+  else if(shape==='star'){ for(let i=0;i<10;i++){const rad=i%2?r*0.45:r, a=-Math.PI/2+i*Math.PI/5; c.lineTo(Math.cos(a)*rad,Math.sin(a)*rad);} c.closePath(); }
+  else if(shape==='heart'){ c.moveTo(0,r*0.9); c.bezierCurveTo(-r*1.3,r*0.1,-r*0.7,-r,0,-r*0.4); c.bezierCurveTo(r*0.7,-r,r*1.3,r*0.1,0,r*0.9); }
+  c.fill(); c.restore();
+}
+function drawParcel(c,p,x,y,s){
+  c.save(); c.translate(x,y);
+  rr(c,-s/2,-s/2,s,s,s*0.15); c.fillStyle=p.color; c.fill();
+  c.strokeStyle='rgba(0,0,0,.25)'; c.lineWidth=Math.max(1,s*0.05); c.stroke();
+  c.fillStyle='rgba(255,255,255,.35)'; c.fillRect(-s*0.08,-s/2,s*0.16,s);
+  if(p.shape==='emoji'){ c.font=`${s*0.6}px serif`; c.textAlign='center'; c.textBaseline='middle'; c.fillText(p.glyph,0,s*0.04); }
+  else if(p.shape==='text'){ c.font=`bold ${s*0.62}px "Comic Sans MS","Segoe UI",sans-serif`; c.textAlign='center'; c.textBaseline='middle'; c.fillStyle='#fff'; c.fillText(p.glyph,0,s*0.03); }
+  else drawShape(c,p.shape,0,0,s*0.6,'#fff');
+  c.restore();
+}
+function drawHouse(c,x,y,stop,scale=1,bmin=0){
+  const w=120,h=90; c.save(); c.translate(x,y); c.scale(scale,scale);
+  c.fillStyle=stop.house; c.fillRect(-w/2,-h/2,w,h);
+  c.strokeStyle='rgba(0,0,0,.2)'; c.lineWidth=3; c.strokeRect(-w/2,-h/2,w,h);
+  c.fillStyle='#b5651d'; c.beginPath(); c.moveTo(-w/2-12,-h/2); c.lineTo(0,-h/2-50); c.lineTo(w/2+12,-h/2); c.closePath(); c.fill();
+  c.fillStyle='#6d4c41'; rr(c,-16,h/2-44,32,44,6); c.fill();
+  c.fillStyle='#bde0fe'; c.fillRect(-w/2+14,-h/2+14,28,26); c.fillRect(w/2-42,-h/2+14,28,26);
+  if(stop.delivered){ c.font='30px serif'; c.textAlign='center'; c.textBaseline='middle'; c.fillText('🎉',w/2+10,-h/2-10); drawParcel(c,stop.parcel,30,h/2-14,24); }
+  c.restore();
+  // "wanted" speech bubble: drawn at its own size so the parcel stays readable on small screens
+  const bs=Math.max(scale,bmin); c.save(); c.translate(x,y-(h/2+44)*scale); c.scale(bs,bs);
+  c.fillStyle='#fff'; rr(c,-36,-78,72,66,12); c.fill(); c.strokeStyle='#bbb'; c.lineWidth=2; c.stroke();
+  c.beginPath(); c.moveTo(-8,-12); c.lineTo(8,-12); c.lineTo(0,0); c.closePath(); c.fillStyle='#fff'; c.fill();
+  drawParcel(c,stop.parcel,0,-45,46); c.restore();
+}
+function drawTree(c,x,y,big){ c.fillStyle='#8d5524'; c.fillRect(x-5,y,10,26); c.fillStyle=big?'#3a9d4f':'#52b788'; c.beginPath(); c.arc(x,y-6,big?26:20,0,Math.PI*2); c.fill(); }
+function drawObstacle(c,o,x,y){
+  c.save(); c.translate(x,y); if(o.hit) c.globalAlpha=0.35;
+  if(o.type==='cone'){ c.fillStyle='#ff6b00'; c.beginPath(); c.moveTo(0,-28); c.lineTo(20,24); c.lineTo(-20,24); c.closePath(); c.fill(); c.fillStyle='#fff'; c.fillRect(-11,0,22,7); c.fillStyle='#333'; c.fillRect(-24,22,48,6); }
+  else if(o.type==='puddle'){ c.fillStyle='#4ea8de'; c.beginPath(); c.ellipse(0,0,34,20,0,0,Math.PI*2); c.fill(); c.fillStyle='rgba(255,255,255,.4)'; c.beginPath(); c.ellipse(-8,-6,10,5,0,0,Math.PI*2); c.fill(); }
+  else if(o.type==='log'){ c.fillStyle='#8d5524'; rr(c,-32,-12,64,24,10); c.fill(); c.fillStyle='#d9a066'; c.beginPath(); c.arc(-26,0,8,0,Math.PI*2); c.fill(); }
+  else { c.font='44px serif'; c.textAlign='center'; c.textBaseline='middle'; c.fillText('🐈',0,0); }
+  c.restore();
+}
+function wrapLines(c,text,max){ const lines=[]; let cur=''; for(const w of text.split(' ')){ const t=cur?cur+' '+w:w; if(c.measureText(t).width>max&&cur){lines.push(cur);cur=w;} else cur=t; } if(cur) lines.push(cur); return lines; }
+
+/* ============ PARTICLES ============ */
+function confettiBurst(x,y,n=90){
+  const cols=['#e63946','#3a86ff','#ffd60a','#2dc653','#9d4edd','#ff70a6','#ff8c42'];
+  for(let i=0;i<n;i++){ const a=Math.random()*Math.PI*2, v=120+Math.random()*260;
+    G.particles.push({x,y,vx:Math.cos(a)*v,vy:Math.sin(a)*v-150,life:1.6+Math.random(),color:cols[i%cols.length],rot:Math.random()*6,w:6+Math.random()*6}); }
+}
+function updateParticles(dt){ for(const p of G.particles){ p.x+=p.vx*dt; p.y+=p.vy*dt; p.vy+=380*dt; p.vx*=0.985; p.rot+=dt*4; p.life-=dt; } G.particles=G.particles.filter(p=>p.life>0&&p.y<H+40); }
+function drawParticles(){ for(const p of G.particles){ ctx.save(); ctx.globalAlpha=clamp(p.life,0,1); ctx.translate(p.x,p.y); ctx.rotate(p.rot); ctx.fillStyle=p.color; ctx.fillRect(-p.w/2,-p.w/4,p.w,p.w/2); ctx.restore(); } }
+
+/* ============ SCENE ============ */
+function drawScene(now){
+  const st=G.st||idle, R=road(), vy=VAN_Y();
+  ctx.clearRect(0,0,W,H);
+  ctx.fillStyle='#8fd36a'; ctx.fillRect(0,0,W,H);
+  // trees and flowers along the road
+  for(let d=Math.floor((st.dist-300)/170)*170; d<st.dist+H+300; d+=170){
+    const y=vy-(d-st.dist), k=Math.round(d/170);
+    const side=k%2===0?-1:1, jitter=(k*37)%40;
+    const x=side<0?R.left-48-jitter:R.left+R.w+48+jitter;
+    drawTree(ctx,x,y,k%3===0);
+    ctx.fillStyle=['#ff70a6','#ffd60a','#fff'][k%3]; ctx.beginPath(); ctx.arc(x+side*40,y+60,5,0,Math.PI*2); ctx.fill();
+  }
+  // road
+  ctx.fillStyle='#5b5f66'; ctx.fillRect(R.left,0,R.w,H);
+  ctx.fillStyle='#f1f1f1'; ctx.fillRect(R.left-6,0,6,H); ctx.fillRect(R.left+R.w,0,6,H);
+  ctx.strokeStyle='#fff'; ctx.lineWidth=4; ctx.setLineDash([30,30]); ctx.lineDashOffset=-(st.dist%60);
+  for(let i=1;i<LANES;i++){ ctx.beginPath(); ctx.moveTo(R.left+i*R.laneW,0); ctx.lineTo(R.left+i*R.laneW,H); ctx.stroke(); }
+  ctx.setLineDash([]);
+  // finish line
+  const fy=vy-(st.finishD-st.dist);
+  if(fy>-40&&fy<H+40){ for(let i=0;i<12;i++){ for(let j=0;j<2;j++){ ctx.fillStyle=(i+j)%2?'#222':'#fff'; ctx.fillRect(R.left+i*R.w/12,fy-16+j*16,R.w/12,16); } } ctx.font='28px serif'; ctx.textAlign='center'; ctx.fillStyle='#fff'; ctx.fillText('🏁',R.left+R.w+30,fy); }
+  // obstacles
+  for(const o of st.obstacles){ const y=vy-(o.d-st.dist); if(y<-60||y>H+60) continue;
+    const x=R.left+laneFrac(o.lane)*R.w;
+    if(!o.hit&&o.d>st.dist&&o.d-st.dist<520){ ctx.strokeStyle='rgba(255,255,255,.55)'; ctx.lineWidth=3; ctx.setLineDash([6,6]); ctx.beginPath(); ctx.arc(x,y,44,0,Math.PI*2); ctx.stroke(); ctx.setLineDash([]); }
+    drawObstacle(ctx,o,x,y); }
+  // houses + delivery zones
+  st.stops.forEach(stop=>{ const y=vy-(stop.d-st.dist); if(y<-220||y>H+200) return;
+    const cx=R.left+laneFrac(stop.lane)*R.w, w=R.laneW*0.88, h=170;
+    const active=st.waiting&&st.stops[st.stopIdx]===stop, inZ=active&&Logic.vanInZone(st.vanX,stop.lane,st.tol);
+    const pulse=active?0.45+0.25*Math.sin(now/180):0.35;
+    ctx.save(); ctx.translate(cx,y);
+    ctx.fillStyle=stop.delivered?'rgba(46,204,113,.3)':`rgba(255,220,0,${pulse})`; rr(ctx,-w/2,-h/2,w,h,16); ctx.fill();
+    ctx.setLineDash([14,10]); ctx.lineWidth=5; ctx.strokeStyle=stop.delivered?'#2ecc71':(inZ?'#2ecc71':'#ffb703'); ctx.stroke(); ctx.setLineDash([]);
+    ctx.font='34px serif'; ctx.textAlign='center'; ctx.textBaseline='middle'; ctx.fillText(stop.delivered?'✅':'📦',0,-h/2+30);
+    if(!stop.delivered){ ctx.fillText('⬇',0,h/2-30); }
+    ctx.restore();
+    const sideRight=stop.lane===2, margin=(W-R.w)/2, off=margin<220?margin*0.5:110, hx=sideRight?R.left+R.w+off:R.left-off;
+    // little path from house to zone
+    ctx.fillStyle='#d9c7a7'; ctx.fillRect(Math.min(hx,cx),y+20,Math.abs(hx-cx),14);
+    drawHouse(ctx,hx,y,stop,Math.min(1,(W-R.w)/2/150),0.6);
+  });
+  // van
+  const vx=R.left+st.vanX*R.w, w=Math.min(74,R.laneW*0.6), h=100, wob=now<st.bumpUntil?Math.sin(now/40)*4:0;
+  ctx.save(); ctx.translate(vx+wob,vy); ctx.rotate(st.steer*0.12);
+  ctx.fillStyle='#222'; [-w/2-5,w/2-5].forEach(x=>{ rr(ctx,x,-h/2+12,10,22,3); ctx.fill(); rr(ctx,x,h/2-34,10,22,3); ctx.fill(); });
+  rr(ctx,-w/2,-h/2,w,h,12); ctx.fillStyle='#ff8c42'; ctx.fill(); ctx.strokeStyle='#c9641e'; ctx.lineWidth=3; ctx.stroke();
+  rr(ctx,-w/2+8,-h/2+8,w-16,22,6); ctx.fillStyle='#bde0fe'; ctx.fill();
+  ctx.fillStyle='#fff6a9'; ctx.fillRect(-w/2+6,-h/2-3,10,6); ctx.fillRect(w/2-16,-h/2-3,10,6);
+  rr(ctx,-w/2+6,-h/2+38,w-12,h-48,8); ctx.fillStyle='#fff'; ctx.fill();
+  if(st.parcels[0]) drawParcel(ctx,st.parcels[0],0,10,Math.min(44,w*0.55));
+  ctx.restore();
+  // hints near van
+  if(G.st&&st.waiting){
+    const stop=st.stops[st.stopIdx], inZ=Logic.vanInZone(st.vanX,stop.lane,st.tol), bob=Math.sin(now/150)*6;
+    const t=inZ?'🙌 Raise your right hand!':(laneFrac(stop.lane)<st.vanX?'⬅ Steer this way':'Steer this way ➡');
+    ctx.font=`bold ${W<600?17:22}px "Comic Sans MS","Segoe UI",sans-serif`; ctx.textAlign='center'; ctx.textBaseline='middle';
+    const tw=ctx.measureText(t).width, tx=clamp(vx,tw/2+8,W-tw/2-8);
+    ctx.lineWidth=5; ctx.strokeStyle='#333'; ctx.fillStyle='#fff'; ctx.strokeText(t,tx,vy-80+bob); ctx.fillText(t,tx,vy-80+bob);
+  }
+  if(now<st.bumpUntil){ ctx.font='bold 26px sans-serif'; ctx.textAlign='center'; ctx.fillStyle='#fff'; ctx.strokeStyle='#333'; ctx.lineWidth=5; ctx.strokeText('Bump!',vx,vy-110); ctx.fillText('Bump!',vx,vy-110); }
+  drawMessage(now);
+}
+function drawMessage(now){
+  if(!G.msg||now>G.msg.until){ G.msg=null; return; }
+  const small=W<600, fs=small?15:21, lh=small?19:27;
+  ctx.font=`bold ${fs}px "Comic Sans MS","Segoe UI",sans-serif`;
+  const lines=wrapLines(ctx,G.msg.text,small?W-50:Math.min(W-70,560)), bw=small?W-20:Math.min(W-40,600), bh=lines.length*lh+(small?14:22), x=(W-bw)/2, y=small?74:14;
+  ctx.fillStyle='rgba(255,255,255,.94)'; rr(ctx,x,y,bw,bh,small?12:16); ctx.fill(); ctx.strokeStyle='#ffb703'; ctx.lineWidth=small?3:4; ctx.stroke();
+  ctx.fillStyle='#333'; ctx.textAlign='center'; ctx.textBaseline='top'; lines.forEach((l,i)=>ctx.fillText(l,W/2,y+(small?7:11)+i*lh));
+}
+function drawFinale(now){
+  ctx.clearRect(0,0,W,H);
+  const g=ctx.createLinearGradient(0,0,0,H); g.addColorStop(0,'#8ecae6'); g.addColorStop(1,'#cdeffd'); ctx.fillStyle=g; ctx.fillRect(0,0,W,H);
+  ctx.fillStyle='#ffd60a'; ctx.beginPath(); ctx.arc(W-80,70,40,0,Math.PI*2); ctx.fill();
+  ctx.fillStyle='#8fd36a'; ctx.fillRect(0,H*0.5,W,H);
+  const all=ROUTES.flatMap(r=>r.stops), perRow=Math.ceil(all.length/2), sp=W/(perRow+1), sc=Math.min(0.9,sp/140);
+  all.forEach((s,i)=>{ const row=i<perRow?0:1, col=row?i-perRow:i; drawHouse(ctx,sp*(col+1)+(row?sp/2:0),H*(row?0.68:0.54)-20*sc,{...s,delivered:true},sc); });
+  for(let i=0;i<14;i++){ const x=(i*97+40)%W, y=H+40-((now/14+i*170)%(H+120)), col=['#e63946','#3a86ff','#ffd60a','#2dc653','#9d4edd','#ff70a6'][i%6];
+    ctx.strokeStyle='#555'; ctx.lineWidth=1; ctx.beginPath(); ctx.moveTo(x,y+22); ctx.lineTo(x+Math.sin(now/300+i)*6,y+60); ctx.stroke();
+    ctx.fillStyle=col; ctx.beginPath(); ctx.ellipse(x,y,16,22,0,0,Math.PI*2); ctx.fill(); }
+  ctx.font='bold 34px "Comic Sans MS","Segoe UI",sans-serif'; ctx.textAlign='center'; ctx.fillStyle='#fff'; ctx.strokeStyle='#333'; ctx.lineWidth=6;
+  ctx.strokeText('🎉 Everyone got their parcel! 🎉',W/2,H*0.8); ctx.fillText('🎉 Everyone got their parcel! 🎉',W/2,H*0.8);
+  ctx.font='60px serif'; ctx.fillText('🚚',W/2,H*0.93);
+  if(now-G.finaleBurst>900){ G.finaleBurst=now; confettiBurst(Math.random()*W,H*0.3,50); }
+}
+
+/* ============ HUD ============ */
+function renderHud(){
+  const st=G.st; const nc=$('#nextIcon'), c=nc.getContext('2d'); c.clearRect(0,0,110,110);
+  $('#vanParcels').innerHTML=''; $('#routeMap').innerHTML='';
+  if(!st){ $('#nextLabel').textContent='–'; $('#score').textContent=G.total; $('#routeName').textContent=''; return; }
+  const stop=st.stops[st.stopIdx];
+  if(stop){ drawParcel(c,stop.parcel,55,55,96); $('#nextLabel').textContent=stop.parcel.label; }
+  else { c.font='70px serif'; c.textAlign='center'; c.textBaseline='middle'; c.fillText('🏁',55,55); $('#nextLabel').textContent='Finish line!'; }
+  st.parcels.forEach((p,i)=>{ const k=document.createElement('canvas'); const s=i===0?64:40; k.width=k.height=s; drawParcel(k.getContext('2d'),p,s/2,s/2,s*0.8); if(i===0) k.className='front'; $('#vanParcels').append(k);
+    if(i===0){ const r=document.createElement('span'); r.className='ready'; r.textContent='Ready ➡'; $('#vanParcels').append(r); } });
+  if(!st.parcels.length){ $('#vanParcels').textContent='Van is empty! 🎉'; }
+  const span=t=>{const s=document.createElement('span'); s.textContent=t; return s;};
+  const map=$('#routeMap'); map.append(span('🚚'));
+  st.stops.forEach((s,i)=>{ const d=document.createElement('span'); d.className='mapHouse'+(s.delivered?' done':'')+(i===st.stopIdx?' current':''); d.textContent='🏠';
+    const k=document.createElement('canvas'); k.width=k.height=24; drawParcel(k.getContext('2d'),s.parcel,12,12,21); d.append(k);
+    if(s.delivered){ const t=document.createElement('span'); t.className='tick'; t.textContent='✅'; d.append(t); }
+    map.append(d); { const a=span('➡'); a.className='arr'; map.append(a); } });
+  map.append(span('🏁'));
+  $('#score').textContent=`${st.score} (total ${G.total+st.score})`;
+  $('#routeName').textContent=`Route ${G.route+1} of ${ROUTES.length}: ${ROUTES[G.route].name}`;
+}
+
+/* ============ SCREENS ============ */
+function showScreen(html){ overlay.innerHTML=`<div class="card">${html}</div>`; overlay.classList.remove('hidden'); }
+function hideScreen(){ overlay.classList.add('hidden'); }
+function menuScreen(){
+  showScreen(`<h2>🚚 Parcel Pals Delivery Dash</h2>
+  <div class="how"><div><span>↔️</span>Lean left or right to steer</div><div><span>🙌</span>Left hand = switch parcel, right hand = deliver</div><div><span>📦</span>Match the parcel to the house</div></div>
+  <p>5 routes, 5 parcels each. Every route gets a little trickier!</p>
+  <p>Stand about 2 metres from the camera so your shoulders are in the picture.</p>
+  <div class="row"><button data-action="start-cam">📷 Play with camera</button><button class="secondary" data-action="start-kb">⌨️ Play with keyboard</button></div>
+  <p style="font-size:.85rem;color:#777">Keyboard: ← → steer, S = switch parcel, Space = deliver, P = pause. On a touch screen, hold the left or right side of the road.</p>`);
+}
+function setButtons(){ const playing=!!G.st&&G.screen!=='finale'; $('#startBtn').disabled=G.screen!=='menu'; $('#pauseBtn').disabled=!(G.screen==='playing'||G.screen==='paused'); $('#pauseBtn').innerHTML=G.screen==='paused'?'▶<span class="tx"> Resume</span>':'⏸<span class="tx"> Pause</span>'; $('#restartBtn').disabled=!(playing||G.screen==='finale'); }
+
+function beginRoute(i,newGame=false){
+  if(newGame) G.total=0;
+  G.route=i; G.st=Logic.newRouteState(i); G.particles=[]; G.screen='playing'; G.kb=0; hideScreen(); Music.play(i);
+  Cam.lastSeen=performance.now(); G.hudDirty=true; setButtons();
+  const r=ROUTES[i]; say(`${r.name}! ${r.hint} Drive to the ${r.stops[0].parcel.label} house.`,4000,true);
+}
+function resumePlay(){ G.screen='playing'; hideScreen(); Music.play(G.route); Cam.lastSeen=performance.now(); setButtons(); }
+function togglePause(){
+  if(G.screen==='playing'){ G.screen='paused'; Music.stop(); showScreen(`<h2>⏸ Paused</h2><div class="big">🚚💤</div><div class="row"><button data-action="resume">▶ Keep driving</button>${Cam.active?'<button class="secondary" data-action="calib">📐 Recalibrate</button>':''}<button class="secondary" data-action="replay">🔄 Restart route</button></div>`); }
+  else if(G.screen==='paused') resumePlay();
+  setButtons();
+}
+function routeDone(){
+  const st=G.st; G.screen='routeDone'; Music.stop(); jingle(); confettiBurst(W/2,H/3,160); G.hudDirty=true; setButtons();
+  const tries=st.stops.reduce((a,s)=>a+s.tries,0), stars=tries===0?'⭐⭐⭐':tries<=3?'⭐⭐':'⭐', last=G.route>=ROUTES.length-1;
+  G.total+=st.score; G.banked=true;
+  showScreen(`<h2>${ROUTES[G.route].name} done! 🎉</h2><div class="big">${stars}</div><p>All ${st.stops.length} parcels delivered!</p><p>Route score: <b>${st.score}</b> · Total: <b>${G.total}</b></p>
+   <div class="row">${last?'<button data-action="finale">🎈 See the party!</button>':'<button data-action="next">Next route ➡</button>'}<button class="secondary" data-action="replay">Play this route again</button></div>`);
+  speak(`Hooray! ${ROUTES[G.route].name} is done! Great driving!`);
+}
+function startFinale(){
+  G.st=null; G.screen='finale'; G.particles=[]; renderHud(); Music.play('finale'); $('#score').textContent=G.total; setButtons(); jingle();
+  showScreen(`<h2>🏘️ The whole neighbourhood is happy!</h2><div class="big">🎉🎈🎊</div><p>You finished all ${ROUTES.length} routes.</p><p>Final score: <b>${G.total}</b></p><div class="row"><button data-action="play-again">🔄 Play again</button></div>`);
+  speak('Hooray! The whole neighbourhood is happy! You delivered every parcel!');
+  setTimeout(hideScreen,4500);
+}
+function restartGame(){
+  if(G.screen==='finale'){ beginRoute(0,true); return; }
+  if(!G.st) return;
+  if(G.banked){ G.total-=G.st.score; G.banked=false; }
+  beginRoute(G.route);
+}
+
+/* ============ DELIVERY ============ */
+function deliverAction(now){
+  if(G.screen!=='playing'||!G.st) return;
+  const st=G.st, stop=st.stops[st.stopIdx], res=Logic.attemptDelivery(st,now);
+  if(res==='delivered'){ const R=road(); confettiBurst(R.left+st.vanX*R.w,VAN_Y()-60,110); jingle(); G.hudDirty=true;
+    const next=st.stops[st.stopIdx]; say(`Yay! ${stop.parcel.label} delivered! ${next?'Now drive to the '+next.parcel.label+' house.':'Drive to the finish line!'}`,3500,true); }
+  else if(res==='wrong'){ const wrong=st.parcels[0]; beep(220,0.25,'triangle'); G.hudDirty=true;
+    say(`Oops! That was the ${wrong.label}. This house wants the ${stop.parcel.label}. Raise your left hand to switch parcels!`,4000,true); }
+  else if(res==='notInZone') say('Steer into the yellow box first!',2000,true);
+  else if(res==='notAtHouse') say('No house yet. Keep driving!',1800);
+  else if(res==='duplicate') say('Already delivered!',1500);
+}
+
+function switchAction(){
+  if(G.screen!=='playing'||!G.st) return;
+  if(Logic.switchParcel(G.st)){ const f=G.st.parcels[0]; beep(520,0.1,'triangle'); G.hudDirty=true; say(`Switched! Now carrying the ${f.label}.`,1500,true); }
+}
+
+/* ============ CAMERA + POSE ============ */
+const Cam={video:$('#camVideo'),cv:$('#camCanvas'),active:false,lm:null,lastSeen:0,center:null,calib:null,handUp:false,leftUp:false,lastT:-1,steerTarget:0};
+Cam.cv.width=160; Cam.cv.height=120;
+const setCamStatus=t=>$('#camStatus').textContent=t;
+async function ensureCamera(){
+  if(Cam.active) return true;
+  setCamStatus('Loading pose model…');
+  try{
+    const base='https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.14';
+    let vision; try{ vision=await import(base+'/vision_bundle.mjs'); }catch(e){ vision=await import(base); }
+    const files=await vision.FilesetResolver.forVisionTasks(base+'/wasm');
+    const opts=d=>({baseOptions:{modelAssetPath:'https://storage.googleapis.com/mediapipe-models/pose_landmarker/pose_landmarker_lite/float16/1/pose_landmarker_lite.task',delegate:d},runningMode:'VIDEO',numPoses:1});
+    try{ Cam.lm=await vision.PoseLandmarker.createFromOptions(files,opts('GPU')); }catch(e){ Cam.lm=await vision.PoseLandmarker.createFromOptions(files,opts('CPU')); }
+    setCamStatus('Asking for camera…');
+    const stream=await navigator.mediaDevices.getUserMedia({video:{facingMode:'user',width:{ideal:640},height:{ideal:480}},audio:false});
+    Cam.video.srcObject=stream; await Cam.video.play();
+    Cam.active=true; setCamStatus('Camera on'); return true;
+  }catch(e){ console.warn(e); setCamStatus('No camera'); return false; }
+}
+function calibrate(){
+  return new Promise(resolve=>{
+    Cam.calib={samples:[]}; let n=3;
+    const tick=()=>{
+      if(n===0){ const s=Cam.calib.samples; Cam.calib=null;
+        if(s.length<10){ showScreen(`<h2>I can't see you! 👀</h2><p>Step back so your head and shoulders are inside the little camera picture, then try again.</p><div class="row"><button data-action="calib">Try again</button><button class="secondary" data-action="keyboard">Use keyboard instead</button></div>`); resolve(false); return; }
+        Cam.center=s.reduce((a,b)=>a+b,0)/s.length; Cam.lastSeen=performance.now(); resolve(true); return; }
+      showScreen(`<h2>Stand in the middle 🧍</h2><p>Arms down, hold still!</p><div class="big">${n}</div><p>Lean left and right to steer the van.</p>`);
+      n--; setTimeout(tick,1000);
+    };
+    tick();
+  });
+}
+function onNotSeen(){ Cam.handUp=false; Cam.leftUp=false; }
+function processPose(now){
+  if(!Cam.active||!Cam.lm||Cam.video.readyState<2) return;
+  if(Cam.video.currentTime===Cam.lastT) return; Cam.lastT=Cam.video.currentTime;
+  let res; try{ res=Cam.lm.detectForVideo(Cam.video,now); }catch(e){ return; }
+  const cc=Cam.cv.getContext('2d'); cc.clearRect(0,0,160,120);
+  const lm=res&&res.landmarks&&res.landmarks[0]; if(!lm){ onNotSeen(); return; }
+  const ls=lm[11],rs=lm[12],lw=lm[15],rw=lm[16],nose=lm[0], vis=p=>(p.visibility??1)>0.4;
+  if(!vis(ls)||!vis(rs)){ onNotSeen(); return; }
+  Cam.lastSeen=now;
+  if(G.screen==='lost'){ resumePlay(); say("Found you! Let's go! 🚚",2000,true); }
+  const mid=(ls.x+rs.x)/2;
+  const leftRaised=vis(lw)&&lw.y<ls.y-0.06, rightRaised=vis(rw)&&rw.y<rs.y-0.06; // person's own left = switch, right = deliver
+  // tiny skeleton preview
+  cc.strokeStyle='#fff'; cc.lineWidth=2; cc.beginPath(); cc.moveTo(ls.x*160,ls.y*120); cc.lineTo(rs.x*160,rs.y*120); cc.stroke();
+  [[nose,'#ffd60a'],[ls,'#fff'],[rs,'#fff'],[lw,leftRaised?'#2ecc71':'#4ea8de'],[rw,rightRaised?'#2ecc71':'#4ea8de']].forEach(([p,col])=>{ if(!vis(p)) return; cc.fillStyle=col; cc.beginPath(); cc.arc(p.x*160,p.y*120,5,0,Math.PI*2); cc.fill(); });
+  if(Cam.center!==null){ cc.strokeStyle='#ffd60a'; cc.beginPath(); cc.moveTo(Cam.center*160,0); cc.lineTo(Cam.center*160,120); cc.stroke(); }
+  if(Cam.calib){ Cam.calib.samples.push(mid); return; }
+  if(Cam.center!==null){ const dx=(Cam.center-mid)*($('#flipChk').checked?-1:1); Cam.steerTarget=Logic.steerFromLean(dx); }
+  if(rightRaised&&!Cam.handUp) deliverAction(now); // one action per raise; must lower hand before next
+  else if(leftRaised&&!Cam.leftUp) switchAction();
+  Cam.handUp=rightRaised; Cam.leftUp=leftRaised;
+}
+
+/* ============ UPDATE LOOP ============ */
+function update(dt,now){
+  const st=G.st;
+  const target=G.kb!==0?G.kb:(Cam.center!==null?Cam.steerTarget:0);
+  st.steer+=(target-st.steer)*Math.min(1,dt*8);
+  st.vanX=clamp(st.vanX+st.steer*0.5*dt,0.17,0.83);
+  const wasWaiting=st.waiting, r=Logic.advance(st,dt,now);
+  if(r==='waiting'&&!wasWaiting){ const stop=st.stops[st.stopIdx]; beep(660,0.15); say(`Here's a house! It wants the ${stop.parcel.label}. Switch to that parcel, steer into the yellow box, then deliver!`,4500,true); }
+  if(r==='finished'){ routeDone(); return; }
+  const o=Logic.checkObstacles(st,now); if(o){ say('Bump! Careful! 🙂',1500); beep(140,0.25,'square',0.12); }
+  if(st.waiting){ const stop=st.stops[st.stopIdx], inZ=Logic.vanInZone(st.vanX,stop.lane,st.tol);
+    if(inZ!==st.lastInZone){ if(inZ&&st.lastInZone!==null){ beep(880,0.12); say('Great! Now raise your right hand to deliver! 🙌',2500,true); } st.lastInZone=inZ; } }
+}
+function loop(now){
+  requestAnimationFrame(loop);
+  const dt=Math.min(0.05,G.last?(now-G.last)/1000:0); G.last=now;
+  processPose(now);
+  if(G.screen==='playing'&&Cam.active&&Cam.center!==null&&now-Cam.lastSeen>1500){
+    G.screen='lost'; Music.stop(); setButtons();
+    showScreen(`<h2>Where did you go? 👀</h2><div class="big">🚚⏸</div><p>Step back in front of the camera and the van will keep going.</p><div class="row"><button class="secondary" data-action="calib">📐 Recalibrate</button><button class="secondary" data-action="keyboard">⌨️ Use keyboard instead</button></div>`);
+  }
+  if(G.screen==='playing') update(dt,now);
+  else if(!G.st) idle.dist+=dt*35;
+  if(G.screen==='finale') drawFinale(now); else drawScene(now);
+  updateParticles(dt); drawParticles();
+  if(G.hudDirty){ renderHud(); G.hudDirty=false; }
+}
+
+/* ============ INPUT ============ */
+overlay.addEventListener('click',async e=>{
+  unlockAudio();
+  const a=e.target.closest('[data-action]'); if(!a) return; const act=a.dataset.action;
+  if(act==='start-cam'){ showScreen('<h2>Getting ready…</h2><div class="big">📷</div><p>Please allow the camera.</p>'); const ok=await ensureCamera();
+    if(ok){ if(await calibrate()) beginRoute(0,true); }
+    else showScreen(`<h2>No camera found 😕</h2><p>You can still play with the keyboard, or try the camera again.</p><div class="row"><button data-action="start-cam">Try camera again</button><button class="secondary" data-action="start-kb">⌨️ Keyboard</button></div>`); }
+  else if(act==='start-kb'){ Cam.center=null; beginRoute(0,true); }
+  else if(act==='calib'){ if(!Cam.active&&!(await ensureCamera())) return; if(await calibrate()){ G.st?resumePlay():beginRoute(0,true); } }
+  else if(act==='keyboard'){ Cam.center=null; G.st?resumePlay():beginRoute(0,true); }
+  else if(act==='resume') resumePlay();
+  else if(act==='next') beginRoute(G.route+1);
+  else if(act==='replay') restartGame();
+  else if(act==='finale') startFinale();
+  else if(act==='play-again') beginRoute(0,true);
+});
+$('#startBtn').onclick=()=>overlay.querySelector('[data-action="start-cam"]')?.click();
+$('#pauseBtn').onclick=togglePause;
+$('#musicChk').onchange=()=>{ if($('#musicChk').checked){ if(G.screen==='playing') Music.play(G.route); else if(G.screen==='finale') Music.play('finale'); } else Music.stop(); };
+$('#restartBtn').onclick=restartGame;
+$('#deliverBtn').onclick=()=>deliverAction(performance.now());
+$('#switchBtn').onclick=switchAction;
+addEventListener('keydown',e=>{
+  if(e.key==='ArrowLeft') G.kb=-1; if(e.key==='ArrowRight') G.kb=1;
+  if(e.key===' '||e.key==='ArrowUp'){ e.preventDefault(); deliverAction(performance.now()); }
+  if(e.key==='s'||e.key==='S'||e.key==='ArrowDown'){ e.preventDefault(); switchAction(); }
+  if(e.key==='p'||e.key==='P') togglePause();
+});
+addEventListener('keyup',e=>{ if((e.key==='ArrowLeft'&&G.kb===-1)||(e.key==='ArrowRight'&&G.kb===1)) G.kb=0; });
+cv.addEventListener('pointerdown',e=>{ G.kb=e.offsetX<W/2?-1:1; });
+['pointerup','pointercancel','pointerleave'].forEach(ev=>cv.addEventListener(ev,()=>G.kb=0));
+document.addEventListener('visibilitychange',()=>{ if(document.hidden&&G.screen==='playing') togglePause(); });
+
+/* ============ SELF-TESTS ============ */
+function runTests(){
+  const out=[]; const t=(name,ok)=>out.push((ok?'✅ ':'❌ ')+name);
+  let seed=7; const rng=()=>(seed=(seed*16807)%2147483647)/2147483647;
+  // steering
+  t('lean right steers right',Logic.steerFromLean(0.1)>0);
+  t('lean left steers left',Logic.steerFromLean(-0.1)<0);
+  t('small lean ignored (dead zone)',Logic.steerFromLean(0.01)===0);
+  t('big lean clamped to 1',Logic.steerFromLean(0.5)===1&&Logic.steerFromLean(-0.5)===-1);
+  // zone detection
+  t('van centred in lane 1 is in zone',Logic.vanInZone(laneFrac(1),1));
+  t('van slightly off-centre still in zone (forgiving)',Logic.vanInZone(laneFrac(1)+0.1,1));
+  t('van in lane 0 is not in lane 2 zone',!Logic.vanInZone(laneFrac(0),2));
+  // matching, duplicates, completion
+  const s=Logic.newRouteState(0,rng); const first=s.stops[0]; const n=s.stops.length; let now=10000;
+  const right=first.parcel, others=s.parcels.filter(p=>p.id!==right.id); s.parcels=[others[0],right,...others.slice(1)];
+  t('delivery refused when no house yet',Logic.attemptDelivery(s,now)==='notAtHouse');
+  s.waiting=true; s.vanX=laneFrac((first.lane+1)%3);
+  t('delivery refused outside the zone',Logic.attemptDelivery(s,now)==='notInZone');
+  s.vanX=laneFrac(first.lane);
+  const r1=Logic.attemptDelivery(s,now);
+  t('wrong parcel rejected and stays in front until switched',r1==='wrong'&&s.parcels.length===n&&s.parcels[0].id===others[0].id&&first.tries===1);
+  t('cooldown blocks a second action right away',Logic.attemptDelivery(s,now+200)==='cooldown');
+  t('switching moves the front parcel to the back',Logic.switchParcel(s)&&s.parcels[0].id===right.id&&s.parcels[n-1].id===others[0].id&&s.parcels.length===n);
+  now+=2000; const r2=Logic.attemptDelivery(s,now);
+  t('correct parcel delivered, removed from van, score added',r2==='delivered'&&first.delivered&&s.parcels.length===n-1&&s.score===10&&s.stopIdx===1);
+  now+=2000; s.stopIdx=0; s.waiting=true;
+  t('duplicate delivery to same house blocked',Logic.attemptDelivery(s,now)==='duplicate'&&s.score===10);
+  s.stopIdx=1;
+  for(let i=1;i<s.stops.length;i++){ const st=s.stops[i]; s.waiting=true; s.vanX=laneFrac(st.lane); now+=2000;
+    while(s.parcels[0].id!==st.parcel.id){ Logic.switchParcel(s); }
+    Logic.attemptDelivery(s,now); }
+  t('all stops delivered → route complete',Logic.isRouteComplete(s)&&s.parcels.length===0&&s.delivered.size===n);
+  let res='driving'; for(let i=0;i<2000&&res!=='finished';i++) res=Logic.advance(s,0.05,now);
+  t('van reaches finish line after last delivery',res==='finished');
+  // obstacles
+  const o=Logic.newRouteState(1,rng); const ob=o.obstacles[0]; o.dist=ob.d; o.vanX=laneFrac(ob.lane);
+  t('obstacle hit slows the van but is only counted once',Logic.checkObstacles(o,now)===ob&&Logic.checkObstacles(o,now)===null&&o.slowUntil>now);
+  const one={parcels:[right]}; t('switching with a single parcel does nothing',Logic.switchParcel(one)===false&&one.parcels[0]===right);
+  // restart
+  const r=Logic.newRouteState(0,rng);
+  t('restart gives a fresh route (no deliveries, 5 parcels, at start)',r.stopIdx===0&&r.parcels.length===5&&r.dist===0&&r.delivered.size===0&&r.score===0&&!r.waiting);
+  // stage structure
+  t('there are 5 stages',ROUTES.length===5);
+  t('every stage has 5 tasks with unique parcels',ROUTES.every(rt=>rt.stops.length===5&&new Set(rt.stops.map(x=>x.parcel.id)).size===5));
+  t('each stage is a bit harder (faster, more obstacles, tighter zone)',ROUTES.every((rt,i)=>i===0||(rt.speed>ROUTES[i-1].speed&&rt.gap<ROUTES[i-1].gap&&rt.tol<ROUTES[i-1].tol)));
+  t('stage 4 and 5 are different task types (combo + mixed)',ROUTES[3].hint!==ROUTES[4].hint&&ROUTES[3].name!==ROUTES[2].name);
+  t('obstacles never block all 3 lanes at once (every stage)',ROUTES.every((_,k)=>{ const st=Logic.newRouteState(k,rng), by={}; st.obstacles.forEach(x=>{(by[x.d]=by[x.d]||new Set()).add(x.lane);}); return Object.values(by).every(z=>z.size<3); }));
+  t('every stage has a music theme',ROUTES.every((_,k)=>!!Music.themes[k])&&!!Music.themes.finale);
+  const txt=out.join('\n')+`\n\n${out.filter(l=>l.startsWith('✅')).length}/${out.length} passed`;
+  $('#testOut').textContent=txt; console.log(txt);
+}
+$('#testBtn').onclick=runTests;
+
+/* ============ GO ============ */
+menuScreen(); renderHud(); setButtons(); requestAnimationFrame(loop);
+</script>
+</body>
+</html>
