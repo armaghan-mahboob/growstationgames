@@ -1,0 +1,884 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no">
+<title>Firefly Night Navigator</title>
+<style>
+:root{--bg:#0b1030;--ink:#fff6d6;--glow:#ffe66d;--accent:#7ef0c8}
+*{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+html,body{margin:0;height:100%;background:var(--bg);color:var(--ink);font-family:"Trebuchet MS",Verdana,sans-serif;overflow:hidden;touch-action:none;user-select:none}
+#app{position:fixed;inset:0}
+#game{position:absolute;inset:0;width:100%;height:100%;display:block}
+#cam{position:fixed;right:14px;bottom:14px;width:min(22vw,220px);aspect-ratio:4/3;height:auto;object-fit:cover;transform:scaleX(-1);opacity:0;display:none;pointer-events:none;z-index:4;border:3px solid rgba(126,240,200,.85);border-radius:16px;box-shadow:0 0 22px rgba(126,240,200,.25);background:#000}
+#cam.camera-visible{display:block;opacity:.9}
+#cam-overlay{position:fixed;right:14px;bottom:14px;width:min(22vw,220px);aspect-ratio:4/3;height:auto;display:none;pointer-events:none;z-index:5;transform:scaleX(-1)}
+#cam-overlay.camera-visible{display:block}
+@media(max-width:600px){#cam.camera-visible{width:112px;right:8px;bottom:8px;border-width:2px;border-radius:10px}#cam-overlay.camera-visible{width:112px;right:8px;bottom:8px}}
+#hud{position:absolute;left:0;right:0;top:0;display:flex;flex-direction:column;gap:6px;padding:8px 10px;pointer-events:none;z-index:5;visibility:hidden}
+.row{display:flex;align-items:center;justify-content:space-between;gap:8px;flex-wrap:wrap}
+.row.center{justify-content:center}
+.group{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+.chip{pointer-events:auto;background:rgba(10,14,48,.75);border:2px solid rgba(255,230,109,.35);border-radius:999px;padding:8px 14px;font-size:clamp(15px,2.4vw,20px);display:flex;align-items:center;gap:8px;white-space:nowrap}
+.chip.big{font-size:clamp(18px,3vw,24px);padding:10px 18px;border-color:rgba(126,240,200,.6)}
+.dots{display:flex;gap:7px}
+.dot{width:14px;height:14px;border-radius:50%;background:rgba(255,255,255,.2);border:2px solid rgba(255,255,255,.35)}
+.dot.active{background:var(--accent);border-color:#fff}
+.dot.done{background:var(--glow);border-color:var(--glow)}
+.icon{pointer-events:auto;width:56px;height:56px;border-radius:50%;border:2px solid rgba(255,230,109,.4);background:rgba(10,14,48,.8);color:#fff;font-size:24px;cursor:pointer}
+.icon.off{opacity:.45}
+.cdot{width:18px;height:18px;border-radius:50%;border:2px solid #fff;display:inline-block}
+.seq{display:flex;gap:10px;justify-content:center;align-items:center;flex-wrap:wrap}
+.seqdot{width:30px;height:30px;border-radius:50%;border:3px solid rgba(255,255,255,.35);display:inline-flex;align-items:center;justify-content:center;font-size:16px;color:#1a1a2e;transition:transform .3s,opacity .3s}
+.seqdot.current{transform:scale(1.3);border-color:#fff;box-shadow:0 0 14px rgba(255,255,255,.75)}
+.seqdot.done{opacity:.45}
+.overlay{position:absolute;inset:0;display:none;align-items:center;justify-content:center;padding:14px;background:rgba(5,8,30,.6);z-index:10;overflow:auto}
+.overlay.show{display:flex}
+.card{background:rgba(14,20,60,.94);border:3px solid rgba(255,230,109,.35);border-radius:28px;padding:26px 22px;max-width:560px;width:100%;text-align:center;box-shadow:0 0 60px rgba(255,230,109,.15)}
+.card h1{margin:0 0 6px;font-size:clamp(28px,6vw,44px);color:var(--glow)}
+.card h2{margin:0 0 8px;font-size:clamp(22px,5vw,32px);color:var(--glow)}
+.card p{font-size:clamp(16px,3vw,20px);line-height:1.45;margin:8px 0}
+.card .small{font-size:14px;opacity:.75}
+.btn{display:inline-flex;align-items:center;justify-content:center;gap:10px;min-height:64px;min-width:160px;padding:12px 26px;margin:8px 5px;border:none;border-radius:999px;font-size:clamp(18px,3.5vw,24px);font-weight:700;color:#1a1a2e;background:var(--glow);cursor:pointer;box-shadow:0 6px 0 #b89c2a}
+.btn:active{transform:translateY(3px);box-shadow:0 3px 0 #b89c2a}
+.btn.secondary{background:var(--accent);box-shadow:0 6px 0 #3f9f85}
+.btn.ghost{background:transparent;color:var(--ink);border:2px solid rgba(255,255,255,.4);box-shadow:none}
+.link{background:none;border:none;color:var(--accent);text-decoration:underline;cursor:pointer;font-size:14px;margin-top:10px}
+.preview{width:min(320px,80vw);aspect-ratio:4/3;border-radius:18px;background:#000;overflow:hidden;margin:10px auto;border:3px solid rgba(126,240,200,.5)}
+.preview canvas{width:100%;height:100%;display:block}
+.bar{height:16px;border-radius:999px;background:rgba(255,255,255,.15);overflow:hidden;margin:12px auto;max-width:360px}
+.bar>div{height:100%;width:0;background:var(--accent);transition:width .2s linear}
+.spinner{width:46px;height:46px;border-radius:50%;border:5px solid rgba(255,255,255,.2);border-top-color:var(--glow);animation:spin 1.2s linear infinite;margin:10px auto}
+@keyframes spin{to{transform:rotate(360deg)}}
+.err{color:#ffb3b3}
+#toast{position:absolute;left:50%;bottom:22px;transform:translateX(-50%);display:none;align-items:center;gap:12px;background:rgba(14,20,60,.94);border:2px solid rgba(255,230,109,.4);border-radius:20px;padding:12px 18px;font-size:clamp(16px,3vw,20px);z-index:8;max-width:92vw}
+#toast.show{display:flex}
+#toast .btn{min-height:48px;min-width:0;font-size:16px;margin:0;display:none}
+#tests ul{text-align:left;list-style:none;padding:0;font-size:16px;max-height:55vh;overflow:auto}
+#tests li.pass::before{content:"✅ "}#tests li.fail::before{content:"❌ "}
+</style>
+</head>
+<body>
+<div id="app">
+  <video id="cam" autoplay muted playsinline></video>
+  <canvas id="cam-overlay" aria-hidden="true"></canvas>
+  <canvas id="game"></canvas>
+
+  <div id="hud">
+    <div class="row">
+      <div class="group">
+        <div class="chip"><span class="dots" id="stage-dots"><span class="dot"></span><span class="dot"></span><span class="dot"></span><span class="dot"></span><span class="dot"></span></span></div>
+        <div class="chip" id="progress">0 / 0</div>
+      </div>
+      <div class="group">
+        <div class="chip" id="score">⭐ 0</div>
+        <button class="icon" id="btn-sound" title="Sound">🔊</button>
+        <button class="icon" id="btn-speech" title="Voice">🗣️</button>
+        <button class="icon" id="btn-pause" title="Pause">⏸</button>
+      </div>
+    </div>
+    <div class="row center">
+      <div class="chip big" id="next-chip"><span>Find:</span><span id="next-icon"></span><span id="next-text"></span></div>
+      <div class="chip" id="seq-chip" style="display:none"><div class="seq" id="seq-hud"></div></div>
+    </div>
+  </div>
+
+  <div id="toast"><span id="toast-text"></span><button class="btn secondary" id="btn-touch-fallback">Use touch instead</button></div>
+
+  <div class="overlay show" id="ov-start"><div class="card">
+    <h1>✨ Firefly Night Navigator</h1>
+    <p>Guide the little firefly through the magic garden with your finger!</p>
+    <button class="btn" id="btn-camera">📷 Use my camera</button>
+    <button class="btn secondary" id="btn-touch">👆 Play with touch</button>
+    <p class="small">For grown-ups: the camera picture stays on this device and is never sent anywhere. If the camera is blocked, touch mode works on any screen.</p>
+    <button class="link" id="btn-tests">Run self-tests</button>
+  </div></div>
+
+  <div class="overlay" id="ov-setup"><div class="card">
+    <h2>Getting ready…</h2>
+    <div class="spinner" id="setup-spin"></div>
+    <p id="setup-status">Looking for your camera…</p>
+    <div id="setup-actions" style="display:none">
+      <button class="btn" id="btn-retry">Try again</button>
+      <button class="btn secondary" id="btn-touch2">👆 Play with touch</button>
+    </div>
+  </div></div>
+
+  <div class="overlay" id="ov-calib"><div class="card">
+    <h2 id="calib-title">Let me see your finger!</h2>
+    <p id="calib-text">Hold up one finger and move it around in a big circle.</p>
+    <div class="preview"><canvas id="preview" width="320" height="240"></canvas></div>
+    <div class="bar"><div id="calib-bar"></div></div>
+    <button class="btn ghost" id="btn-skip-calib">Skip</button>
+  </div></div>
+
+  <div class="overlay" id="ov-intro"><div class="card">
+    <p id="intro-stage">Stage 1</p>
+    <h2 id="intro-title"></h2>
+    <p id="intro-hint"></p>
+    <div class="seq" id="intro-seq"></div>
+    <button class="btn" id="btn-go">Go! ✨</button>
+  </div></div>
+
+  <div class="overlay" id="ov-pause"><div class="card">
+    <h2>Paused</h2>
+    <button class="btn" id="btn-resume">▶ Keep playing</button><br>
+    <button class="btn ghost" id="btn-restart-stage">Restart stage</button>
+    <button class="btn ghost" id="btn-restart-game">Restart game</button><br>
+    <button class="btn ghost" id="btn-change">Change controls</button>
+  </div></div>
+
+  <div class="overlay" id="ov-done"><div class="card">
+    <h1>🎉 Hooray!</h1>
+    <p>You guided the firefly all the way to the glowing tree!</p>
+    <p style="font-size:30px">⭐ <span id="final-score">0</span> points</p>
+    <button class="btn" id="btn-again">Play again</button>
+    <button class="btn ghost" id="btn-home">Change controls</button>
+  </div></div>
+
+  <div class="overlay" id="ov-tests"><div class="card" id="tests">
+    <h2>Self-tests</h2>
+    <p id="tests-summary"></p>
+    <ul id="tests-list"></ul>
+    <button class="btn ghost" id="btn-tests-close">Close</button>
+  </div></div>
+</div>
+
+<script>
+(() => {
+'use strict';
+// ---------- helpers ----------
+const $ = s => document.querySelector(s);
+const TAU = Math.PI * 2;
+const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
+const lerp = (a, b, t) => a + (b - a) * t;
+const dist = (ax, ay, bx, by) => Math.hypot(ax - bx, ay - by);
+const shuffle = a => { for (let i = a.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [a[i], a[j]] = [a[j], a[i]]; } return a; };
+const hexA = (hex, a) => `rgba(${parseInt(hex.slice(1,3),16)},${parseInt(hex.slice(3,5),16)},${parseInt(hex.slice(5,7),16)},${a})`;
+const COLORS = { red:'#ff6b6b', yellow:'#ffe66d', blue:'#6bb8ff', green:'#7ef0a0', purple:'#c98bff' };
+const ICONS = { firefly:'✨', flower:'🌸', lantern:'🏮', tree:'🌳' };
+
+const canvas = $('#game'), ctx = canvas.getContext('2d');
+const video = $('#cam');
+const handOverlay = $('#cam-overlay');
+const handCtx = handOverlay.getContext('2d');
+const HAND_CONNECTIONS = [[0,1],[1,2],[2,3],[3,4],[0,5],[5,6],[6,7],[7,8],[5,9],[9,10],[10,11],[11,12],[9,13],[13,14],[14,15],[15,16],[13,17],[17,18],[18,19],[19,20],[0,17]];
+let detectedHandLandmarks = null;
+const HUD = $('#hud');
+const preview = $('#preview'), pctx = preview.getContext('2d');
+
+// ---------- state ----------
+const G = {
+  phase:'start', mode:null, score:0, scoreAtStageStart:0, stageIndex:0, stage:null,
+  W:0, H:0, play:{x:0,y:0,w:0,h:0},
+  cursor:{x:0,y:0}, fly:{x:0,y:0,r:22}, trail:[], particles:[],
+  inputAt:-1e9, pointer:null, keys:{}, sm:null, lastHand:null, lastMotion:null,
+  tracking:{lastSeen:-1e9, lost:false},
+  calib:{ hand:{minX:.15,maxX:.85,minY:.15,maxY:.8}, pose:{cx:.5,cy:.5} },
+  calibData:null, sound:true, speech:true, t:0, lastSpawn:0, ambient:[], stars:[],
+};
+
+// ---------- pure game logic (covered by self-tests) ----------
+function mapFingertip(nx, ny, calib, play) {          // nx,ny: normalized camera coords, x is mirrored
+  const mx = 1 - nx;
+  const u = clamp((mx - calib.minX) / (calib.maxX - calib.minX), 0, 1);
+  const v = clamp((ny - calib.minY) / (calib.maxY - calib.minY), 0, 1);
+  return { x: play.x + u * play.w, y: play.y + v * play.h };
+}
+function mapPose(nx, ny, calib, play) {
+  const mx = 1 - nx;
+  const u = clamp((mx - (calib.cx - 0.18)) / 0.36, 0, 1);
+  const v = clamp((ny - (calib.cy - 0.12)) / 0.24, 0, 1);
+  return { x: play.x + u * play.w, y: play.y + v * play.h };
+}
+function hitTest(fly, t) { return dist(fly.x, fly.y, t.x, t.y) <= fly.r + t.r; }
+function collectTarget(t, pts = 10) { if (t.collected) return 0; t.collected = true; t.collectedAt = performance.now(); return pts; }
+function validateSequence(stage, color) {
+  if (stage.seqIndex >= stage.sequence.length) return 'done';
+  return stage.sequence[stage.seqIndex] === color ? 'correct' : 'wrong';
+}
+function isStageComplete(s) {
+  if (s.type === 'fireflies') return s.targets.every(t => t.collected);
+  if (s.type === 'flowers') return s.seqIndex >= s.sequence.length;
+  if (s.type === 'tree') return !!s.arrived;
+  if (s.type === 'moonstones') return s.targets.every(t => t.collected);
+  if (s.type === 'constellation') return s.seqIndex >= s.sequence.length;
+  return false;
+}
+
+// ---------- stages ----------
+function buildStage1() {
+  const mk = (x, y, motion) => ({ type:'firefly', rel:{x,y}, r:28, collected:false, phase:Math.random()*TAU, motion });
+  return { type:'fireflies', title:'Catch the Fireflies', hint:'Touch every little firefly! There are 10 to find.', speak:'Catch all ten fireflies!',
+    targets:[
+      mk(.12,.24,{kind:'bob'}),mk(.34,.18,{kind:'bob'}),mk(.62,.22,{kind:'bob'}),mk(.86,.28,{kind:'bob'}),
+      mk(.20,.54,{kind:'bob'}),mk(.46,.44,{kind:'line',speed:.35,a:{x:.32,y:.43},b:{x:.66,y:.50}}),
+      mk(.78,.58,{kind:'bob'}),mk(.30,.78,{kind:'bob'}),mk(.60,.74,{kind:'ellipse',speed:.4,rx:.08,ry:.06}),
+      mk(.88,.80,{kind:'bob'})
+    ] };
+}
+function buildStage2() {
+  const cols = ['red','yellow','blue','green','purple'];
+  const pos = shuffle([[.12,.62],[.31,.44],[.50,.66],[.69,.44],[.88,.62]]);
+  const targets = cols.map((c,i)=>({type:'flower',color:c,rel:{x:pos[i][0],y:pos[i][1]},r:32,collected:false,phase:i*1.3,motion:{kind:'sway'},lastWrong:-1e9}));
+  const sequence = shuffle(cols.slice());
+  return {type:'flowers',title:'Flower Colors',hint:'Find all 5 flowers in the glowing color order:',speak:'Find the flowers in the color order!',targets,sequence,seqIndex:0};
+}
+function buildStage3() {
+  return {type:'tree',title:'The Glowing Tree',hint:'Light all four lanterns, then stay by the tree until it glows!',speak:'Light four lanterns, then fly to the glowing tree!',
+    targets:[
+      {type:'lantern',rel:{x:.12,y:.60},r:29,collected:false,phase:0,motion:{kind:'bob'}},
+      {type:'lantern',rel:{x:.32,y:.34},r:29,collected:false,phase:2,motion:{kind:'line',speed:.4,a:{x:.26,y:.32},b:{x:.38,y:.38}}},
+      {type:'lantern',rel:{x:.54,y:.64},r:29,collected:false,phase:4,motion:{kind:'bob'}},
+      {type:'lantern',rel:{x:.70,y:.28},r:29,collected:false,phase:1,motion:{kind:'sway'}},
+      {type:'tree',rel:{x:.87,y:.55},r:62,collected:false,phase:0,motion:{kind:'none'}}
+    ],arrived:false,dwell:0,lanternsLit:false,treeHintAt:-1e9};
+}
+function buildStage4() {
+  const positions = shuffle([[.12,.30],[.30,.56],[.48,.26],[.65,.62],[.84,.30],[.82,.78],[.38,.82]]);
+  return {type:'moonstones',title:'Moonstone Search',hint:'Find all 7 glowing moonstones. Some drift around, so keep moving!',speak:'Find all seven moonstones!',
+    targets:positions.map((p,i)=>({type:'moonstone',rel:{x:p[0],y:p[1]},r:27,collected:false,phase:i*1.1,motion:i%2?{kind:'ellipse',speed:.38+i*.025,rx:.045,ry:.04}:{kind:'bob'}}))};
+}
+function buildStage5() {
+  const cols=['red','yellow','blue','green','purple'];
+  const pos=shuffle([[.12,.30],[.30,.56],[.48,.26],[.65,.62],[.84,.30]]);
+  const targets=cols.map((c,i)=>({type:'star',color:c,order:i,rel:{x:pos[i][0],y:pos[i][1]},r:30,collected:false,phase:i*1.4,motion:{kind:'ellipse',speed:.32+i*.045,rx:.025+i*.004,ry:.025},lastWrong:-1e9}));
+  const sequence=shuffle(cols.slice());
+  return {type:'constellation',title:'Rainbow Constellation',hint:'A little harder! Follow the 5-color star sequence in the right order.',speak:'Follow the rainbow star sequence!',targets,sequence,seqIndex:0};
+}
+const BUILDERS = [buildStage1,buildStage2,buildStage3,buildStage4,buildStage5];
+
+function layoutStage(s) {
+  const p = G.play;
+  for (const t of s.targets) {
+    t.base = { x: p.x + t.rel.x * p.w, y: p.y + t.rel.y * p.h };
+    const m = t.motion;
+    if (m.kind === 'line') { m.A = { x: p.x + m.a.x * p.w, y: p.y + m.a.y * p.h }; m.B = { x: p.x + m.b.x * p.w, y: p.y + m.b.y * p.h }; }
+    if (m.kind === 'ellipse') { m.RX = m.rx * p.w; m.RY = m.ry * p.h; }
+    t.pos = targetPos(t, G.t);
+  }
+}
+function targetPos(t, time) {
+  const b = t.base, m = t.motion; let p;
+  switch (m.kind) {
+    case 'bob': p = { x: b.x, y: b.y + Math.sin(time * 1.2 + t.phase) * 8 }; break;
+    case 'sway': p = { x: b.x + Math.sin(time * 0.9 + t.phase) * 6, y: b.y }; break;
+    case 'line': { const s = (Math.sin(time * m.speed + t.phase) + 1) / 2; p = { x: lerp(m.A.x, m.B.x, s), y: lerp(m.A.y, m.B.y, s) }; break; }
+    case 'ellipse': p = { x: b.x + Math.cos(time * m.speed + t.phase) * m.RX, y: b.y + Math.sin(time * m.speed + t.phase) * m.RY }; break;
+    default: p = { x: b.x, y: b.y };
+  }
+  // Keep targets out of the camera preview's covered rectangle on both desktop and mobile.
+  if (video.classList.contains('camera-visible')) {
+    const r = video.getBoundingClientRect(), margin = Math.max( t.r + 12, 24 );
+    if (p.x + t.r > r.left && p.y + t.r > r.top && p.x - t.r < r.right && p.y - t.r < r.bottom) {
+      const leftX = r.left - margin, upperY = r.top - margin;
+      if (leftX >= G.play.x + t.r) p.x = Math.min(p.x, leftX);
+      else p.y = Math.min(p.y, upperY);
+    }
+  }
+  return p;
+}
+function updateTargets() { if (G.stage) for (const t of G.stage.targets) t.pos = targetPos(t, G.t); }
+function nextTarget() {
+  const s = G.stage; if (!s) return null;
+  if (s.type === 'flowers' || s.type === 'constellation') return s.targets.find(t => t.color === s.sequence[s.seqIndex] && !t.collected) || null;
+  const pool = s.type === 'tree' && s.lanternsLit ? s.targets.filter(t => t.type === 'tree') : s.targets.filter(t => !t.collected && t.type !== 'tree');
+  let best = null, bd = Infinity;
+  for (const t of pool) { const d = dist(G.fly.x, G.fly.y, t.pos.x, t.pos.y); if (d < bd) { bd = d; best = t; } }
+  return best;
+}
+
+// ---------- layout ----------
+function resize() {
+  const dpr = Math.min(2, window.devicePixelRatio || 1);
+  G.W = window.innerWidth; G.H = window.innerHeight;
+  canvas.width = Math.round(G.W * dpr); canvas.height = Math.round(G.H * dpr);
+  canvas.style.width = G.W + 'px'; canvas.style.height = G.H + 'px';
+  ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+  const hb = HUD.style.visibility === 'visible' ? HUD.getBoundingClientRect().bottom : 0;
+  const pad = Math.max(26, Math.min(G.W, G.H) * 0.05);
+  const top = Math.max(hb + 10, pad);
+  G.play = { x: pad, y: top, w: Math.max(100, G.W - 2 * pad), h: Math.max(120, G.H - top - pad) };
+  if (G.stage) layoutStage(G.stage);
+  clampToPlay(G.cursor); clampToPlay(G.fly);
+  if (!G.stars.length) for (let i = 0; i < 90; i++) G.stars.push({ x: Math.random(), y: Math.random() * 0.75, r: 0.6 + Math.random() * 1.6, tw: 0.4 + Math.random() * 0.8, ph: Math.random() * TAU });
+}
+function clampToPlay(p) { const r = G.play; p.x = clamp(p.x, r.x, r.x + r.w); p.y = clamp(p.y, r.y, r.y + r.h); }
+function setHudVisible(v) { HUD.style.visibility = v ? 'visible' : 'hidden'; resize(); }
+
+// ---------- audio & speech ----------
+let AC = null;
+function audio() { if (!AC) AC = new (window.AudioContext || window.webkitAudioContext)(); if (AC.state === 'suspended') AC.resume(); return AC; }
+function tone(freq, t0, dur, type = 'sine', gain = 0.16) {
+  if (!G.sound) return;
+  try {
+    const ac = audio(), o = ac.createOscillator(), g = ac.createGain(), st = ac.currentTime + t0;
+    o.type = type; o.frequency.value = freq;
+    g.gain.setValueAtTime(0.0001, st); g.gain.exponentialRampToValueAtTime(gain, st + 0.03); g.gain.exponentialRampToValueAtTime(0.0001, st + dur);
+    o.connect(g).connect(ac.destination); o.start(st); o.stop(st + dur + 0.05);
+  } catch (e) {}
+}
+const SFX = {
+  collect() { tone(880, 0, 0.25); tone(1320, 0.09, 0.3); },
+  wrong() { tone(330, 0, 0.2, 'triangle', 0.1); tone(280, 0.12, 0.2, 'triangle', 0.08); },
+  stage() { [523, 659, 784, 1047].forEach((f, i) => tone(f, i * 0.13, 0.45)); },
+  win() { [523, 659, 784, 1047, 784, 1047, 1319].forEach((f, i) => tone(f, i * 0.16, 0.55, 'sine', 0.14)); },
+  tap() { tone(660, 0, 0.12, 'sine', 0.08); },
+};
+let musicTimer = null, musicStep = 0;
+const MUSIC_NOTES = [[523,659,784,659,587,698,880,698],[392,494,587,494,440,587,659,587],[349,440,523,440,392,494,587,494],[440,554,659,554,494,622,740,622],[523,659,784,988,784,659,587,698]];
+function startStageMusic() {
+  stopStageMusic(); if(!G.sound) return;
+  const notes=MUSIC_NOTES[G.stageIndex]||MUSIC_NOTES[0]; musicStep=0;
+  musicTimer=setInterval(()=>{if(G.phase!=='play'||!G.sound)return; const f=notes[musicStep++%notes.length];tone(f,0,.42,'sine',.025);if(musicStep%4===0)tone(f/2,0,.55,'sine',.012);},520);
+}
+function stopStageMusic(){if(musicTimer){clearInterval(musicTimer);musicTimer=null;}}
+function say(text) {
+  if (!G.speech || !('speechSynthesis' in window)) return;
+  try { speechSynthesis.cancel(); const u = new SpeechSynthesisUtterance(text); u.rate = 0.9; u.pitch = 1.1; u.lang = 'en-US'; speechSynthesis.speak(u); } catch (e) {}
+}
+
+// ---------- vision (MediaPipe) ----------
+const VISION_URL = 'https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.14';
+const HAND_MODEL = 'https://storage.googleapis.com/mediapipe-models/hand_landmarker/hand_landmarker/float16/1/hand_landmarker.task';
+const POSE_MODEL = 'https://storage.googleapis.com/mediapipe-models/pose_landmarker/pose_landmarker_lite/float16/1/pose_landmarker_lite.task';
+let vision = null, handLM = null, poseLM = null, lastVideoTime = -1;
+async function getVision() { if (vision) return vision; const m = await import(VISION_URL); const fs = await m.FilesetResolver.forVisionTasks(VISION_URL + '/wasm'); vision = { m, fs }; return vision; }
+const withTimeout = (p, ms) => Promise.race([p, new Promise((_, rej) => setTimeout(() => rej(new Error('timeout')), ms))]);
+async function createLM(kind) {
+  const v = await getVision();
+  const cls = kind === 'hand' ? v.m.HandLandmarker : v.m.PoseLandmarker;
+  const model = kind === 'hand' ? HAND_MODEL : POSE_MODEL;
+  const extra = kind === 'hand' ? { numHands: 1 } : { numPoses: 1 };
+  for (const delegate of ['GPU', 'CPU']) {
+    try { return await cls.createFromOptions(v.fs, { baseOptions: { modelAssetPath: model, delegate }, runningMode: 'VIDEO', ...extra }); }
+    catch (e) { console.warn(kind, delegate, 'failed', e); }
+  }
+  throw new Error(kind + ' landmarker unavailable');
+}
+function freshFrame() { if (video.readyState < 2) return false; if (video.currentTime === lastVideoTime) return false; lastVideoTime = video.currentTime; return true; }
+function readHand() {
+  if (!handLM) return null;
+  if (!freshFrame()) return G.lastHand;
+  const res = handLM.detectForVideo(video, performance.now());
+  detectedHandLandmarks = (res.landmarks && res.landmarks.length) ? res.landmarks[0] : null;
+  G.lastHand = detectedHandLandmarks ? { x: detectedHandLandmarks[8].x, y: detectedHandLandmarks[8].y } : null;
+  return G.lastHand;
+}
+function readPose() {
+  if (!poseLM) return null;
+  if (!freshFrame()) return G.lastHand;
+  const res = poseLM.detectForVideo(video, performance.now());
+  G.lastHand = (res.landmarks && res.landmarks.length) ? { x: res.landmarks[0][0].x, y: res.landmarks[0][0].y } : null;
+  return G.lastHand;
+}
+// motion-centroid "lean" fallback (no model needed)
+const MW = 48, MH = 36, mcan = document.createElement('canvas'); mcan.width = MW; mcan.height = MH;
+const mctx = mcan.getContext('2d', { willReadFrequently: true });
+let prevGray = null; const act = new Float32Array(MW * MH);
+function readMotion() {
+  if (!freshFrame()) return G.lastMotion;
+  mctx.drawImage(video, 0, 0, MW, MH);
+  const d = mctx.getImageData(0, 0, MW, MH).data, gray = new Float32Array(MW * MH);
+  for (let i = 0; i < gray.length; i++) gray[i] = (d[i*4] + d[i*4+1] + d[i*4+2]) / 3;
+  if (!prevGray) { prevGray = gray; return null; }
+  let sum = 0, sx = 0, sy = 0;
+  for (let i = 0; i < gray.length; i++) {
+    act[i] = act[i] * 0.85 + (Math.abs(gray[i] - prevGray[i]) > 22 ? 1 : 0);
+    if (act[i] > 0.05) { sum += act[i]; sx += act[i] * (i % MW); sy += act[i] * Math.floor(i / MW); }
+  }
+  prevGray = gray;
+  G.lastMotion = sum < 4 ? { active: false } : { active: true, x: 1 - (sx / sum) / MW, y: (sy / sum) / MH };
+  return G.lastMotion;
+}
+
+function drawHandOverlay() {
+  if (!handOverlay.classList.contains('camera-visible')) return;
+  const rect = video.getBoundingClientRect();
+  const dpr = Math.min(2, window.devicePixelRatio || 1);
+  const w = Math.max(1, Math.round(rect.width * dpr)), h = Math.max(1, Math.round(rect.height * dpr));
+  if (handOverlay.width !== w || handOverlay.height !== h) { handOverlay.width = w; handOverlay.height = h; }
+  handCtx.clearRect(0, 0, w, h);
+  if (!detectedHandLandmarks || G.mode !== 'hand') return;
+  handCtx.save(); handCtx.scale(dpr, dpr); handCtx.lineCap = 'round'; handCtx.lineJoin = 'round';
+  handCtx.strokeStyle = '#7ef0c8'; handCtx.lineWidth = 3;
+  for (const [a,b] of HAND_CONNECTIONS) {
+    const p = detectedHandLandmarks[a], q = detectedHandLandmarks[b];
+    handCtx.beginPath(); handCtx.moveTo(p.x * rect.width, p.y * rect.height); handCtx.lineTo(q.x * rect.width, q.y * rect.height); handCtx.stroke();
+  }
+  for (let i=0;i<detectedHandLandmarks.length;i++) {
+    const p = detectedHandLandmarks[i]; handCtx.beginPath(); handCtx.arc(p.x * rect.width, p.y * rect.height, i===8 ? 5 : 3, 0, Math.PI*2);
+    handCtx.fillStyle = i===8 ? '#ffe66d' : '#ffffff'; handCtx.fill();
+    handCtx.strokeStyle = '#17233f'; handCtx.lineWidth = 1.5; handCtx.stroke();
+  }
+  handCtx.restore();
+}
+
+// ---------- camera ----------
+async function startCamera() {
+  const s = video.srcObject;
+  if (s && s.getVideoTracks().some(t => t.readyState === 'live')) return;
+  if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) { const e = new Error('unsupported'); e.name = 'Unsupported'; throw e; }
+  const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'user', width: { ideal: 640 }, height: { ideal: 480 } }, audio: false });
+  video.srcObject = stream; video.classList.add('camera-visible'); handOverlay.classList.add('camera-visible');
+  stream.getVideoTracks()[0].addEventListener('ended', onCameraEnded);
+  await video.play();
+}
+function stopCamera() { const s = video.srcObject; if (s) { s.getTracks().forEach(t => t.stop()); video.srcObject = null; } video.classList.remove('camera-visible'); handOverlay.classList.remove('camera-visible'); detectedHandLandmarks = null; handCtx.clearRect(0,0,handOverlay.width,handOverlay.height); lastVideoTime = -1; prevGray = null; }
+function onCameraEnded() {
+  if (G.mode === 'touch') return;
+  if (G.phase === 'play' || G.phase === 'calib' || G.phase === 'intro') { setStatus('The camera stopped. Plug it back in and try again, or play with touch.', true); showOverlay('#ov-setup'); G.phase = 'setup'; setHudVisible(false); }
+}
+function setStatus(msg, isError) {
+  const el = $('#setup-status'); el.textContent = msg; el.className = isError ? 'err' : '';
+  $('#setup-actions').style.display = isError ? 'block' : 'none';
+  $('#setup-spin').style.display = isError ? 'none' : 'block';
+}
+function cameraErrorMessage(e) {
+  switch (e && e.name) {
+    case 'NotAllowedError': case 'PermissionDeniedError': case 'SecurityError': return 'The camera is blocked. Tap the camera icon in the address bar to allow it, then try again.';
+    case 'NotFoundError': case 'DevicesNotFoundError': return 'I could not find a camera on this device.';
+    case 'NotReadableError': case 'TrackStartError': return 'Another app is using the camera. Close it and try again.';
+    case 'Unsupported': return 'This browser cannot use the camera here. Open the page over https:// or http://localhost, or play with touch.';
+    default: return 'Something went wrong with the camera (' + (e && e.name || 'unknown') + ').';
+  }
+}
+async function setupCamera() {
+  G.phase = 'setup'; showOverlay('#ov-setup'); setStatus('Looking for your camera…');
+  try { await startCamera(); } catch (e) { console.warn(e); setStatus(cameraErrorMessage(e), true); return; }
+  let mode = null;
+  setStatus('Loading hand tracking (this can take a moment the first time)…');
+  try { if (!handLM) handLM = await withTimeout(createLM('hand'), 30000); mode = 'hand'; } catch (e) { console.warn('hand tracking unavailable', e); }
+  if (!mode) {
+    setStatus('Hand tracking is not available here. Trying body steering…');
+    try { if (!poseLM) poseLM = await withTimeout(createLM('pose'), 30000); mode = 'pose'; } catch (e) { console.warn('pose unavailable', e); }
+  }
+  if (!mode) mode = 'motion';
+  G.mode = mode; startCalib();
+}
+
+// ---------- calibration ----------
+function startCalib() {
+  G.phase = 'calib'; hideOverlays(); showOverlay('#ov-calib'); setHudVisible(false);
+  const texts = {
+    hand: ['Let me see your finger!', 'Hold up one finger and move it around in a big circle.', 5000],
+    pose: ['Stand in the middle!', 'Stand where I can see you and hold still. Then you steer by leaning left, right, up and down.', 3000],
+    motion: ['Stand in the middle!', 'Hold still for a moment. Then sway or step left and right to steer the firefly.', 2500],
+  }[G.mode];
+  $('#calib-title').textContent = texts[0]; $('#calib-text').textContent = texts[1];
+  say(texts[1]);
+  G.calibData = { start: null, created: performance.now(), dur: texts[2], minX: 1, maxX: 0, minY: 1, maxY: 0, samples: 0, sx: 0, sy: 0, dot: null };
+  $('#calib-bar').style.width = '0%';
+}
+function calibTick(now) {
+  const c = G.calibData; let raw = null;
+  if (G.mode === 'hand') raw = readHand(); else if (G.mode === 'pose') raw = readPose(); else { readMotion(); raw = { x: 0.5, y: 0.5, synthetic: true }; }
+  if (raw) {
+    if (c.start === null) c.start = now;
+    const mx = 1 - raw.x;
+    if (!raw.synthetic) { c.minX = Math.min(c.minX, mx); c.maxX = Math.max(c.maxX, mx); c.minY = Math.min(c.minY, raw.y); c.maxY = Math.max(c.maxY, raw.y); c.samples++; c.sx += mx; c.sy += raw.y; c.dot = { x: mx, y: raw.y }; }
+  } else c.dot = null;
+  if (G.mode === 'hand') $('#calib-text').textContent = raw ? 'I see your finger! Keep moving it around in a big circle.' : 'Hold up one finger so I can see it.';
+  // preview (mirrored)
+  pctx.fillStyle = '#000'; pctx.fillRect(0, 0, 320, 240);
+  if (video.readyState >= 2) { pctx.save(); pctx.translate(320, 0); pctx.scale(-1, 1); pctx.drawImage(video, 0, 0, 320, 240); pctx.restore(); }
+  if (c.dot) { pctx.fillStyle = 'rgba(126,240,200,.9)'; pctx.beginPath(); pctx.arc(c.dot.x * 320, c.dot.y * 240, 12, 0, TAU); pctx.fill(); }
+  const p = c.start === null ? 0 : clamp((now - c.start) / c.dur, 0, 1);
+  $('#calib-bar').style.width = (p * 100) + '%';
+  if (p >= 1 || now - c.created > 25000) finishCalib();
+}
+function finishCalib() {
+  const c = G.calibData;
+  if (G.mode === 'hand') {
+    if (c && c.samples >= 20 && c.maxX - c.minX > 0.25 && c.maxY - c.minY > 0.2) {
+      const px = (c.maxX - c.minX) * 0.08, py = (c.maxY - c.minY) * 0.08;
+      G.calib.hand = { minX: c.minX + px, maxX: c.maxX - px, minY: c.minY + py, maxY: c.maxY - py };
+    } else G.calib.hand = { minX: .15, maxX: .85, minY: .15, maxY: .8 };
+  } else if (G.mode === 'pose') {
+    G.calib.pose = (c && c.samples >= 10) ? { cx: c.sx / c.samples, cy: c.sy / c.samples } : { cx: .5, cy: .5 };
+  }
+  G.calibData = null; startNewGame();
+}
+
+// ---------- overlays ----------
+function hideOverlays() { document.querySelectorAll('.overlay').forEach(o => o.classList.remove('show')); }
+function showOverlay(sel) { $(sel).classList.add('show'); }
+function showToast(text, withButton) { $('#toast-text').textContent = text; $('#btn-touch-fallback').style.display = withButton ? 'inline-flex' : 'none'; $('#toast').classList.add('show'); }
+function hideToast() { $('#toast').classList.remove('show'); }
+
+// ---------- game flow ----------
+function startNewGame() { G.score = 0; G.stageIndex = 0; loadStage(0); showIntro(); }
+function loadStage(i) {
+  G.stageIndex = i; G.stage = BUILDERS[i](); G.stage.done = false;
+  setHudVisible(true); layoutStage(G.stage);
+  G.scoreAtStageStart = G.score;
+  G.fly.x = G.cursor.x = G.play.x + G.play.w * 0.5; G.fly.y = G.cursor.y = G.play.y + G.play.h * 0.88;
+  G.trail = []; G.sm = null; G.tracking.lost = false; hideToast(); updateHUD();
+}
+function showIntro() {
+  G.phase = 'intro'; hideOverlays();
+  const s = G.stage;
+  $('#intro-stage').textContent = 'Stage ' + (G.stageIndex + 1) + ' of 5';
+  $('#intro-title').textContent = s.title; $('#intro-hint').textContent = s.hint;
+  const seq = $('#intro-seq'); seq.innerHTML = ''; if (s.type === 'flowers') renderSeq(seq, s);
+  showOverlay('#ov-intro');
+}
+function beginPlay() {
+  hideOverlays(); G.phase = 'play'; startStageMusic(); G.tracking.lastSeen = performance.now(); G.sm = null;
+  const s = G.stage;
+  startStageMusic(); say((s.type === 'flowers' || s.type === 'constellation') ? `Find the ${s.sequence[0]} ${s.type === 'constellation' ? 'star' : 'flower'} first!` : s.speak);
+}
+function pauseGame() { if (G.phase !== 'play') return; G.phase = 'pause'; stopStageMusic(); showOverlay('#ov-pause'); try { speechSynthesis.cancel(); } catch (e) {} }
+function resumeGame() { if (G.phase !== 'pause') return; hideOverlays(); G.phase = 'play'; startStageMusic(); G.tracking.lastSeen = performance.now(); }
+function goHome() { stopStageMusic(); hideOverlays(); hideToast(); G.phase = 'start'; G.stage = null; setHudVisible(false); showOverlay('#ov-start'); }
+function finishStage(now) { stopStageMusic(); const s = G.stage; s.done = true; s.doneAt = now; SFX.stage(); say(['Wonderful!', 'Great job!', 'You did it!'][G.stageIndex]); updateHUD(); }
+function advanceStage() {
+  if (G.stageIndex >= BUILDERS.length - 1) { celebrate(); return; }
+  loadStage(G.stageIndex + 1); showIntro();
+}
+function celebrate() { G.phase = 'celebrate'; $('#final-score').textContent = G.score; showOverlay('#ov-done'); SFX.win(); say('Hooray! You did it! The firefly is home!'); }
+
+// ---------- input ----------
+function updateInput(now, dt) {
+  const play = G.play; let tracked = false, target = null;
+  if (G.mode === 'hand' || G.mode === 'pose') {
+    const raw = G.mode === 'hand' ? readHand() : readPose();
+    if (raw) {
+      tracked = true;
+      if (!G.sm) G.sm = { x: raw.x, y: raw.y }; else { G.sm.x = lerp(G.sm.x, raw.x, 0.18); G.sm.y = lerp(G.sm.y, raw.y, 0.18); }
+      target = G.mode === 'hand' ? mapFingertip(G.sm.x, G.sm.y, G.calib.hand, play) : mapPose(G.sm.x, G.sm.y, G.calib.pose, play);
+    }
+  } else if (G.mode === 'motion') {
+    const m = readMotion();
+    if (m && m.active) {
+      tracked = true; const dx = m.x - 0.5, dy = m.y - 0.5, dz = 0.06;
+      G.cursor.x += (Math.abs(dx) > dz ? dx * 2.2 : 0) * dt * 520;
+      G.cursor.y += (Math.abs(dy) > dz ? dy * 2.2 : 0) * dt * 520;
+    }
+  }
+  if (target) { const follow = 1 - Math.exp(-dt * 4.2); G.cursor.x = lerp(G.cursor.x, target.x, follow); G.cursor.y = lerp(G.cursor.y, target.y, follow); }
+  if (tracked) { G.tracking.lastSeen = now; G.inputAt = now; }
+  let kx = 0, ky = 0;
+  if (G.keys.ArrowLeft) kx--; if (G.keys.ArrowRight) kx++; if (G.keys.ArrowUp) ky--; if (G.keys.ArrowDown) ky++;
+  if (kx || ky) { G.cursor.x += kx * dt * 380; G.cursor.y += ky * dt * 380; G.inputAt = now; }
+  clampToPlay(G.cursor);
+}
+function onPointer(e) {
+  if (G.phase !== 'play') return;
+  const now = performance.now();
+  if (G.mode === 'touch') {
+    const r = canvas.getBoundingClientRect();
+    G.cursor.x = e.clientX - r.left; G.cursor.y = e.clientY - r.top; clampToPlay(G.cursor); G.inputAt = now;
+  }
+}
+function checkTracking(now) {
+  if (G.mode !== 'hand' && G.mode !== 'pose') return;
+  const gone = now - G.tracking.lastSeen;
+  if (gone > 1200) {
+    if (!G.tracking.lost) { G.tracking.lost = true; G.sm = null; }
+    showToast(G.mode === 'hand' ? "I can't see your finger. Hold it up so I can see it!" : "I can't see you. Step back into the picture!", gone > 8000);
+  } else if (G.tracking.lost) { G.tracking.lost = false; hideToast(); }
+}
+function updateFly(dt) {
+  const f = G.fly, c = G.cursor, k = 1 - Math.exp(-dt * 7);
+  let dx = (c.x - f.x) * k, dy = (c.y - f.y) * k;
+  const maxStep = 900 * dt, len = Math.hypot(dx, dy);
+  if (len > maxStep) { dx *= maxStep / len; dy *= maxStep / len; }
+  f.x += dx; f.y += dy; clampToPlay(f);
+  const last = G.trail[G.trail.length - 1];
+  if (!last || dist(last.x, last.y, f.x, f.y) > 2) { G.trail.push({ x: f.x, y: f.y }); if (G.trail.length > 24) G.trail.shift(); }
+}
+
+// ---------- stage logic ----------
+function updateStage(now, dt) {
+  const s = G.stage;
+  if (s.done) { if (now - s.doneAt > 1600) advanceStage(); return; }
+  for (const t of s.targets) {
+    if (t.collected) continue;
+    const p = t.pos, hit = hitTest(G.fly, { x: p.x, y: p.y, r: t.r });
+    if (!hit) { if (t.type === 'tree') s.dwell = Math.max(0, s.dwell - dt * 2); continue; }
+    if (t.type === 'moonstone') {
+      G.score += collectTarget(t, 15); SFX.collect(); burst(p.x,p.y,'#9cecff',18); updateHUD();
+    } else if (t.type === 'star') {
+      const v = validateSequence(s,t.color);
+      if (v === 'correct') { G.score += collectTarget(t,20); s.seqIndex++; SFX.collect(); burst(p.x,p.y,COLORS[t.color],20); if(s.seqIndex<s.sequence.length) say(`Now find the ${s.sequence[s.seqIndex]} star!`); updateHUD(); }
+      else if(v === 'wrong' && now-t.lastWrong>1200) { t.lastWrong=now; SFX.wrong(); say(`Find the ${s.sequence[s.seqIndex]} star!`); }
+    } else if (t.type === 'firefly' || t.type === 'lantern') {
+      G.score += collectTarget(t); SFX.collect(); burst(p.x, p.y, t.type === 'lantern' ? '#ffb347' : '#ffe66d');
+      if (t.type === 'lantern' && s.targets.filter(x => x.type === 'lantern').every(x => x.collected)) { s.lanternsLit = true; say('All lit! Now fly to the tree!'); }
+      updateHUD();
+    } else if (t.type === 'flower') {
+      const v = validateSequence(s, t.color);
+      if (v === 'correct') {
+        G.score += collectTarget(t); s.seqIndex++; SFX.collect(); burst(p.x, p.y, COLORS[t.color]);
+        if (s.seqIndex < s.sequence.length) say(`Now find the ${s.sequence[s.seqIndex]} flower!`);
+        updateHUD();
+      } else if (v === 'wrong' && now - t.lastWrong > 1500) { t.lastWrong = now; SFX.wrong(); say(`That one is ${t.color}. Find the ${s.sequence[s.seqIndex]} flower!`); }
+    } else if (t.type === 'tree') {
+      if (!s.lanternsLit) { if (now - s.treeHintAt > 5000) { s.treeHintAt = now; SFX.tap(); say('Light the lanterns first!'); } }
+      else { s.dwell += dt; if (s.dwell >= 1.2) { s.arrived = true; G.score += collectTarget(t, 30); burst(p.x, p.y - 20, '#b4ffc8', 26); updateHUD(); } }
+    }
+  }
+  if (isStageComplete(s)) finishStage(now);
+}
+
+// ---------- HUD ----------
+function renderSeq(container, s) {
+  container.innerHTML = '';
+  s.sequence.forEach((c, i) => {
+    const d = document.createElement('span'); d.className = 'seqdot' + (i < s.seqIndex ? ' done' : i === s.seqIndex ? ' current' : '');
+    d.style.background = COLORS[c]; d.textContent = i < s.seqIndex ? '✓' : ''; d.title = c; container.appendChild(d);
+  });
+}
+function updateHUD() {
+  const s = G.stage; if (!s) return;
+  $('#score').textContent = '⭐ ' + G.score;
+  document.querySelectorAll('#stage-dots .dot').forEach((d, i) => { d.className = 'dot' + (i < G.stageIndex ? ' done' : i === G.stageIndex ? ' active' : ''); });
+  const icon = $('#next-icon'), text = $('#next-text'), seqChip = $('#seq-chip');
+  seqChip.style.display = 'none'; icon.innerHTML = '';
+  if (s.type === 'fireflies') {
+    const done = s.targets.filter(t => t.collected).length;
+    $('#progress').textContent = done + ' / ' + s.targets.length + ' ✨';
+    icon.textContent = ICONS.firefly; text.textContent = done >= s.targets.length ? 'All caught!' : 'a firefly';
+  } else if (s.type === 'flowers' || s.type === 'constellation') {
+    $('#progress').textContent = s.seqIndex + ' / ' + s.sequence.length + (s.type === 'constellation' ? ' ⭐' : ' 🌸');
+    seqChip.style.display = 'flex'; renderSeq($('#seq-hud'), s);
+    if (s.seqIndex < s.sequence.length) { const c = s.sequence[s.seqIndex]; icon.innerHTML = `<span class="cdot" style="background:${COLORS[c]}"></span>`; text.textContent = c + (s.type === 'constellation' ? ' star' : ' flower'); }
+    else { icon.textContent = s.type === 'constellation' ? '⭐' : ICONS.flower; text.textContent = 'All done!'; }
+  } else {
+    if (s.type === 'moonstones') {
+      const done=s.targets.filter(t=>t.collected).length; $('#progress').textContent=done+' / '+s.targets.length+' 💎'; icon.textContent='💎'; text.textContent=done===s.targets.length?'All found!':'a moonstone'; return;
+    }
+    const lit = s.targets.filter(t => t.type === 'lantern' && t.collected).length;
+    $('#progress').textContent = lit + ' / 4 🏮';
+    if (s.arrived) { icon.textContent = '🎉'; text.textContent = 'Home!'; }
+    else if (s.lanternsLit) { icon.textContent = ICONS.tree; text.textContent = 'the glowing tree'; }
+    else { icon.textContent = ICONS.lantern; text.textContent = 'a lantern'; }
+  }
+}
+
+// ---------- particles ----------
+function burst(x, y, color, n = 14) {
+  for (let i = 0; i < n; i++) { const a = Math.random() * TAU, sp = 40 + Math.random() * 90; G.particles.push({ x, y, vx: Math.cos(a) * sp, vy: Math.sin(a) * sp - 30, life: 0.9, age: 0, r: 3 + Math.random() * 4, color }); }
+}
+function updateParticles(dt) {
+  for (const p of G.particles) { p.age += dt; p.x += p.vx * dt; p.y += p.vy * dt; p.vy -= 20 * dt; }
+  G.particles = G.particles.filter(p => p.age < p.life);
+}
+
+// ---------- rendering ----------
+function rr(x, y, w, h, r) { ctx.beginPath(); ctx.moveTo(x + r, y); ctx.arcTo(x + w, y, x + w, y + h, r); ctx.arcTo(x + w, y + h, x, y + h, r); ctx.arcTo(x, y + h, x, y, r); ctx.arcTo(x, y, x + w, y, r); ctx.closePath(); }
+function glow(x, y, r, color, a) { const g = ctx.createRadialGradient(x, y, r * 0.05, x, y, r); g.addColorStop(0, hexA(color, a)); g.addColorStop(0.5, hexA(color, a * 0.35)); g.addColorStop(1, hexA(color, 0)); ctx.fillStyle = g; ctx.beginPath(); ctx.arc(x, y, r, 0, TAU); ctx.fill(); }
+function drawBackground(time) {
+  const W = G.W, H = G.H;
+  const g = ctx.createLinearGradient(0, 0, 0, H); g.addColorStop(0, '#060922'); g.addColorStop(0.6, '#101a4a'); g.addColorStop(1, '#17315c');
+  ctx.fillStyle = g; ctx.fillRect(0, 0, W, H);
+  for (const s of G.stars) { ctx.globalAlpha = 0.45 + 0.35 * Math.sin(time * s.tw + s.ph); ctx.fillStyle = '#fff'; ctx.beginPath(); ctx.arc(s.x * W, s.y * H, s.r, 0, TAU); ctx.fill(); }
+  ctx.globalAlpha = 1;
+  const mx = W * 0.86, my = H * 0.13, mr = Math.min(W, H) * 0.05;
+  glow(mx, my, mr * 3, '#fff6c8', 0.35);
+  ctx.fillStyle = '#fff6c8'; ctx.beginPath(); ctx.arc(mx, my, mr, 0, TAU); ctx.fill();
+  ctx.fillStyle = '#0f2d3f'; ctx.beginPath(); ctx.moveTo(0, H); ctx.lineTo(0, H * 0.80); ctx.quadraticCurveTo(W * 0.25, H * 0.70, W * 0.5, H * 0.80); ctx.quadraticCurveTo(W * 0.75, H * 0.90, W, H * 0.78); ctx.lineTo(W, H); ctx.closePath(); ctx.fill();
+  ctx.fillStyle = '#0a1f2e'; ctx.beginPath(); ctx.moveTo(0, H); ctx.lineTo(0, H * 0.90); ctx.quadraticCurveTo(W * 0.3, H * 0.84, W * 0.6, H * 0.92); ctx.quadraticCurveTo(W * 0.85, H * 0.97, W, H * 0.90); ctx.lineTo(W, H); ctx.closePath(); ctx.fill();
+}
+function drawBug(x, y, s, glowA, time, smile) {
+  ctx.save(); ctx.translate(x, y); ctx.scale(s, s);
+  glow(6, 0, 44, '#ffe66d', glowA);
+  const flap = 0.85 + 0.15 * Math.sin(time * 9);
+  ctx.fillStyle = 'rgba(200,235,255,0.5)';
+  ctx.beginPath(); ctx.ellipse(-2, -9 * flap, 12, 6, -0.5, 0, TAU); ctx.fill();
+  ctx.beginPath(); ctx.ellipse(-2, 9 * flap, 12, 6, 0.5, 0, TAU); ctx.fill();
+  ctx.fillStyle = '#ffe66d'; ctx.beginPath(); ctx.ellipse(8, 0, 9, 7, 0, 0, TAU); ctx.fill();
+  ctx.fillStyle = '#4b3a2b'; ctx.beginPath(); ctx.ellipse(-4, 0, 10, 7, 0, 0, TAU); ctx.fill();
+  ctx.beginPath(); ctx.arc(-14, 0, 6.5, 0, TAU); ctx.fill();
+  ctx.fillStyle = '#fff'; ctx.beginPath(); ctx.arc(-16, -2.6, 2.4, 0, TAU); ctx.fill(); ctx.beginPath(); ctx.arc(-16, 2.6, 2.4, 0, TAU); ctx.fill();
+  ctx.fillStyle = '#111'; ctx.beginPath(); ctx.arc(-17, -2.6, 1.2, 0, TAU); ctx.fill(); ctx.beginPath(); ctx.arc(-17, 2.6, 1.2, 0, TAU); ctx.fill();
+  if (smile) { ctx.strokeStyle = '#111'; ctx.lineWidth = 1.2; ctx.beginPath(); ctx.arc(-19, 0, 2.2, Math.PI * 0.6, Math.PI * 1.4); ctx.stroke(); }
+  ctx.restore();
+}
+function drawFlower(t, p, time) {
+  const col = COLORS[t.color], bloom = t.collected; let wig = 0;
+  const since = performance.now() - t.lastWrong; if (since < 500) wig = Math.sin(since * 0.04) * 5 * (1 - since / 500);
+  ctx.save(); ctx.translate(p.x + wig, p.y);
+  ctx.strokeStyle = '#2f9a5a'; ctx.lineWidth = 5; ctx.lineCap = 'round'; ctx.beginPath(); ctx.moveTo(0, 10); ctx.quadraticCurveTo(4, 40, 0, 70); ctx.stroke();
+  ctx.fillStyle = '#3cb371'; ctx.beginPath(); ctx.ellipse(10, 45, 12, 5, -0.5, 0, TAU); ctx.fill();
+  glow(0, 0, bloom ? 75 : 46, col, bloom ? 0.55 : 0.25);
+  const n = 6, len = bloom ? 20 : 14, pr = bloom ? 15 : 11, spin = bloom ? time * 0.3 : 0;
+  ctx.fillStyle = col; ctx.globalAlpha = bloom ? 1 : 0.85;
+  for (let i = 0; i < n; i++) { const a = spin + i * TAU / n; ctx.beginPath(); ctx.ellipse(Math.cos(a) * len, Math.sin(a) * len, pr, pr * 0.6, a, 0, TAU); ctx.fill(); }
+  ctx.globalAlpha = 1;
+  ctx.fillStyle = '#ffe66d'; ctx.beginPath(); ctx.arc(0, 0, bloom ? 11 : 8, 0, TAU); ctx.fill();
+  if (bloom) { ctx.fillStyle = '#4b3a2b'; ctx.beginPath(); ctx.arc(-3.5, -2, 1.4, 0, TAU); ctx.fill(); ctx.beginPath(); ctx.arc(3.5, -2, 1.4, 0, TAU); ctx.fill(); ctx.strokeStyle = '#4b3a2b'; ctx.lineWidth = 1.5; ctx.beginPath(); ctx.arc(0, 1, 4, 0.3, Math.PI - 0.3); ctx.stroke(); }
+  ctx.restore();
+}
+function drawMoonstone(t,p,time) {
+  ctx.save();ctx.translate(p.x,p.y);const pulse=.75+.25*Math.sin(time*3+t.phase);
+  glow(0,0,48,'#8deaff',t.collected?.15:.5);
+  ctx.rotate(Math.sin(time*.7+t.phase)*.12);ctx.fillStyle=t.collected?'rgba(180,240,255,.25)':'#9cecff';
+  ctx.beginPath();ctx.moveTo(0,-23*pulse);ctx.lineTo(18,-7);ctx.lineTo(14,17);ctx.lineTo(0,24);ctx.lineTo(-17,10);ctx.lineTo(-14,-12);ctx.closePath();ctx.fill();
+  ctx.strokeStyle='#eaffff';ctx.lineWidth=2;ctx.stroke();ctx.restore();
+}
+function drawStar(t,p,time) {
+  ctx.save();ctx.translate(p.x,p.y);const pulse=.85+.15*Math.sin(time*3+t.phase);
+  glow(0,0,48,COLORS[t.color],t.collected?.12:.42);
+  ctx.rotate(time*.22+t.phase*.1);ctx.fillStyle=t.collected?'rgba(255,255,255,.25)':COLORS[t.color];
+  ctx.beginPath();for(let i=0;i<10;i++){const a=-Math.PI/2+i*Math.PI/5,r=(i%2?11:24)*pulse;const x=Math.cos(a)*r,y=Math.sin(a)*r;i?ctx.lineTo(x,y):ctx.moveTo(x,y);}ctx.closePath();ctx.fill();ctx.strokeStyle='#fff6d6';ctx.lineWidth=2;ctx.stroke();ctx.restore();
+}
+function drawLantern(t, p, time) {
+  const lit = t.collected; ctx.save(); ctx.translate(p.x, p.y);
+  if (lit) glow(0, 0, 70, '#ffb347', 0.4 + 0.12 * Math.sin(time * 1.5 + t.phase));
+  ctx.strokeStyle = '#8a6a3a'; ctx.lineWidth = 3; ctx.beginPath(); ctx.moveTo(0, -32); ctx.lineTo(0, -22); ctx.stroke();
+  ctx.fillStyle = lit ? '#ffb347' : '#6a4a2a'; rr(-14, -20, 28, 38, 9); ctx.fill();
+  ctx.fillStyle = lit ? '#fff1b8' : '#3a2a1a'; rr(-8, -12, 16, 22, 5); ctx.fill();
+  ctx.fillStyle = '#8a6a3a'; rr(-10, -25, 20, 6, 3); ctx.fill(); rr(-10, 17, 20, 6, 3); ctx.fill();
+  ctx.restore();
+}
+const TREE_SPARKS = Array.from({ length: 12 }, (_, i) => ({ x: Math.cos(i * 2.4) * 45, y: -25 + Math.sin(i * 1.7) * 40, ph: i }));
+function drawTree(t, p, time, s) {
+  const active = s.lanternsLit, arrived = s.arrived, pulse = 0.5 + 0.5 * Math.sin(time * 1.5);
+  ctx.save(); ctx.translate(p.x, p.y);
+  glow(0, -10, 150, '#b4ffc8', arrived ? 0.7 : active ? 0.35 + 0.2 * pulse : 0.12);
+  ctx.fillStyle = '#5a3a22'; rr(-12, 10, 24, 80, 8); ctx.fill();
+  ctx.fillStyle = active ? '#2e9a5f' : '#1d5f3f';
+  [[0, -20, 58], [-38, 0, 40], [38, 0, 40], [0, -55, 36]].forEach(c => { ctx.beginPath(); ctx.arc(c[0], c[1], c[2], 0, TAU); ctx.fill(); });
+  if (active) for (const sp of TREE_SPARKS) { ctx.globalAlpha = 0.4 + 0.4 * Math.sin(time * 2 + sp.ph); ctx.fillStyle = '#eaffd0'; ctx.beginPath(); ctx.arc(sp.x, sp.y, 3, 0, TAU); ctx.fill(); }
+  ctx.globalAlpha = 1;
+  if (s.dwell > 0 && !arrived) { ctx.strokeStyle = 'rgba(255,255,255,.9)'; ctx.lineWidth = 6; ctx.beginPath(); ctx.arc(0, -10, t.r + 14, -Math.PI / 2, -Math.PI / 2 + TAU * clamp(s.dwell / 1.2, 0, 1)); ctx.stroke(); }
+  ctx.restore();
+}
+function drawNextRing(p, r, time) {
+  const k = 0.5 + 0.5 * Math.sin(time * 2.2);
+  ctx.strokeStyle = `rgba(255,255,255,${0.45 + 0.35 * k})`; ctx.lineWidth = 4; ctx.setLineDash([10, 8]); ctx.lineDashOffset = -time * 30;
+  ctx.beginPath(); ctx.arc(p.x, p.y, r + 10 + k * 5, 0, TAU); ctx.stroke(); ctx.setLineDash([]);
+}
+function drawTrail() {
+  const n = G.trail.length;
+  for (let i = 0; i < n; i++) { const p = G.trail[i], f = i / n; ctx.globalAlpha = f * 0.35; ctx.fillStyle = '#ffe66d'; ctx.beginPath(); ctx.arc(p.x, p.y, 4 + f * 10, 0, TAU); ctx.fill(); }
+  ctx.globalAlpha = 1;
+}
+function drawCursor(now) {
+  if (now - G.inputAt > 1500) return;
+  const c = G.cursor; ctx.strokeStyle = 'rgba(126,240,200,.85)'; ctx.lineWidth = 4; ctx.beginPath(); ctx.arc(c.x, c.y, 26, 0, TAU); ctx.stroke();
+  ctx.fillStyle = 'rgba(126,240,200,.9)'; ctx.beginPath(); ctx.arc(c.x, c.y, 6, 0, TAU); ctx.fill();
+}
+function drawParticles() {
+  for (const p of G.particles) { ctx.globalAlpha = 1 - p.age / p.life; ctx.fillStyle = p.color; ctx.beginPath(); ctx.arc(p.x, p.y, p.r, 0, TAU); ctx.fill(); }
+  ctx.globalAlpha = 1;
+}
+function render(now) {
+  const time = G.t; drawBackground(time);
+  const inScene = G.stage && ['play', 'pause', 'intro'].includes(G.phase);
+  if (inScene) {
+    const s = G.stage, nxt = G.phase === 'play' && !s.done ? nextTarget() : null;
+    for (const t of s.targets) {
+      const p = t.pos;
+      if (t.type === 'firefly') {
+        if (!t.collected) drawBug(p.x, p.y, 1, 0.5 + 0.15 * Math.sin(time * 1.3 + t.phase), time, false);
+        else { const a = performance.now() - t.collectedAt; if (a < 800) { ctx.globalAlpha = 1 - a / 800; drawBug(p.x, p.y - a * 0.08, 1, 0.3, time, false); ctx.globalAlpha = 1; } }
+      } else if (t.type === 'flower') drawFlower(t, p, time);
+      else if (t.type === 'moonstone') drawMoonstone(t,p,time);
+      else if (t.type === 'star') drawStar(t,p,time);
+      else if (t.type === 'lantern') drawLantern(t, p, time);
+      else if (t.type === 'tree') drawTree(t, p, time, s);
+    }
+    if (nxt) drawNextRing(nxt.pos, nxt.r, time);
+    drawTrail();
+    drawBug(G.fly.x, G.fly.y + Math.sin(time * 2) * 3, 1.6, 0.6 + 0.1 * Math.sin(time * 1.5), time, true);
+    if (G.phase === 'play') drawCursor(now);
+  } else {
+    if (!G.ambient.length) for (let i = 0; i < 6; i++) G.ambient.push({ x: Math.random(), y: 0.2 + Math.random() * 0.6, ph: Math.random() * TAU, sp: 0.2 + Math.random() * 0.2 });
+    for (const a of G.ambient) drawBug(a.x * G.W + Math.cos(time * a.sp + a.ph) * 60, a.y * G.H + Math.sin(time * a.sp * 1.3 + a.ph) * 30, 1, 0.45, time, false);
+    if (G.phase === 'celebrate') {
+      if (now - G.lastSpawn > 160) { G.lastSpawn = now; G.particles.push({ x: Math.random() * G.W, y: G.H + 10, vx: (Math.random() - 0.5) * 20, vy: -40 - Math.random() * 40, life: 6, age: 0, r: 3 + Math.random() * 5, color: ['#ffe66d', '#7ef0c8', '#ff9ad5', '#6bb8ff'][Math.floor(Math.random() * 4)] }); }
+      drawBug(G.W * 0.5, G.H * 0.3 + Math.sin(time * 2) * 10, 2.4, 0.7, time, true);
+    }
+  }
+  drawParticles();
+}
+
+// ---------- main loop ----------
+let last = performance.now();
+function loop(now) {
+  requestAnimationFrame(loop);
+  const dt = Math.min(0.05, (now - last) / 1000); last = now; G.t = now / 1000;
+  try {
+    if (G.phase === 'calib') calibTick(now);
+    updateTargets();
+    if (G.phase === 'play') { updateInput(now, dt); updateFly(dt); updateStage(now, dt); checkTracking(now); }
+    updateParticles(dt); drawHandOverlay(); render(now);
+  } catch (e) { console.error(e); }
+}
+
+// ---------- self tests ----------
+function runSelfTests() {
+  const R = []; const ok = (name, cond) => R.push({ name, pass: !!cond });
+  const play = { x: 100, y: 50, w: 800, h: 600 }, calib = { minX: .2, maxX: .8, minY: .2, maxY: .8 };
+  let p = mapFingertip(0.5, 0.5, calib, play); ok('Fingertip at camera centre maps to play-area centre', Math.abs(p.x - 500) < 1e-9 && Math.abs(p.y - 350) < 1e-9);
+  p = mapFingertip(0.9, 0.1, calib, play); ok('Fingertip is mirrored and clamped to the play area', p.x === 100 && p.y === 50);
+  p = mapFingertip(0.2, 0.8, calib, play); ok('Fingertip at far corner reaches far corner', p.x === 900 && p.y === 650);
+  const fly = { x: 0, y: 0, r: 22 };
+  ok('Collision detected inside combined radius', hitTest(fly, { x: 30, y: 30, r: 30 }));
+  ok('No collision outside combined radius', !hitTest(fly, { x: 60, y: 60, r: 30 }));
+  const t = { collected: false }; const a = collectTarget(t), b = collectTarget(t);
+  ok('First collection awards points', a === 10 && t.collected === true);
+  ok('Second collection of same target awards nothing', b === 0);
+  const st = { type: 'flowers', sequence: ['red', 'blue', 'yellow'], seqIndex: 0 };
+  ok('Wrong colour is rejected and index does not move', validateSequence(st, 'blue') === 'wrong' && st.seqIndex === 0);
+  ok('Right colour is accepted', validateSequence(st, 'red') === 'correct');
+  st.seqIndex = 1; ok('Sequence checks the next colour in order', validateSequence(st, 'blue') === 'correct' && validateSequence(st, 'red') === 'wrong');
+  st.seqIndex = 3; ok('Finished sequence reports done', validateSequence(st, 'red') === 'done');
+  const s1 = { type: 'fireflies', targets: [{ collected: true }, { collected: false }] };
+  ok('Firefly stage incomplete with one left', !isStageComplete(s1)); s1.targets[1].collected = true; ok('Firefly stage completes when all collected', isStageComplete(s1));
+  const s2 = { type: 'flowers', sequence: ['red', 'blue'], seqIndex: 1 };
+  ok('Flower stage incomplete mid-sequence', !isStageComplete(s2)); s2.seqIndex = 2; ok('Flower stage completes at end of sequence', isStageComplete(s2));
+  const s3 = { type: 'tree', arrived: false };
+  ok('Tree stage incomplete before arrival', !isStageComplete(s3)); s3.arrived = true; ok('Tree stage completes on arrival', isStageComplete(s3));
+  const b1 = buildStage1(); ok('Stage 1 includes moving targets', b1.targets.some(x => x.motion.kind === 'line' || x.motion.kind === 'ellipse'));
+  const b2 = buildStage2(); ok('Stage 2 sequence uses distinct, existing flower colours', b2.sequence.length === 5 && new Set(b2.sequence).size === 5 && b2.sequence.every(c => b2.targets.some(x => x.color === c)));
+  const b3 = buildStage3(); ok('Stage 3 has four lanterns and one tree', b3.targets.filter(x => x.type === 'lantern').length === 4 && b3.targets.filter(x => x.type === 'tree').length === 1);
+  const b4=buildStage4(), b5=buildStage5(); ok('Stage 4 has seven moonstone tasks',b4.targets.length>=5); ok('Stage 5 has five ordered star tasks',b5.sequence.length>=5 && b5.targets.length>=5);
+  const list = $('#tests-list'); list.innerHTML = '';
+  R.forEach(r => { const li = document.createElement('li'); li.className = r.pass ? 'pass' : 'fail'; li.textContent = r.name; list.appendChild(li); });
+  const passed = R.filter(r => r.pass).length;
+  $('#tests-summary').textContent = `${passed} / ${R.length} passed`;
+  console.table(R); showOverlay('#ov-tests');
+  return R;
+}
+window.FNN = { mapFingertip, hitTest, collectTarget, validateSequence, isStageComplete, runSelfTests, state: G };
+
+// ---------- events & boot ----------
+$('#btn-camera').onclick = () => { audio(); hideOverlays(); setupCamera(); };
+const chooseTouch = () => { audio(); stopCamera(); G.mode = 'touch'; hideOverlays(); hideToast(); startNewGame(); };
+$('#btn-touch').onclick = chooseTouch; $('#btn-touch2').onclick = chooseTouch;
+$('#btn-retry').onclick = () => { hideOverlays(); setupCamera(); };
+$('#btn-skip-calib').onclick = () => { G.calibData = null; finishCalib(); };
+$('#btn-go').onclick = () => { audio(); beginPlay(); };
+$('#btn-pause').onclick = () => pauseGame();
+$('#btn-resume').onclick = () => resumeGame();
+$('#btn-restart-stage').onclick = () => { hideOverlays(); G.score = G.scoreAtStageStart; loadStage(G.stageIndex); showIntro(); };
+$('#btn-restart-game').onclick = () => { hideOverlays(); startNewGame(); };
+$('#btn-change').onclick = goHome; $('#btn-home').onclick = goHome;
+$('#btn-again').onclick = () => { hideOverlays(); startNewGame(); };
+$('#btn-touch-fallback').onclick = () => { stopCamera(); G.mode = 'touch'; hideToast(); say('Okay, use your finger on the screen!'); };
+$('#btn-sound').onclick = e => { G.sound = !G.sound; if(!G.sound) stopStageMusic(); else if(G.phase==='play') startStageMusic(); e.currentTarget.textContent = G.sound ? '🔊' : '🔇'; e.currentTarget.classList.toggle('off', !G.sound); if (G.sound) SFX.tap(); };
+$('#btn-speech').onclick = e => { G.speech = !G.speech; e.currentTarget.classList.toggle('off', !G.speech); if (!G.speech) { try { speechSynthesis.cancel(); } catch (x) {} } else say('Voice is on!'); };
+$('#btn-tests').onclick = () => runSelfTests();
+$('#btn-tests-close').onclick = () => { $('#ov-tests').classList.remove('show'); if (G.phase === 'start') showOverlay('#ov-start'); };
+
+canvas.addEventListener('pointerdown', e => { try { canvas.setPointerCapture(e.pointerId); } catch (x) {} onPointer(e); });
+canvas.addEventListener('pointermove', onPointer);
+window.addEventListener('keydown', e => {
+  if (e.key.startsWith('Arrow')) { G.keys[e.key] = true; e.preventDefault(); }
+  if (e.key === 'p' || e.key === 'P' || e.key === 'Escape' || e.key === ' ') { if (G.phase === 'play') pauseGame(); else if (G.phase === 'pause') resumeGame(); e.preventDefault(); }
+});
+window.addEventListener('keyup', e => { if (e.key.startsWith('Arrow')) G.keys[e.key] = false; });
+document.addEventListener('visibilitychange', () => { if (document.hidden && G.phase === 'play') pauseGame(); });
+window.addEventListener('resize', resize);
+window.addEventListener('orientationchange', () => setTimeout(resize, 200));
+
+resize(); requestAnimationFrame(loop);
+if (new URLSearchParams(location.search).get('test') === '1') setTimeout(runSelfTests, 100);
+})();
+</script>
+</body>
+</html>
