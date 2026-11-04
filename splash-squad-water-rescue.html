@@ -1,0 +1,788 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no" />
+<title>Splash Squad Water Rescue</title>
+<style>
+  :root{ --blue:#38b6ff; --dark:#0b2a4a; --yellow:#ffd60a; --red:#ff5a5a; --green:#5cc45c; }
+  *{box-sizing:border-box;-webkit-tap-highlight-color:transparent;}
+  html,body{margin:0;height:100%;background:#0b2a4a;overflow:hidden;color:#fff;touch-action:none;
+    font-family:"Comic Sans MS","Chalkboard SE","Segoe UI",Arial,sans-serif;}
+  #app{position:fixed;inset:0;display:flex;align-items:center;justify-content:center;}
+  #stage{position:relative;width:480px;height:720px;background:var(--blue);border-radius:12px;overflow:hidden;box-shadow:0 10px 40px rgba(0,0,0,.4);}
+  #game{position:absolute;inset:0;display:block;}
+  #hud{position:absolute;top:0;left:0;right:0;display:none;align-items:center;justify-content:space-between;padding:1.2vmin 1.5vmin;gap:1vmin;z-index:2;pointer-events:none;}
+  #hud > *{pointer-events:auto;}
+  .pill{background:rgba(11,42,74,.78);border-radius:999px;padding:.55em 1em;font-size:clamp(13px,2.6vmin,22px);font-weight:700;white-space:nowrap;min-width:0;overflow:hidden;text-overflow:ellipsis;}
+  .hudbtns{display:flex;gap:1vmin;flex:none;}
+  .icon-btn{width:clamp(44px,8vmin,60px);height:clamp(44px,8vmin,60px);border-radius:50%;border:3px solid #fff;background:var(--yellow);color:var(--dark);font-size:clamp(18px,3.5vmin,28px);cursor:pointer;display:flex;align-items:center;justify-content:center;font-family:inherit;}
+  #camBox{position:absolute;right:1.5vmin;top:calc(2.5vmin + clamp(44px,8vmin,60px));width:26%;aspect-ratio:4/3;border:3px solid #fff;border-radius:10px;overflow:hidden;background:#000;z-index:6;display:none;transform:scaleX(-1);transition:box-shadow .15s;}
+  #camBox.handup{box-shadow:0 0 0 6px var(--yellow);}
+  #camBox.big{right:auto;left:50%;top:6%;width:72%;transform:translateX(-50%) scaleX(-1);}
+  #camBox video,#camBox canvas{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;}
+  #rescueBtn{position:absolute;left:50%;bottom:2%;transform:translateX(-50%);width:clamp(80px,18vmin,120px);height:clamp(80px,18vmin,120px);border-radius:50%;border:5px solid #fff;background:var(--yellow);color:var(--dark);font-weight:900;font-family:inherit;font-size:clamp(13px,2.8vmin,20px);display:none;z-index:2;cursor:pointer;box-shadow:0 6px 0 #c9a200;user-select:none;line-height:1.1;}
+  #rescueBtn:active{transform:translateX(-50%) translateY(4px);box-shadow:0 2px 0 #c9a200;}
+  #banner{position:absolute;left:50%;top:16%;transform:translateX(-50%);background:rgba(255,255,255,.95);color:var(--dark);padding:.6em 1.2em;border-radius:20px;font-size:clamp(16px,3.6vmin,30px);font-weight:900;text-align:center;opacity:0;transition:opacity .3s;pointer-events:none;z-index:3;max-width:90%;}
+  #banner.show{opacity:1;}
+  .overlay{position:absolute;inset:0;display:none;flex-direction:column;align-items:center;justify-content:center;gap:2.2vmin;padding:4vmin;text-align:center;background:rgba(11,42,74,.86);z-index:5;}
+  .overlay.show{display:flex;}
+  .overlay.bottom{justify-content:flex-end;padding-bottom:8vmin;}
+  h1{font-size:clamp(26px,6vmin,46px);margin:0;line-height:1.1;text-shadow:0 3px 0 rgba(0,0,0,.3);}
+  h2{font-size:clamp(22px,5vmin,38px);margin:0;}
+  p{font-size:clamp(15px,3vmin,22px);margin:0;max-width:34ch;line-height:1.35;}
+  .btn{border:4px solid #fff;border-radius:999px;background:var(--yellow);color:var(--dark);font:inherit;font-weight:900;font-size:clamp(17px,3.6vmin,26px);padding:.6em 1.3em;min-height:56px;cursor:pointer;box-shadow:0 5px 0 #c9a200;}
+  .btn.secondary{background:#fff;box-shadow:0 5px 0 #b9c3cc;}
+  .btn:active{transform:translateY(3px);box-shadow:none;}
+  .row{display:flex;flex-wrap:wrap;gap:1.5vmin;justify-content:center;}
+  .animals{font-size:clamp(32px,8vmin,64px);letter-spacing:.1em;line-height:1.2;}
+  .bar{width:70%;height:22px;border:3px solid #fff;border-radius:999px;overflow:hidden;background:rgba(255,255,255,.2);}
+  .bar > div{height:100%;width:0;background:var(--yellow);transition:width .15s;}
+  .small{font-size:clamp(12px,2.2vmin,16px);opacity:.8;}
+  .link{background:none;border:none;color:#fff;text-decoration:underline;font:inherit;cursor:pointer;opacity:.75;}
+  #testOut{text-align:left;font:12px/1.4 monospace;background:rgba(0,0,0,.45);padding:1em;border-radius:8px;max-height:45%;overflow:auto;width:92%;white-space:pre-wrap;display:none;}
+  .spinner{width:48px;height:48px;border:6px solid rgba(255,255,255,.3);border-top-color:#fff;border-radius:50%;animation:spin 1s linear infinite;}
+  @keyframes spin{to{transform:rotate(360deg)}}
+</style>
+</head>
+<body>
+<div id="app">
+  <div id="stage">
+    <canvas id="game"></canvas>
+
+    <div id="hud">
+      <div class="pill" id="hudStage">Stage 1</div>
+      <div class="pill" id="hudCount">🐾 0 / 5</div>
+      <div class="hudbtns"><button class="icon-btn" id="muteBtn" title="Music on/off">🎵</button><button class="icon-btn" id="pauseBtn" title="Pause">⏸</button></div>
+    </div>
+
+    <div id="camBox">
+      <video id="cam" autoplay playsinline muted></video>
+      <canvas id="camOverlay"></canvas>
+    </div>
+
+    <button id="rescueBtn">🥅<br>RESCUE!</button>
+    <div id="banner"></div>
+
+    <div class="overlay show" id="startScreen">
+      <h1>🚤 Splash Squad<br>Water Rescue</h1>
+      <p>Lean left and right to steer your boat. Raise one hand (or tap the big yellow button) to rescue your animal friends!</p>
+      <div class="row">
+        <button class="btn" id="startCamBtn">📷 Play with camera</button>
+        <button class="btn secondary" id="startKeysBtn">⌨️ Play without camera</button>
+      </div>
+      <p class="small">Without the camera: use ← → keys or touch the left / right side of the river. Space bar or the button uses the net.</p>
+      <button class="link" id="testBtn">Run self-test</button>
+      <pre id="testOut"></pre>
+    </div>
+
+    <div class="overlay" id="camScreen">
+      <div class="spinner" id="camSpin"></div>
+      <h2 id="camTitle">Starting the camera…</h2>
+      <p id="camMsg"></p>
+      <div class="row" id="camButtons" style="display:none">
+        <button class="btn" id="camRetryBtn">Try again</button>
+        <button class="btn secondary" id="camNoCamBtn">Play without camera</button>
+      </div>
+    </div>
+
+    <div class="overlay bottom" id="calibScreen">
+      <h2>Let's get ready!</h2>
+      <p>Sit in the middle of the picture, hands down, and hold still. 🙂</p>
+      <div class="bar"><div id="calibBar"></div></div>
+      <p id="calibStatus">Looking for you…</p>
+      <button class="btn secondary" id="calibSkipBtn">Play without camera instead</button>
+    </div>
+
+    <div class="overlay" id="lostScreen">
+      <h2>👀 I can't see you!</h2>
+      <p>Step back into the picture so the camera can see your shoulders. The game will carry on by itself.</p>
+      <button class="btn secondary" id="lostKeysBtn">Use keyboard / touch instead</button>
+    </div>
+
+    <div class="overlay" id="pauseScreen">
+      <h2>⏸ Paused</h2>
+      <div class="row">
+        <button class="btn" id="resumeBtn">▶ Resume</button>
+        <button class="btn secondary" id="restartBtn">🔁 Restart</button>
+      </div>
+      <div class="row">
+        <button class="btn secondary" id="recalBtn">🎯 Recalibrate camera</button>
+        <button class="btn secondary" id="menuBtn">🏠 Main menu</button>
+      </div>
+    </div>
+
+    <div class="overlay" id="stageScreen">
+      <h2 id="stageDoneTitle">🎉 Stage done!</h2>
+      <p id="stageDoneText"></p>
+      <div class="animals" id="stageAnimals"></div>
+      <button class="btn" id="nextBtn">Next stage ▶</button>
+    </div>
+
+    <div class="overlay" id="winScreen">
+      <h1>🏆 Hooray!</h1>
+      <p>The Splash Squad rescued everyone!</p>
+      <div class="animals" id="winAnimals"></div>
+      <p id="winText"></p>
+      <button class="btn" id="playAgainBtn">🔁 Play again</button>
+    </div>
+  </div>
+</div>
+
+<script type="module">
+/* ---------- constants ---------- */
+const CDN='https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.14';
+const MODEL='https://storage.googleapis.com/mediapipe-models/pose_landmarker/pose_landmarker_lite/float16/1/pose_landmarker_lite.task';
+const $=id=>document.getElementById(id);
+const clamp=(v,a,b)=>Math.max(a,Math.min(b,v));
+const rnd=(a,b)=>a+Math.random()*(b-a);
+const TAU=Math.PI*2;
+const EMOJI='"Segoe UI Emoji","Apple Color Emoji","Noto Color Emoji",sans-serif';
+
+const W=480,H=720,BANK=44,RIVER_L=BANK,RIVER_R=W-BANK;
+const BOAT_R=28,BOAT_Y=H-200,NET_R=100;
+const ANIMALS={duck:'🦆',turtle:'🐢',frog:'🐸',otter:'🦦',swan:'🦢'};
+const STAGES=[
+  {name:'Duck Bend',    target:5, animals:['duck'],                                 speed:60,  obstacleEvery:2.9, gap:[4.0,5.5], maxAnimals:2, drift:0,  current:0,  tip:'Rescue 5 friends!'},
+  {name:'Turtle Creek', target:5, animals:['duck','turtle'],                        speed:67,  obstacleEvery:2.5, gap:[4.2,5.6], maxAnimals:2, drift:0,  current:0,  tip:'Rescue 5 friends!'},
+  {name:'Otter Falls',  target:5, animals:['duck','turtle','frog','otter','swan'],  speed:74,  obstacleEvery:2.2, gap:[4.4,5.8], maxAnimals:2, drift:0,  current:0,  tip:'More animals, more rocks!'},
+  {name:'Lily Lagoon',  target:5, animals:['duck','turtle','frog','otter','swan'],  speed:82,  obstacleEvery:1.9, gap:[4.6,6.0], maxAnimals:2, drift:30, current:0,  tip:'Careful: logs drift sideways!'},
+  {name:'Storm Rapids', target:5, animals:['duck','turtle','frog','otter','swan'],  speed:92,  obstacleEvery:1.65,gap:[4.8,6.2], maxAnimals:2, drift:40, current:60, tip:'Stormy! The current pushes your boat!'},
+];
+const THEMES=[
+  {water:'#38b6ff',wave:'rgba(255,255,255,0.35)',grass:'#5cc45c',bush:'#3e9b3e',sand:'#f2d58b'},
+  {water:'#3dbbd0',wave:'rgba(255,255,255,0.35)',grass:'#6cc26a',bush:'#4a9f4e',sand:'#e8cf8a'},
+  {water:'#4aa3f0',wave:'rgba(255,255,255,0.38)',grass:'#4fae5a',bush:'#388a42',sand:'#e5c98a'},
+  {water:'#2fb8a0',wave:'rgba(255,255,255,0.30)',grass:'#7bc96f',bush:'#56a84f',sand:'#efd9a0',lily:true},
+  {water:'#2f5f9e',wave:'rgba(255,255,255,0.26)',grass:'#3d7f4a',bush:'#2c5f38',sand:'#b9a574',rain:true},
+];
+
+/* ---------- DOM ---------- */
+const stageEl=$('stage'), canvas=$('game'), ctx=canvas.getContext('2d');
+const video=$('cam'), camBox=$('camBox'), camOverlay=$('camOverlay');
+const hud=$('hud'), rescueBtn=$('rescueBtn'), banner=$('banner');
+
+/* ---------- game state ---------- */
+const G={
+  phase:'menu', mode:'none', cameraOn:false, stage:0, time:0, scroll:0,
+  boat:{x:W/2,y:BOAT_Y,vx:0,tilt:0,bump:0,passengers:[]},
+  obstacles:[], animals:[], dock:null, particles:[], confetti:[],
+  stageRescued:0, allRescued:[], nextAnimalId:1,
+  net:{active:false,scale:0}, buttonNetTimer:0,
+  obstacleTimer:2.5, animalTimer:1.2,
+  input:{poseSteer:0,handUp:false,keyLeft:false,keyRight:false,keySpace:false,touchSteer:0},
+  seenTimer:0, calibReturn:'start', dist:0, muted:false,
+};
+let calib=null, calSamples=[], poseLandmarker=null, stream=null, lastPoseTime=0, lastDetect=0, lastLandmarks=null;
+let bannerTimer=null;
+
+/* ---------- pure logic (also used by the self-test) ---------- */
+function analyzePose(lm){
+  if(!lm||lm.length<17) return null;
+  const vis=p=>(p.visibility==null?1:p.visibility)>0.5;
+  const ls=lm[11], rs=lm[12];
+  if(!vis(ls)||!vis(rs)) return null;
+  const cx=1-(ls.x+rs.x)/2;               // mirrored: child's left = small x
+  const cy=(ls.y+rs.y)/2;
+  const width=Math.abs(ls.x-rs.x);
+  let handHeight=-1;                       // how far the highest wrist is above the shoulder line
+  for(const w of [lm[15],lm[16]]) if(vis(w)) handHeight=Math.max(handHeight,cy-w.y);
+  return {cx,cy,width,handHeight};
+}
+function computeSteer(cx,cal,deadZone=0.12,full=0.6){
+  if(!cal) return 0;
+  const lean=(cx-cal.cx)/Math.max(cal.width,0.05);   // in shoulder widths
+  const mag=Math.abs(lean);
+  if(mag<deadZone) return 0;
+  return Math.sign(lean)*Math.min(1,(mag-deadZone)/(full-deadZone));
+}
+function updateHandNet(handHeight,wasUp,shoulderWidth){
+  const sw=Math.max(shoulderWidth,0.1);
+  return wasUp ? handHeight > 0.05*sw : handHeight > 0.3*sw;   // hysteresis: no flicker
+}
+function circleCirclePush(cx,cy,r,ox,oy,orad){
+  const dx=cx-ox, dy=cy-oy, d=Math.hypot(dx,dy), min=r+orad;
+  if(d>=min) return null;
+  if(d<1e-6) return {x:min,y:0};
+  const pen=min-d; return {x:dx/d*pen,y:dy/d*pen};
+}
+function circleRectPush(cx,cy,r,rect){
+  const hx=rect.w/2, hy=rect.h/2;
+  const px=clamp(cx,rect.x-hx,rect.x+hx), py=clamp(cy,rect.y-hy,rect.y+hy);
+  const dx=cx-px, dy=cy-py, d=Math.hypot(dx,dy);
+  if(d>=r) return null;
+  if(d<1e-6){ const left=cx-(rect.x-hx), right=(rect.x+hx)-cx; return left<right?{x:-(left+r),y:0}:{x:right+r,y:0}; }
+  const pen=r-d; return {x:dx/d*pen,y:dy/d*pen};
+}
+function inNetRange(a){ return Math.hypot(a.x-G.boat.x,a.y-G.boat.y)<NET_R; }
+function makeAnimal(type,x,y){ return {id:G.nextAnimalId++,type,x,y,r:20,t:rnd(0,6),drift:rnd(-8,8),rescued:false}; }
+function tryRescue(a){
+  if(a.rescued) return false;           // each animal only once
+  a.rescued=true;
+  const i=G.animals.indexOf(a); if(i>=0) G.animals.splice(i,1);
+  G.boat.passengers.push(a.type); G.allRescued.push(a.type); G.stageRescued++;
+  for(let k=0;k<6;k++) G.particles.push({x:a.x,y:a.y,vx:rnd(-40,40),vy:rnd(-90,-40),life:rnd(.6,1.1),text:k%2?'💛':'✨'});
+  sfxDing(); updateHud();
+  if(G.stageRescued<STAGES[G.stage].target) showBanner(`Task ${G.stageRescued} of ${STAGES[G.stage].target} done! ⭐`,1400);
+  return true;
+}
+
+/* ---------- audio (tiny synth, created on first user gesture) ---------- */
+let AC=null;
+function audio(){ try{ if(!AC) AC=new (window.AudioContext||window.webkitAudioContext)(); if(AC.state==='suspended') AC.resume(); return AC; }catch(e){ return null; } }
+function tone(f,dur,type='sine',vol=0.12,when=0){
+  const ac=audio(); if(!ac) return;
+  const o=ac.createOscillator(), g=ac.createGain(); o.type=type; o.frequency.value=f;
+  const t0=ac.currentTime+when; g.gain.setValueAtTime(vol,t0); g.gain.exponentialRampToValueAtTime(0.001,t0+dur);
+  o.connect(g).connect(ac.destination); o.start(t0); o.stop(t0+dur+0.05);
+}
+const sfxDing=()=>{ tone(880,.15); tone(1320,.3,'sine',.1,.12); };
+const sfxBonk=()=>tone(150,.25,'triangle',.12);
+const sfxNet=()=>tone(520,.12,'square',.05);
+const sfxTada=()=>{ [523,659,784,1047].forEach((f,i)=>tone(f,.35,'sine',.12,i*.13)); };
+
+/* ---------- background music: soft generated tune, one per stage ---------- */
+const MUSIC=[
+  {root:60,bpm:84, scale:[0,2,4,7,9],  chords:[0,5,-3,-5], lead:'sine',     arp:0},      // Duck Bend: C major, sunny
+  {root:62,bpm:92, scale:[0,2,4,7,9],  chords:[0,5,-3,-5], lead:'triangle', arp:0},      // Turtle Creek: D major, relaxed
+  {root:57,bpm:100,scale:[0,3,5,7,10], chords:[0,-4,3,-2], lead:'sine',     arp:0},      // Otter Falls: A minor, adventurous
+  {root:65,bpm:104,scale:[0,2,4,7,9],  chords:[0,5,-3,-5], lead:'triangle', arp:.028},   // Lily Lagoon: F major, dreamy arpeggio
+  {root:62,bpm:118,scale:[0,3,5,7,10], chords:[0,-4,3,-2], lead:'triangle', arp:.036},   // Storm Rapids: D minor, driving
+];
+function mnote(ac,dest,midi,when,dur,type,vol){
+  const o=ac.createOscillator(), g=ac.createGain(); o.type=type; o.frequency.value=440*Math.pow(2,(midi-69)/12);
+  g.gain.setValueAtTime(0.0001,when); g.gain.exponentialRampToValueAtTime(vol,when+0.03); g.gain.exponentialRampToValueAtTime(0.0001,when+dur);
+  o.connect(g); g.connect(dest); o.start(when); o.stop(when+dur+0.05);
+}
+const Music={
+  timer:null, idx:-1, step:0, next:0, out:null, lp:null, mi:2,
+  start(i){
+    if(this.idx===i&&this.timer) return;
+    const ac=audio(); if(!ac) return; this.halt();
+    const out=ac.createGain(), lp=ac.createBiquadFilter(); lp.type='lowpass'; lp.frequency.value=2200;
+    out.connect(lp); lp.connect(ac.destination);
+    out.gain.setValueAtTime(0,ac.currentTime); out.gain.linearRampToValueAtTime(G.muted?0:0.55,ac.currentTime+1.2);
+    this.out=out; this.lp=lp; this.idx=i; this.step=0; this.mi=2; this.next=ac.currentTime+0.15;
+    this.timer=setInterval(()=>this.tick(),90);
+  },
+  tick(){
+    if(!AC||this.idx<0) return;
+    while(this.next<AC.currentTime+0.35){ this.play(this.next); this.next+=60/MUSIC[this.idx].bpm/2; this.step++; }
+  },
+  play(t){
+    const m=MUSIC[this.idx], ac=AC, beat=60/m.bpm;
+    const bar=Math.floor(this.step/8)%m.chords.length, s=this.step%8, ch=m.root+m.chords[bar];
+    if(s===0) mnote(ac,this.out,ch-12,t,beat*3.2,'triangle',0.07);
+    if(s===4) mnote(ac,this.out,ch-12+7,t,beat*1.6,'triangle',0.045);
+    if(m.arp){ const a=[0,7,12,7,0,7,12,16][s]; mnote(ac,this.out,ch+a,t,beat*0.7,'sine',m.arp); }
+    if((s%2===0&&Math.random()<0.6)||(s%2===1&&Math.random()<0.25)){
+      this.mi=clamp(this.mi+Math.floor(rnd(-2,3)),0,m.scale.length*2-1);
+      const n=m.root+12+m.scale[this.mi%m.scale.length]+(this.mi>=m.scale.length?12:0);
+      mnote(ac,this.out,n,t,beat*1.1,m.lead,0.045);
+    }
+  },
+  halt(){
+    if(this.timer){ clearInterval(this.timer); this.timer=null; }
+    if(this.out&&AC){
+      const o=this.out, l=this.lp, now=AC.currentTime;
+      o.gain.cancelScheduledValues(now); o.gain.setValueAtTime(o.gain.value,now); o.gain.linearRampToValueAtTime(0,now+0.4);
+      setTimeout(()=>{ try{ o.disconnect(); l.disconnect(); }catch(e){} },700);
+    }
+    this.out=null; this.idx=-1;
+  },
+  refreshMute(){
+    if(this.out&&AC){ const g=this.out.gain, now=AC.currentTime; g.cancelScheduledValues(now); g.setValueAtTime(g.value,now); g.linearRampToValueAtTime(G.muted?0:0.55,now+0.3); }
+  }
+};
+function syncMusic(){ if(G.phase==='playing') Music.start(G.stage); else Music.halt(); }
+
+/* ---------- UI helpers ---------- */
+function showOverlay(id){ document.querySelectorAll('.overlay').forEach(o=>o.classList.toggle('show',o.id===id)); }
+function hideOverlays(){ document.querySelectorAll('.overlay').forEach(o=>o.classList.remove('show')); }
+function showBanner(text,ms=2600){ banner.textContent=text; banner.classList.add('show'); clearTimeout(bannerTimer); bannerTimer=setTimeout(()=>banner.classList.remove('show'),ms); }
+function setPhase(p){ G.phase=p; syncUI(); syncMusic(); }
+function syncUI(){
+  const p=G.phase, inGame=['playing','paused','lost','stageDone'].includes(p);
+  hud.style.display=inGame?'flex':'none';
+  rescueBtn.style.display=p==='playing'?'block':'none';
+  camBox.style.display=(G.mode==='camera'&&G.cameraOn&&p!=='menu')?'block':'none';
+  $('recalBtn').style.display=G.mode==='camera'?'':'none';
+}
+function updateHud(){
+  const st=STAGES[G.stage];
+  $('hudStage').textContent=`${G.stage+1}/${STAGES.length} · ${st.name}`;
+  $('hudCount').textContent=`🐾 ${G.stageRescued} / ${st.target}`;
+}
+function resize(){
+  const s=Math.min(innerWidth/W,innerHeight/H);
+  const cw=Math.floor(W*s), ch=Math.floor(H*s), dpr=Math.min(2,devicePixelRatio||1);
+  stageEl.style.width=cw+'px'; stageEl.style.height=ch+'px';
+  canvas.width=Math.round(cw*dpr); canvas.height=Math.round(ch*dpr);
+  canvas.style.width=cw+'px'; canvas.style.height=ch+'px';
+  ctx.setTransform(canvas.width/W,0,0,canvas.height/H,0,0);
+}
+addEventListener('resize',resize); resize();
+
+/* ---------- game flow ---------- */
+function newGame(){
+  G.stage=0; G.allRescued=[]; G.nextAnimalId=1; G.time=0;
+}
+function startStage(i){
+  const st=STAGES[i]; G.stage=i;
+  Object.assign(G.boat,{x:W/2,y:BOAT_Y,vx:0,tilt:0,bump:0,passengers:[]});
+  G.obstacles=[]; G.animals=[]; G.dock=null; G.particles=[]; G.stageRescued=0;
+  G.net.active=false; G.net.scale=0; G.buttonNetTimer=0;
+  G.obstacleTimer=2.5; G.animalTimer=1.2; G.dist=0;
+  G.input.touchSteer=0; G.input.keySpace=false;
+  hideOverlays(); updateHud(); setPhase('playing');
+  showBanner(`Stage ${i+1}: ${st.name} — ${st.tip}`,3400);
+}
+function stageComplete(){
+  sfxTada(); setPhase('stageDone');
+  const st=STAGES[G.stage], last=G.stage===STAGES.length-1;
+  $('stageDoneTitle').textContent=last?'🎉 All stages done!':`🎉 Stage ${G.stage+1} done!`;
+  $('stageDoneText').textContent=`All ${G.stageRescued} rescue tasks done at ${st.name}! Your friends hopped safely onto the dock.`;
+  $('stageAnimals').textContent=G.boat.passengers.map(t=>ANIMALS[t]).join(' ');
+  $('nextBtn').textContent=last?'See the celebration 🎊':'Next stage ▶';
+  showOverlay('stageScreen');
+}
+function nextStage(){
+  if(G.stage<STAGES.length-1) startStage(G.stage+1); else win();
+}
+function win(){
+  setPhase('won');
+  $('winAnimals').textContent=G.allRescued.map(t=>ANIMALS[t]).join(' ');
+  $('winText').textContent=`${G.allRescued.length} animals are safe and sound. Great teamwork, captain!`;
+  G.confetti=Array.from({length:140},()=>({x:rnd(0,W),y:rnd(-H,0),vx:rnd(-30,30),vy:rnd(60,160),w:rnd(6,12),h:rnd(8,16),rot:rnd(0,TAU),rs:rnd(-4,4),c:['#ff5a5a','#ffd60a','#5cc45c','#ffffff','#ff9ff3','#48dbfb'][Math.floor(rnd(0,6))]}));
+  sfxTada(); setTimeout(sfxTada,500);
+  showOverlay('winScreen');
+}
+function resetToMenu(){
+  stopCamera(); G.mode='none'; calib=null;
+  G.obstacles=[]; G.animals=[]; G.dock=null; G.particles=[]; G.confetti=[];
+  Object.assign(G.boat,{x:W/2,vx:0,tilt:0,bump:0,passengers:[]});
+  G.net.scale=0; G.net.active=false;
+  camBox.classList.remove('big','handup');
+  setPhase('menu'); showOverlay('startScreen');
+}
+
+/* ---------- spawning ---------- */
+function spawnObstacle(){
+  if(G.obstacles.some(o=>o.y<70)) return false;             // keep gaps between rows
+  const isLog=Math.random()<0.45; let o=null;
+  for(let tries=0;tries<20;tries++){
+    if(isLog){ const w=rnd(90,140); o={type:'log',x:rnd(RIVER_L+70+w/2,RIVER_R-70-w/2),y:-60,w,h:34,seed:rnd(0,10)}; }
+    else { const r=rnd(22,32); o={type:'rock',x:rnd(RIVER_L+70+r,RIVER_R-70-r),y:-60,r,seed:rnd(0,10)}; }
+    const half=o.r||o.w/2;
+    if(!G.animals.some(a=>Math.abs(a.y-o.y)<100&&Math.abs(a.x-o.x)<half+45)) break;
+  }
+  const st=STAGES[G.stage];
+  if(st.drift&&Math.random()<0.7) o.vx=rnd(0.4,1)*st.drift*(Math.random()<0.5?-1:1);   // drifting hazards in later stages
+  G.obstacles.push(o); return true;
+}
+function spawnAnimal(){
+  const types=STAGES[G.stage].animals; const type=types[Math.floor(rnd(0,types.length))];
+  let x=rnd(RIVER_L+40,RIVER_R-40);
+  for(let tries=0;tries<20;tries++){
+    if(!G.obstacles.some(o=>Math.abs(o.y-(-70))<110&&Math.abs(o.x-x)<(o.r||o.w/2)+45)) break;
+    x=rnd(RIVER_L+40,RIVER_R-40);
+  }
+  G.animals.push(makeAnimal(type,x,-70));
+}
+
+/* ---------- update ---------- */
+function update(dt){
+  const st=STAGES[G.stage], b=G.boat, inp=G.input;
+  let steer=(inp.keyRight?1:0)-(inp.keyLeft?1:0)+inp.touchSteer;
+  if(G.mode==='camera') steer+=inp.poseSteer;
+  steer=clamp(steer,-1,1);
+  b.vx+=(steer*240-b.vx)*Math.min(1,dt*7);
+  b.x+=b.vx*dt;
+  if(st.current) b.x+=st.current*Math.sin(G.time*0.9)*dt;      // stormy current (stage 5)
+  b.tilt+=(steer*0.18-b.tilt)*Math.min(1,dt*6);
+
+  if(G.buttonNetTimer>0) G.buttonNetTimer-=dt;
+  const wantNet=(G.mode==='camera'&&inp.handUp)||inp.keySpace||G.buttonNetTimer>0;
+  if(wantNet&&!G.net.active) sfxNet();
+  G.net.active=wantNet;
+  G.net.scale+=((wantNet?1:0)-G.net.scale)*Math.min(1,dt*10);
+
+  if(b.bump>0) b.bump-=dt;
+  const speed=st.speed*(b.bump>0?0.45:1);
+  G.scroll=(G.scroll+speed*dt)%64; G.dist+=speed*dt; G.time+=dt;
+
+  for(const o of G.obstacles){
+    o.y+=speed*dt;
+    if(o.vx){ o.x+=o.vx*dt; const half=(o.r||o.w/2)+8;
+      if(o.x<RIVER_L+half){ o.x=RIVER_L+half; o.vx=Math.abs(o.vx); }
+      if(o.x>RIVER_R-half){ o.x=RIVER_R-half; o.vx=-Math.abs(o.vx); } }
+  }
+  G.obstacles=G.obstacles.filter(o=>o.y<H+120);
+  for(const a of G.animals){
+    a.t+=dt; a.y+=speed*dt*0.85;
+    a.x=clamp(a.x+Math.sin(a.t*0.8)*14*dt+a.drift*dt,RIVER_L+30,RIVER_R-30);
+    if(a.y>H+50){ a.y=-70; a.x=rnd(RIVER_L+40,RIVER_R-40); }   // float back around, never lost
+  }
+
+  if(G.dock){
+    G.dock.y+=speed*dt;
+    if(G.dock.y>=BOAT_Y-80){ stageComplete(); return; }
+  } else if(G.stageRescued>=st.target){
+    G.dock={y:-140}; showBanner('Great job! 🎉 Head for the dock!');
+  } else {
+    G.obstacleTimer-=dt;
+    if(G.obstacleTimer<=0) G.obstacleTimer=spawnObstacle()?st.obstacleEvery*rnd(0.85,1.2):0.3;
+    G.animalTimer-=dt;
+    if(G.animalTimer<=0&&G.animals.length<(st.maxAnimals||2)){ spawnAnimal(); G.animalTimer=rnd(st.gap[0],st.gap[1]); }
+  }
+
+  // gentle collisions: boat slides out, obstacle is nudged, speed dips briefly
+  for(const o of G.obstacles){
+    const push=o.type==='rock'?circleCirclePush(b.x,b.y,BOAT_R,o.x,o.y,o.r):circleRectPush(b.x,b.y,BOAT_R,o);
+    if(!push) continue;
+    b.x+=push.x; o.y-=push.y;
+    if(Math.abs(push.y)>Math.abs(push.x)){ b.x+=(b.x<=o.x?-1:1)*110*dt; }   // head-on: ease around it
+    if(b.bump<=0){ sfxBonk(); for(let k=0;k<5;k++) G.particles.push({x:b.x,y:b.y-30,vx:rnd(-60,60),vy:rnd(-80,-20),life:.5,text:'💦'}); }
+    b.bump=0.5; b.vx*=0.2;
+  }
+  b.x=clamp(b.x,RIVER_L+BOAT_R,RIVER_R-BOAT_R);
+
+  if(G.net.active&&G.net.scale>0.6) for(const a of [...G.animals]) if(inNetRange(a)) tryRescue(a);
+
+  for(const p of G.particles){ p.life-=dt; p.x+=p.vx*dt; p.y+=p.vy*dt; }
+  G.particles=G.particles.filter(p=>p.life>0);
+}
+function updateConfetti(dt){
+  for(const c of G.confetti){ c.x+=c.vx*dt; c.y+=c.vy*dt; c.rot+=c.rs*dt; if(c.y>H+20){ c.y=-20; c.x=rnd(0,W); } }
+}
+
+/* ---------- drawing ---------- */
+function roundRect(x,y,w,h,r){ ctx.beginPath(); ctx.moveTo(x+r,y); ctx.arcTo(x+w,y,x+w,y+h,r); ctx.arcTo(x+w,y+h,x,y+h,r); ctx.arcTo(x,y+h,x,y,r); ctx.arcTo(x,y,x+w,y,r); ctx.closePath(); }
+function drawLilies(){
+  const sp=150, wd=RIVER_R-RIVER_L-120;
+  const f=(k,n)=>Math.abs(Math.sin(k*12.9898+n*78.233)*43758.5453)%1;
+  ctx.textAlign='center'; ctx.textBaseline='middle';
+  for(let k=Math.ceil((G.dist-H-60)/sp);k<=Math.floor((G.dist+60)/sp);k++){
+    for(const n of [1,2]){
+      const x=RIVER_L+60+f(k,n)*wd, y=G.dist-k*sp+(n-1)*70-35;
+      ctx.fillStyle='#4aa65a'; ctx.strokeStyle='#2f7a3e'; ctx.lineWidth=2;
+      ctx.beginPath(); ctx.ellipse(x,y,22,15,0.3,0.25,TAU-0.1); ctx.lineTo(x,y); ctx.closePath(); ctx.fill(); ctx.stroke();
+      if(f(k,n+5)>0.5){ ctx.font=`18px ${EMOJI}`; ctx.fillText('🌸',x+3,y-2); }
+    }
+  }
+}
+function drawRain(){
+  ctx.strokeStyle='rgba(220,235,255,0.35)'; ctx.lineWidth=2; ctx.beginPath();
+  for(let i=0;i<45;i++){ const x=(i*61+G.time*40)%W, y=((G.time*420+i*131)%(H+60))-30; ctx.moveTo(x,y); ctx.lineTo(x-6,y+18); }
+  ctx.stroke();
+}
+function drawRiver(){
+  const th=THEMES[(G.phase==='menu'||G.phase==='won')?0:G.stage]||THEMES[0];
+  ctx.fillStyle=th.water; ctx.fillRect(0,0,W,H);
+  ctx.strokeStyle=th.wave; ctx.lineWidth=3;
+  let row=0;
+  for(let y=-64+G.scroll;y<H+64;y+=64,row++){
+    const ox=row%2?48:0;
+    for(let x=RIVER_L+20+ox;x<RIVER_R-20;x+=96){ ctx.beginPath(); ctx.arc(x,y,14,Math.PI*1.1,Math.PI*1.9); ctx.stroke(); }
+  }
+  if(th.lily) drawLilies();
+  for(const side of [0,1]){
+    const x=side?W-BANK:0;
+    ctx.fillStyle=th.grass; ctx.fillRect(x,0,BANK,H);
+    ctx.fillStyle=th.sand; ctx.fillRect(side?x:BANK-12,0,12,H);
+    ctx.fillStyle=th.bush;
+    for(let y=-90+(G.scroll*1.0);y<H+90;y+=90){ ctx.beginPath(); ctx.arc(side?x+30:14,y,11,0,TAU); ctx.fill(); }
+  }
+  if(th.rain) drawRain();
+}
+function drawDock(d){
+  const y=d.y;
+  ctx.fillStyle='#c98a4b'; ctx.strokeStyle='#6b4423'; ctx.lineWidth=4;
+  roundRect(RIVER_L-8,y-32,RIVER_R-RIVER_L+16,64,10); ctx.fill(); ctx.stroke();
+  ctx.strokeStyle='rgba(107,68,35,0.5)'; ctx.lineWidth=2;
+  for(let x=RIVER_L+10;x<RIVER_R;x+=26){ ctx.beginPath(); ctx.moveTo(x,y-28); ctx.lineTo(x,y+28); ctx.stroke(); }
+  ctx.font=`bold 30px ${EMOJI}`; ctx.textAlign='center'; ctx.textBaseline='middle';
+  ctx.fillText('🏁',RIVER_L+30,y); ctx.fillText('🏁',RIVER_R-30,y);
+  ctx.font='bold 28px sans-serif'; ctx.lineWidth=5; ctx.strokeStyle='#4a2d14'; ctx.fillStyle='#fff';
+  ctx.strokeText('FINISH DOCK',W/2,y); ctx.fillText('FINISH DOCK',W/2,y);
+}
+function drawObstacle(o){
+  if(o.type==='rock'){
+    ctx.fillStyle='#9a9aa8'; ctx.strokeStyle='#45455a'; ctx.lineWidth=4; ctx.beginPath();
+    for(let i=0;i<10;i++){ const a=i/10*TAU, r=o.r*(1+0.1*Math.sin(i*2.3+o.seed)); const px=o.x+Math.cos(a)*r, py=o.y+Math.sin(a)*r; i?ctx.lineTo(px,py):ctx.moveTo(px,py); }
+    ctx.closePath(); ctx.fill(); ctx.stroke();
+    ctx.fillStyle='rgba(255,255,255,0.35)'; ctx.beginPath(); ctx.arc(o.x-o.r*0.3,o.y-o.r*0.35,o.r*0.3,0,TAU); ctx.fill();
+  } else {
+    ctx.fillStyle='#a0622d'; ctx.strokeStyle='#5a3414'; ctx.lineWidth=4;
+    roundRect(o.x-o.w/2,o.y-o.h/2,o.w,o.h,o.h/2); ctx.fill(); ctx.stroke();
+    ctx.strokeStyle='rgba(90,52,20,0.45)'; ctx.lineWidth=2;
+    for(let k=0;k<3;k++){ ctx.beginPath(); ctx.moveTo(o.x-o.w/2+16,o.y-9+k*9); ctx.lineTo(o.x+o.w/2-16,o.y-9+k*9); ctx.stroke(); }
+    ctx.fillStyle='#d9a066'; ctx.strokeStyle='#5a3414'; ctx.lineWidth=3;
+    for(const s of [-1,1]){ ctx.beginPath(); ctx.ellipse(o.x+s*(o.w/2-9),o.y,8,o.h/2-4,0,0,TAU); ctx.fill(); ctx.stroke(); }
+  }
+}
+function drawAnimal(a){
+  const bob=Math.sin(a.t*2)*3, near=inNetRange(a);
+  ctx.fillStyle='rgba(0,60,120,0.18)'; ctx.beginPath(); ctx.ellipse(a.x,a.y+18,20,7,0,0,TAU); ctx.fill();
+  if(near){ ctx.strokeStyle=`rgba(255,214,10,${0.6+0.4*Math.sin(G.time*6)})`; ctx.lineWidth=4; ctx.beginPath(); ctx.arc(a.x,a.y+bob,30,0,TAU); ctx.stroke(); }
+  ctx.font=`38px ${EMOJI}`; ctx.textAlign='center'; ctx.textBaseline='middle';
+  ctx.fillText(ANIMALS[a.type],a.x,a.y+bob);
+}
+function drawNet(b){
+  if(G.net.scale<0.02) return;
+  const r=NET_R*G.net.scale;
+  ctx.save(); ctx.translate(b.x,b.y);
+  ctx.fillStyle='rgba(255,255,255,0.18)'; ctx.beginPath(); ctx.arc(0,0,r,0,TAU); ctx.fill();
+  ctx.save(); ctx.beginPath(); ctx.arc(0,0,r,0,TAU); ctx.clip();
+  ctx.strokeStyle='rgba(255,255,255,0.55)'; ctx.lineWidth=1.5;
+  for(let k=-r;k<=r;k+=22){ ctx.beginPath(); ctx.moveTo(k,-r); ctx.lineTo(k,r); ctx.stroke(); ctx.beginPath(); ctx.moveTo(-r,k); ctx.lineTo(r,k); ctx.stroke(); }
+  ctx.restore();
+  ctx.strokeStyle='#fff'; ctx.lineWidth=4; ctx.setLineDash([12,8]); ctx.beginPath(); ctx.arc(0,0,r,0,TAU); ctx.stroke(); ctx.setLineDash([]);
+  ctx.restore();
+}
+function drawBoat(b){
+  ctx.save(); ctx.translate(b.x,b.y); ctx.rotate(b.tilt);
+  const shake=b.bump>0?Math.sin(b.bump*40)*2:0; ctx.translate(shake,0);
+  ctx.fillStyle='rgba(255,255,255,0.45)'; ctx.beginPath(); ctx.moveTo(-18,34); ctx.lineTo(18,34); ctx.lineTo(32,80); ctx.lineTo(-32,80); ctx.closePath(); ctx.fill();
+  ctx.fillStyle='#ff5a5a'; ctx.strokeStyle='#8a1f1f'; ctx.lineWidth=3;
+  ctx.beginPath(); ctx.moveTo(0,-46); ctx.quadraticCurveTo(32,-10,28,24); ctx.quadraticCurveTo(28,38,16,40); ctx.lineTo(-16,40); ctx.quadraticCurveTo(-28,38,-28,24); ctx.quadraticCurveTo(-32,-10,0,-46); ctx.closePath(); ctx.fill(); ctx.stroke();
+  ctx.fillStyle='#ffe9b3'; ctx.beginPath(); ctx.moveTo(0,-32); ctx.quadraticCurveTo(22,-6,20,32); ctx.lineTo(-20,32); ctx.quadraticCurveTo(-22,-6,0,-32); ctx.closePath(); ctx.fill();
+  ctx.fillStyle='#4a90e2'; ctx.strokeStyle='#1f4f8a'; ctx.lineWidth=2; roundRect(-12,-20,24,16,5); ctx.fill(); ctx.stroke();
+  ctx.strokeStyle='#ff9f1c'; ctx.lineWidth=5; ctx.beginPath(); ctx.arc(0,-28,5,0,TAU); ctx.stroke();
+  const slots=[[-11,8],[11,8],[-11,24],[11,24],[0,16]];
+  ctx.font=`17px ${EMOJI}`; ctx.textAlign='center'; ctx.textBaseline='middle';
+  b.passengers.slice(0,5).forEach((t,i)=>ctx.fillText(ANIMALS[t],slots[i][0],slots[i][1]));
+  if(b.passengers.length>5){ ctx.fillStyle='#fff'; ctx.beginPath(); ctx.arc(22,-30,11,0,TAU); ctx.fill(); ctx.fillStyle='#0b2a4a'; ctx.font='bold 12px sans-serif'; ctx.fillText('+'+(b.passengers.length-5),22,-30); }
+  ctx.restore();
+}
+function drawParticles(){
+  ctx.textAlign='center'; ctx.textBaseline='middle';
+  for(const p of G.particles){ ctx.globalAlpha=clamp(p.life*1.5,0,1); ctx.font=`20px ${EMOJI}`; ctx.fillText(p.text,p.x,p.y); }
+  ctx.globalAlpha=1;
+}
+function drawConfetti(){
+  for(const c of G.confetti){ ctx.save(); ctx.translate(c.x,c.y); ctx.rotate(c.rot); ctx.fillStyle=c.c; ctx.fillRect(-c.w/2,-c.h/2,c.w,c.h); ctx.restore(); }
+}
+function render(){
+  drawRiver();
+  if(G.dock) drawDock(G.dock);
+  for(const o of G.obstacles) drawObstacle(o);
+  for(const a of G.animals) drawAnimal(a);
+  drawNet(G.boat); drawBoat(G.boat); drawParticles();
+  if(G.phase==='won') drawConfetti();
+}
+
+/* ---------- camera + pose ---------- */
+async function initPose(){
+  if(poseLandmarker) return;
+  const {FilesetResolver,PoseLandmarker}=await import(CDN);
+  const vision=await FilesetResolver.forVisionTasks(CDN+'/wasm');
+  const opts=d=>({baseOptions:{modelAssetPath:MODEL,delegate:d},runningMode:'VIDEO',numPoses:1});
+  try{ poseLandmarker=await PoseLandmarker.createFromOptions(vision,opts('GPU')); }
+  catch(e){ poseLandmarker=await PoseLandmarker.createFromOptions(vision,opts('CPU')); }
+}
+function camError(e){
+  $('camSpin').style.display='none'; $('camButtons').style.display='flex';
+  const n=e&&e.name;
+  let title='Camera trouble', msg='Something went wrong with the camera.';
+  if(n==='NotAllowedError'||n==='SecurityError'){ title='Camera permission needed'; msg='The camera was blocked. Allow the camera in your browser (the icon in the address bar) and try again. Note: camera access only works on https:// or localhost.'; }
+  else if(n==='NotFoundError'||n==='OverconstrainedError'){ title='No camera found'; msg='I could not find a camera on this device. You can still play with the keyboard or touch.'; }
+  else if(n==='NotReadableError'){ title='Camera is busy'; msg='Another app seems to be using the camera. Close it and try again.'; }
+  else if(n==='LibError'){ title='Tracking could not load'; msg='The pose tracking library needs an internet connection the first time. Check the connection and try again, or play without the camera.'; }
+  $('camTitle').textContent=title; $('camMsg').textContent=msg;
+}
+async function startCamera(){
+  showOverlay('camScreen'); $('camSpin').style.display=''; $('camButtons').style.display='none';
+  $('camTitle').textContent='Starting the camera…'; $('camMsg').textContent='Please allow the camera when your browser asks.';
+  try{
+    stream=await navigator.mediaDevices.getUserMedia({video:{facingMode:'user',width:{ideal:640},height:{ideal:480}},audio:false});
+    video.srcObject=stream; await video.play();
+  }catch(e){ camError(e); return; }
+  $('camTitle').textContent='Loading the tracking brain…'; $('camMsg').textContent='This needs internet the first time.';
+  try{ await initPose(); }catch(e){ console.error(e); stopCamera(); camError({name:'LibError'}); return; }
+  G.mode='camera'; G.cameraOn=true; lastPoseTime=0; lastDetect=0;
+  requestAnimationFrame(poseLoop);
+  G.calibReturn='start'; startCalibration();
+}
+function stopCamera(){
+  G.cameraOn=false;
+  if(stream){ stream.getTracks().forEach(t=>t.stop()); stream=null; }
+  video.srcObject=null; camBox.style.display='none';
+}
+function poseLoop(){
+  if(!G.cameraOn) return;
+  const now=performance.now();
+  if(video.readyState>=2&&now-lastDetect>33){
+    lastDetect=now;
+    try{ const res=poseLandmarker.detectForVideo(video,now); handlePose(res.landmarks&&res.landmarks[0],now); }catch(e){ console.warn(e); }
+  }
+  requestAnimationFrame(poseLoop);
+}
+function handlePose(lm,now){
+  const info=analyzePose(lm); lastLandmarks=info?lm:null;
+  if(info){
+    lastPoseTime=now;
+    if(G.phase==='calibrating'){ calSamples.push(info); calibTick(); }
+    else if(calib){
+      const s=computeSteer(info.cx,calib);
+      G.input.poseSteer+=(s-G.input.poseSteer)*0.35;
+      G.input.handUp=updateHandNet(info.handHeight,G.input.handUp,calib.width);
+    }
+  } else {
+    G.input.poseSteer*=0.8; G.input.handUp=false;
+  }
+  camBox.classList.toggle('handup',G.input.handUp);
+  drawCamOverlay();
+}
+function drawCamOverlay(){
+  const w=video.videoWidth||320, h=video.videoHeight||240;
+  if(camOverlay.width!==w||camOverlay.height!==h){ camOverlay.width=w; camOverlay.height=h; }
+  const x=camOverlay.getContext('2d'); x.clearRect(0,0,w,h);
+  if(calib){ x.strokeStyle='rgba(255,255,255,0.7)'; x.lineWidth=3; x.setLineDash([8,6]); const cx=(1-calib.cx)*w; x.beginPath(); x.moveTo(cx,0); x.lineTo(cx,h); x.stroke(); x.setLineDash([]); }
+  const lm=lastLandmarks; if(!lm) return;
+  const dot=(p,c)=>{ x.fillStyle=c; x.beginPath(); x.arc(p.x*w,p.y*h,9,0,TAU); x.fill(); };
+  x.strokeStyle='#ffd60a'; x.lineWidth=4; x.beginPath(); x.moveTo(lm[11].x*w,lm[11].y*h); x.lineTo(lm[12].x*w,lm[12].y*h); x.stroke();
+  dot(lm[11],'#ffd60a'); dot(lm[12],'#ffd60a'); dot(lm[15],'#ff6b6b'); dot(lm[16],'#ff6b6b');
+}
+function startCalibration(){
+  calib=null; calSamples=[]; G.input.poseSteer=0; G.input.handUp=false;
+  setPhase('calibrating'); camBox.classList.add('big'); camBox.style.display='block';
+  $('calibBar').style.width='0%'; $('calibStatus').textContent='Looking for you…';
+  showOverlay('calibScreen');
+}
+function calibTick(){
+  const need=50; $('calibBar').style.width=Math.min(100,calSamples.length/need*100)+'%';
+  $('calibStatus').textContent='Hold still… ✨';
+  if(calSamples.length<need) return;
+  const xs=calSamples.map(s=>s.cx).sort((a,b)=>a-b);
+  calib={cx:xs[Math.floor(xs.length/2)], width:calSamples.reduce((a,s)=>a+s.width,0)/calSamples.length};
+  $('calibStatus').textContent='Great! 👍 Here we go!';
+  setPhase('calibrated');
+  setTimeout(()=>{
+    camBox.classList.remove('big');
+    if(G.calibReturn==='resume'){ hideOverlays(); setPhase('playing'); showBanner('Welcome back! 🚤'); }
+    else startStage(0);
+  },900);
+}
+function handleTracking(now,dt){
+  if(G.mode!=='camera') return;
+  const age=now-lastPoseTime;
+  if(G.phase==='calibrating'&&age>1500) $('calibStatus').textContent="I can't see your shoulders 👀 Step back a little!";
+  if(G.phase==='playing'&&age>1500){ setPhase('lost'); G.seenTimer=0; G.input.poseSteer=0; G.input.handUp=false; showOverlay('lostScreen'); }
+  else if(G.phase==='lost'){
+    if(age<250){ G.seenTimer+=dt; if(G.seenTimer>0.6){ hideOverlays(); setPhase('playing'); showBanner('There you are! 🚤'); } }
+    else G.seenTimer=0;
+  }
+}
+
+/* ---------- main loop ---------- */
+let last=performance.now();
+function frame(now){
+  const dt=Math.min(0.05,(now-last)/1000); last=now;
+  handleTracking(now,dt);
+  if(G.phase==='playing') update(dt);
+  else if(G.phase==='won') updateConfetti(dt);
+  else if(G.phase==='menu'){ G.scroll=(G.scroll+30*dt)%64; G.boat.tilt=Math.sin(now/900)*0.08; }
+  render();
+  requestAnimationFrame(frame);
+}
+requestAnimationFrame(frame);
+
+/* ---------- controls ---------- */
+$('startCamBtn').onclick=()=>{ audio(); newGame(); startCamera(); };
+$('startKeysBtn').onclick=()=>{ audio(); stopCamera(); G.mode='keys'; newGame(); startStage(0); };
+$('camRetryBtn').onclick=()=>startCamera();
+$('camNoCamBtn').onclick=()=>{ stopCamera(); G.mode='keys'; newGame(); startStage(0); };
+$('calibSkipBtn').onclick=()=>{ stopCamera(); camBox.classList.remove('big'); G.mode='keys'; if(G.calibReturn==='resume'){ hideOverlays(); setPhase('playing'); } else startStage(0); };
+$('lostKeysBtn').onclick=()=>{ stopCamera(); G.mode='keys'; hideOverlays(); setPhase('playing'); };
+$('pauseBtn').onclick=()=>{ if(G.phase==='playing'){ setPhase('paused'); showOverlay('pauseScreen'); } };
+$('resumeBtn').onclick=()=>{ hideOverlays(); setPhase('playing'); };
+$('restartBtn').onclick=()=>{ newGame(); startStage(0); };
+$('recalBtn').onclick=()=>{ G.calibReturn='resume'; startCalibration(); };
+$('menuBtn').onclick=()=>resetToMenu();
+const toggleMute=()=>{ G.muted=!G.muted; $('muteBtn').textContent=G.muted?'🔇':'🎵'; Music.refreshMute(); };
+$('muteBtn').onclick=toggleMute;
+$('nextBtn').onclick=()=>nextStage();
+$('playAgainBtn').onclick=()=>{ newGame(); G.confetti=[]; startStage(0); };
+rescueBtn.addEventListener('pointerdown',e=>{ e.preventDefault(); if(G.phase==='playing') G.buttonNetTimer=0.9; });
+
+addEventListener('keydown',e=>{
+  if(e.code==='ArrowLeft'||e.code==='KeyA') G.input.keyLeft=true;
+  if(e.code==='ArrowRight'||e.code==='KeyD') G.input.keyRight=true;
+  if(e.code==='Space'||e.code==='Enter'){ G.input.keySpace=true; if(G.phase==='playing') e.preventDefault(); }
+  if(e.code==='KeyM') toggleMute();
+  if(e.code==='KeyP'){ if(G.phase==='playing') $('pauseBtn').onclick(); else if(G.phase==='paused') $('resumeBtn').onclick(); }
+});
+addEventListener('keyup',e=>{
+  if(e.code==='ArrowLeft'||e.code==='KeyA') G.input.keyLeft=false;
+  if(e.code==='ArrowRight'||e.code==='KeyD') G.input.keyRight=false;
+  if(e.code==='Space'||e.code==='Enter') G.input.keySpace=false;
+});
+canvas.addEventListener('pointerdown',e=>{
+  if(G.phase!=='playing') return;
+  const r=canvas.getBoundingClientRect(); G.input.touchSteer=(e.clientX-r.left)<r.width/2?-1:1;
+  canvas.setPointerCapture(e.pointerId);
+});
+const endTouch=()=>{ G.input.touchSteer=0; };
+canvas.addEventListener('pointerup',endTouch); canvas.addEventListener('pointercancel',endTouch); canvas.addEventListener('lostpointercapture',endTouch);
+document.addEventListener('visibilitychange',()=>{ if(document.hidden&&G.phase==='playing') $('pauseBtn').onclick(); });
+
+/* ---------- self-test (no camera needed) ---------- */
+function runSelfTests(){
+  const R=[]; const t=(name,ok)=>R.push({name,ok:!!ok});
+  const cal={cx:0.5,width:0.3};
+  t('Steering: small lean inside dead zone gives 0', computeSteer(0.51,cal)===0);
+  t('Steering: lean left steers left (negative)', computeSteer(0.5-0.3*0.6,cal)<0);
+  t('Steering: lean right steers right (positive)', computeSteer(0.5+0.3*0.6,cal)>0);
+  t('Steering: output clamped to ±1', Math.abs(computeSteer(0,cal))<=1&&Math.abs(computeSteer(1,cal))<=1);
+  t('Net: raised hand activates', updateHandNet(0.12,false,0.3)===true);
+  t('Net: hand only slightly up does not activate', updateHandNet(0.05,false,0.3)===false);
+  t('Net: stays on in the hysteresis band', updateHandNet(0.03,true,0.3)===true);
+  t('Net: returning to neutral releases', updateHandNet(-0.05,true,0.3)===false);
+
+  t('Stages: at least 5 stages', STAGES.length>=5);
+  t('Stages: every stage has 5 tasks', STAGES.every(s=>s.target===5));
+  t('Stages: speed gets harder every stage', STAGES.every((s,i)=>i===0||s.speed>STAGES[i-1].speed));
+  t('Stages: obstacles get more frequent every stage', STAGES.every((s,i)=>i===0||s.obstacleEvery<STAGES[i-1].obstacleEvery));
+  t('Music: one tune per stage', MUSIC.length>=STAGES.length&&THEMES.length>=STAGES.length);
+  G.mode='keys'; newGame(); startStage(0);
+  const a=makeAnimal('duck',G.boat.x+50,G.boat.y); G.animals=[a];
+  t('Range: nearby animal is in net range', inNetRange(a));
+  const far=makeAnimal('duck',G.boat.x,G.boat.y-NET_R-30);
+  t('Range: distant animal is out of range', !inNetRange(far));
+  G.input.keySpace=true; G.net.scale=1; update(0.05);
+  t('Rescue: in-range animal rescued when net active', a.rescued&&G.stageRescued===1&&G.boat.passengers.length===1);
+  t('Rescue: animal removed from the water', !G.animals.includes(a));
+  t('Duplicate: rescuing the same animal again is ignored', tryRescue(a)===false&&G.stageRescued===1&&G.allRescued.length===1);
+  G.animals=[far]; update(0.05); t('Rescue: out-of-range animal is not rescued', !far.rescued);
+  G.input.keySpace=false; G.animals=[];
+
+  G.obstacles=[{type:'rock',x:G.boat.x+20,y:G.boat.y-20,r:30,seed:0}]; update(0.016);
+  const d=Math.hypot(G.boat.x-G.obstacles[0].x,G.boat.y-G.obstacles[0].y);
+  t('Collision: boat pushed clear of rock, with a gentle bump', d>=BOAT_R+30-0.5&&G.boat.bump>0);
+  t('Collision: boat stays inside the river banks', G.boat.x>=RIVER_L+BOAT_R&&G.boat.x<=RIVER_R-BOAT_R);
+  const lp=circleRectPush(100,100,BOAT_R,{x:110,y:100,w:120,h:34});
+  t('Collision: log overlap produces a push vector', !!lp&&(Math.abs(lp.x)>0||Math.abs(lp.y)>0));
+  t('Collision: no push when not touching', circleCirclePush(0,0,BOAT_R,200,200,30)===null);
+  G.obstacles=[];
+
+  for(let s=0;s<STAGES.length;s++){
+    const st=STAGES[s];
+    while(G.stageRescued<st.target){ const an=makeAnimal('duck',G.boat.x,G.boat.y); G.animals=[an]; tryRescue(an); }
+    update(0.05); t(`Stage ${s+1}: dock appears after ${st.target} rescues`, !!G.dock);
+    G.dock.y=BOAT_Y; update(0.05); t(`Stage ${s+1}: completes at the dock`, G.phase==='stageDone');
+    nextStage();
+  }
+  t('Game: celebration after all stages with every animal', G.phase==='won'&&G.allRescued.length===STAGES.reduce((a,s)=>a+s.target,0));
+  resetToMenu();
+  return R;
+}
+$('testBtn').onclick=()=>{
+  const res=runSelfTests(); const out=$('testOut'); out.style.display='block';
+  out.textContent=res.map(r=>(r.ok?'✅ ':'❌ ')+r.name).join('\n')+`\n\n${res.filter(r=>r.ok).length}/${res.length} passed`;
+};
+if(location.search.includes('test=1')) $('testBtn').onclick();
+window.__splash={G,runSelfTests};
+</script>
+</body>
+</html>
