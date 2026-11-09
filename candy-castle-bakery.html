@@ -1,0 +1,834 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+<title>Candy Castle Bakery</title>
+<style>
+  :root{
+    --pink:#ff6ea9; --pink2:#ff9ec6; --purple:#8a5cff; --purple2:#b89bff;
+    --cream:#fff3e0; --choco:#5b3a1e; --mint:#6ee7c7; --sun:#ffd34e;
+    --sky1:#ffd1e8; --sky2:#c9b8ff; --panel:rgba(255,255,255,.88);
+    --ink:#5a2a4a; --good:#39d98a; --shadow:rgba(90,42,74,.25);
+  }
+  *{box-sizing:border-box; -webkit-tap-highlight-color:transparent;}
+  html,body{margin:0;height:100%;overflow:hidden;font-family:'Baloo 2','Comic Sans MS',system-ui,sans-serif;color:var(--ink);background:#2a1430;}
+  #game{position:fixed;inset:0;overflow:hidden;}
+  canvas#scene{position:absolute;inset:0;width:100%;height:100%;display:block;}
+  /* Camera preview + skeleton */
+  #camWrap{position:absolute;right:14px;top:14px;width:190px;height:142px;border-radius:16px;overflow:hidden;
+    border:4px solid #fff;box-shadow:0 8px 24px var(--shadow);background:#000;z-index:30;}
+  #camWrap video,#camWrap canvas{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;transform:scaleX(-1);}
+  #camWrap .tag{position:absolute;left:0;bottom:0;right:0;font-size:11px;text-align:center;background:rgba(0,0,0,.45);color:#fff;padding:2px;}
+  /* HUD */
+  .hud{position:absolute;z-index:25;}
+  #topbar{left:14px;top:14px;display:flex;gap:10px;align-items:center;flex-wrap:wrap;max-width:60vw;}
+  .chip{background:var(--panel);border-radius:18px;padding:8px 14px;font-weight:800;font-size:15px;
+    box-shadow:0 6px 16px var(--shadow);display:flex;align-items:center;gap:6px;}
+  .chip b{color:var(--pink);}
+  .btn{cursor:pointer;border:none;border-radius:20px;padding:14px 22px;font-size:18px;font-weight:900;color:#fff;
+    background:linear-gradient(180deg,var(--pink),#ff4f98);box-shadow:0 8px 0 #d63b7f,0 12px 20px var(--shadow);
+    transition:transform .08s;font-family:inherit;}
+  .btn:active{transform:translateY(4px);box-shadow:0 4px 0 #d63b7f,0 8px 14px var(--shadow);}
+  .btn.alt{background:linear-gradient(180deg,var(--purple2),var(--purple));box-shadow:0 8px 0 #5e39c9,0 12px 20px var(--shadow);}
+  .btn.alt:active{box-shadow:0 4px 0 #5e39c9,0 8px 14px var(--shadow);}
+  .btn.round{width:58px;height:58px;padding:0;font-size:24px;border-radius:50%;}
+  #controls{right:14px;bottom:14px;display:flex;gap:10px;}
+  /* Overlays */
+  .overlay{position:absolute;inset:0;z-index:40;display:flex;align-items:center;justify-content:center;
+    background:radial-gradient(circle at 50% 30%,rgba(138,92,255,.35),rgba(42,20,48,.85));backdrop-filter:blur(4px);padding:18px;}
+  .card{background:linear-gradient(180deg,#fff,#fff3fb);border-radius:28px;max-width:560px;width:100%;
+    padding:26px;text-align:center;box-shadow:0 20px 50px rgba(0,0,0,.4);border:5px solid #fff;max-height:92vh;overflow-x:hidden;overflow-y:auto;overflow-wrap:anywhere;}
+  .card h1{margin:.1em 0;font-size:40px;color:var(--purple);text-shadow:2px 2px 0 var(--pink2);}
+  .card h2{margin:.2em 0;color:var(--pink);font-size:26px;}
+  .card p{font-size:17px;line-height:1.5;margin:10px 0;}
+  .big{font-size:22px;font-weight:900;}
+  .levelgrid{display:grid;grid-template-columns:repeat(3,1fr);gap:12px;margin:16px 0;}
+  .lvl{position:relative;border-radius:18px;padding:14px 8px;cursor:pointer;color:#fff;font-weight:900;font-size:15px;
+    box-shadow:0 6px 0 rgba(0,0,0,.18);min-height:92px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:6px;border:none;font-family:inherit;}
+  .lvl .emo{font-size:30px;}
+  .lvl.locked{filter:grayscale(.7) brightness(.8);cursor:not-allowed;}
+  .lvl .lock{position:absolute;top:6px;right:8px;font-size:16px;}
+  .stars{font-size:22px;letter-spacing:2px;color:var(--sun);margin:6px 0;min-height:26px;}
+  .hint{font-size:14px;color:#9a6a86;}
+  .calibbar{height:18px;background:#eee;border-radius:10px;overflow:hidden;margin:14px 0;}
+  .calibbar>div{height:100%;width:0;background:linear-gradient(90deg,var(--mint),var(--good));transition:width .2s;}
+  .move-demo{font-size:46px;margin:8px 0;overflow-wrap:anywhere;line-height:1.2;}
+  .stars.wrap{display:flex;flex-wrap:wrap;justify-content:center;gap:6px 14px;letter-spacing:0;font-size:20px;}
+  .stars.wrap .grp{display:inline-flex;align-items:center;gap:1px;white-space:nowrap;background:#fff3fb;border-radius:14px;padding:2px 10px;}
+  .stars.wrap .grp i{font-style:normal;margin-right:4px;font-size:18px;}
+  .starTotal{font-weight:900;font-size:18px;margin:4px 0 10px;}
+  #bigInstruction{position:absolute;left:50%;top:18%;transform:translateX(-50%);z-index:26;
+    background:var(--panel);padding:14px 26px;border-radius:26px;font-size:clamp(18px,3.5vw,30px);font-weight:900;
+    color:var(--purple);box-shadow:0 8px 20px var(--shadow);text-align:center;max-width:90vw;display:none;}
+  #toast{position:absolute;left:50%;top:40%;transform:translate(-50%,-50%) scale(0);z-index:28;
+    font-size:clamp(34px,8vw,70px);font-weight:900;color:#fff;text-shadow:0 4px 0 var(--pink),0 10px 20px rgba(0,0,0,.3);
+    pointer-events:none;transition:transform .3s cubic-bezier(.2,1.6,.4,1);}
+  #toast.show{transform:translate(-50%,-50%) scale(1);}
+  #pauseWarn{display:none;}
+  /* progress inside level */
+  #progwrap{left:50%;bottom:16px;transform:translateX(-50%);width:min(70vw,560px);}
+  #progwrap .bar{height:22px;background:var(--panel);border-radius:14px;overflow:hidden;box-shadow:0 6px 16px var(--shadow);}
+  #progwrap .bar>div{height:100%;width:0;background:linear-gradient(90deg,var(--pink2),var(--pink));transition:width .3s;}
+  #progwrap .lab{text-align:center;font-weight:900;margin-top:4px;color:#fff;text-shadow:0 2px 4px rgba(0,0,0,.4);}
+  canvas#fx{position:absolute;inset:0;width:100%;height:100%;pointer-events:none;z-index:35;}
+  .foot{font-size:12px;color:#b089a0;margin-top:10px;}
+  /* Safer viewport height on phones (address bar) */
+  .card{max-height:92vh;max-height:92dvh;}
+  /* ===== Compact layout: phones (portrait + landscape) and small windows ===== */
+  @media (max-width:760px), (max-height:520px){
+    #camWrap{width:96px;height:128px;top:calc(8px + env(safe-area-inset-top,0px));right:calc(8px + env(safe-area-inset-right,0px));bottom:auto;border-width:3px;border-radius:14px;}
+    #camWrap .tag{font-size:10px;padding:1px;}
+    #topbar{left:calc(8px + env(safe-area-inset-left,0px));top:calc(8px + env(safe-area-inset-top,0px));flex-direction:column;align-items:flex-start;flex-wrap:nowrap;gap:6px;max-width:calc(100vw - 132px);}
+    .chip{padding:5px 11px;font-size:13px;border-radius:14px;gap:4px;max-width:100%;box-shadow:0 4px 10px var(--shadow);}
+    .chip #levelName{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:38vw;}
+    #controls{right:calc(10px + env(safe-area-inset-right,0px));bottom:calc(10px + env(safe-area-inset-bottom,0px));gap:8px;}
+    .btn.round{width:46px;height:46px;font-size:20px;}
+    .btn{padding:12px 16px;font-size:16px;}
+    #progwrap{left:calc(12px + env(safe-area-inset-left,0px));right:calc(124px + env(safe-area-inset-right,0px));bottom:calc(12px + env(safe-area-inset-bottom,0px));transform:none;width:auto;}
+    #progwrap .bar{height:18px;}
+    #progwrap .lab{font-size:14px;margin-top:2px;}
+    #bigInstruction{top:12%;padding:10px 16px;border-radius:20px;font-size:clamp(16px,4.2vw,24px);max-width:calc(100vw - 264px);}
+    #toast{font-size:clamp(30px,8vw,56px);}
+    .levelgrid{grid-template-columns:repeat(2,1fr);gap:10px;}
+    .card{padding:20px 16px;border-width:4px;border-radius:24px;}
+    .card h1{font-size:28px;}
+    .card h2{font-size:22px;}
+    .card p{font-size:15px;line-height:1.4;margin:8px 0;}
+    .big{font-size:19px;}
+    .move-demo{font-size:36px;}
+    .overlay{padding:12px;}
+  }
+  /* Phones held upright: instruction goes under the camera/HUD band */
+  @media (max-width:760px) and (orientation:portrait){
+    #bigInstruction{top:calc(146px + env(safe-area-inset-top,0px));max-width:92vw;}
+  }
+  /* Phones held sideways / very short screens */
+  @media (max-height:520px){
+    .card{padding:12px 16px;}
+    .card h1{font-size:24px;}
+    .card h2{font-size:19px;}
+    .card p{font-size:14px;margin:5px 0;}
+    .big{font-size:17px;}
+    .move-demo{font-size:28px;margin:2px 0;}
+    .levelgrid{grid-template-columns:repeat(3,1fr);gap:8px;margin:8px 0;}
+    .lvl{min-height:64px;padding:6px 4px;font-size:12px;gap:2px;border-radius:14px;}
+    .lvl .emo{font-size:24px;}
+    .btn{padding:9px 14px;font-size:14px;box-shadow:0 5px 0 #d63b7f,0 8px 14px var(--shadow);}
+    .btn.alt{box-shadow:0 5px 0 #5e39c9,0 8px 14px var(--shadow);}
+    .btn.round{width:42px;height:42px;font-size:18px;}
+    #progwrap{right:calc(112px + env(safe-area-inset-right,0px));}
+  }
+</style>
+</head>
+<body>
+<div id="game">
+  <canvas id="scene"></canvas>
+  <canvas id="fx"></canvas>
+
+  <div id="camWrap">
+    <video id="cam" autoplay playsinline muted></video>
+    <canvas id="skel"></canvas>
+    <div class="tag" id="camTag">Camera…</div>
+  </div>
+
+  <div class="hud" id="topbar">
+    <div class="chip">⭐ <b id="scoreVal">0</b></div>
+    <div class="chip">🎂 <span id="levelName">—</span></div>
+    <div class="chip">🎯 <span id="goalVal">0</span>/<span id="goalMax">0</span></div>
+  </div>
+
+  <div id="bigInstruction" class="hud"></div>
+  <div id="toast"></div>
+
+  <div class="hud" id="progwrap" style="display:none">
+    <div class="bar"><div id="progFill"></div></div>
+    <div class="lab" id="progLab"></div>
+  </div>
+
+  <div class="hud" id="controls">
+    <button class="btn round alt" id="muteBtn" title="Sound">🔊</button>
+    <button class="btn round" id="pauseBtn" title="Pause">⏸</button>
+  </div>
+
+  <!-- Loading -->
+  <div class="overlay" id="loadingOv">
+    <div class="card">
+      <h1>Candy Castle Bakery</h1>
+      <div class="move-demo">🧁🍩🍪🍦🍫👑</div>
+      <p class="big" id="loadMsg">Getting the kitchen ready…</p>
+      <div class="calibbar"><div id="loadBar"></div></div>
+      <p class="hint">Loading motion tracking. Please wait a moment.</p>
+    </div>
+  </div>
+
+  <!-- Start -->
+  <div class="overlay" id="startOv" style="display:none">
+    <div class="card">
+      <h1>Candy Castle Bakery</h1>
+      <h2>Help Chef Gingerbread! 🍪</h2>
+      <p>You help the chef bake giant magic desserts. You play with your <b>whole body</b>, not with your hands on the screen.</p>
+      <p class="big">Move like this:</p>
+      <p>🌀 <b>Twist your upper body</b> to stir the mixing bowl<br>
+         ⬆️ <b>Do a tiny jump</b> to start the oven<br>
+         🙌 <b>Big arm swing</b> to roll the rolling pin<br>
+         🖐️ <b>Both arms up high</b> to celebrate</p>
+      <button class="btn" id="toCalib">Start the adventure ▶</button>
+      <p class="foot">Place your device steadily, with some space around you.</p>
+    </div>
+  </div>
+
+  <!-- Calibration -->
+  <div class="overlay" id="calibOv" style="display:none">
+    <div class="card">
+      <h2>Get Ready 🧍</h2>
+      <p>Stand so we can clearly see your <b>head, shoulders and hips</b> in the camera corner.</p>
+      <div class="move-demo" id="calibEmo">🧍</div>
+      <div class="calibbar"><div id="calibFill"></div></div>
+      <p class="big" id="calibMsg">Looking for you…</p>
+      <p class="hint">Stand a little way back from the camera so you can move.</p>
+    </div>
+  </div>
+
+  <!-- Level select -->
+  <div class="overlay" id="mapOv" style="display:none">
+    <div class="card">
+      <h1>Choose a Kitchen 🍰</h1>
+      <div class="levelgrid" id="levelGrid"></div>
+      <p class="hint">Finish baking a kitchen to unlock the next one.</p>
+    </div>
+  </div>
+
+  <!-- Level intro -->
+  <div class="overlay" id="introOv" style="display:none">
+    <div class="card">
+      <h2 id="introTitle"></h2>
+      <div class="move-demo" id="introEmo"></div>
+      <p id="introText"></p>
+      <p class="big" id="introMove"></p>
+      <button class="btn" id="introGo">Let's Go ▶</button>
+    </div>
+  </div>
+
+  <!-- Pause -->
+  <div class="overlay" id="pauseOv" style="display:none">
+    <div class="card">
+      <h2>Paused ⏸</h2>
+      <p>Take a little break.</p>
+      <div style="display:flex;gap:12px;flex-wrap:wrap;justify-content:center;margin-top:12px">
+        <button class="btn" id="resumeBtn">Resume ▶</button>
+        <button class="btn alt" id="restartBtn">Restart 🔁</button>
+        <button class="btn alt" id="toMapBtn">Kitchens 🍰</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Tracking lost -->
+  <div class="overlay" id="lostOv" style="display:none">
+    <div class="card">
+      <h2>Where Are You? 👀</h2>
+      <div class="move-demo">🧍✨</div>
+      <p class="big">Step back in front of the camera and we'll continue!</p>
+      <p class="hint">The game is waiting safely for you.</p>
+    </div>
+  </div>
+
+  <!-- Level complete -->
+  <div class="overlay" id="winOv" style="display:none">
+    <div class="card">
+      <h1 id="winTitle">Well Done! 🎉</h1>
+      <div class="move-demo">🎂✨🌟</div>
+      <div class="stars" id="winStars">⭐⭐⭐</div>
+      <p class="big" id="winText"></p>
+      <div style="display:flex;gap:12px;flex-wrap:wrap;justify-content:center;margin-top:12px">
+        <button class="btn" id="nextBtn">Next Kitchen ▶</button>
+        <button class="btn alt" id="winMapBtn">Kitchens 🍰</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Final victory -->
+  <div class="overlay" id="finalOv" style="display:none">
+    <div class="card">
+      <h1>🎉 Great Dessert Party! 👑</h1>
+      <div class="move-demo">🧁🍩🍪🍦🍫🎂</div>
+      <p class="big">You are now a true Candy Castle master baker!</p>
+      <p>You baked all six kitchens. Chef Gingerbread is SO proud!</p>
+      <div class="starTotal" id="finalTotal"></div>
+      <div class="stars wrap" id="finalStars"></div>
+      <button class="btn" id="playAgainBtn">Play Again 🔁</button>
+    </div>
+  </div>
+
+  <!-- Camera error -->
+  <div class="overlay" id="errOv" style="display:none">
+    <div class="card">
+      <h2>Camera Needed 📷</h2>
+      <p id="errMsg">We need the camera to see your movements.</p>
+      <p class="hint">Allow camera access and try again.</p>
+      <button class="btn" id="retryBtn">Try Again 🔁</button>
+    </div>
+  </div>
+</div>
+
+<script type="module">
+import { FilesetResolver, PoseLandmarker } from "https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.14/vision_bundle.mjs";
+
+/* ---------------- Core state ---------------- */
+const S = {
+  landmarker:null, running:false, paused:false, lost:false,
+  level:0, scene:'load', score:0,
+  unlocked: JSON.parse(localStorage.getItem('ccb_unlocked')||'[0]'),
+  stars: JSON.parse(localStorage.getItem('ccb_stars')||'{}'),
+  muted:false, lastVideoTime:-1, pose:null, poseConf:0,
+  goal:0, goalMax:0, actionCooldown:0, mistakes:0,
+};
+
+/* ---------------- Levels ---------------- */
+const LEVELS = [
+  { key:'cupcake', name:'Cupcake Village', emo:'🧁', color:'linear-gradient(180deg,#ff9ec6,#ff5fa2)',
+    move:'🌀 Twist your upper body to mix', action:'twist', target:6,
+    bg:['#ffe3f1','#ffc0dd'], teach:'Count the cupcakes! 1, 2, 3…',
+    intro:'Stir the batter and count colorful cupcakes.',
+    palette:['#ff6ea9','#ffd34e','#6ee7c7','#8a5cff','#ff8a5c','#5cc8ff'] },
+  { key:'donut', name:'Donut Factory', emo:'🍩', color:'linear-gradient(180deg,#ffc98a,#ff8a3d)',
+    move:'🙌 Big arm swing to roll the dough', action:'swing', target:6,
+    bg:['#ffe9d6','#ffc89a'], teach:'Which color icing? Red, yellow, pink…',
+    intro:'Roll the dough and decorate iced donuts.',
+    palette:['#ff6ea9','#8a5cff','#ffd34e','#6ee7c7','#ff8a5c'] },
+  { key:'cookie', name:'Cookie Kingdom', emo:'🍪', color:'linear-gradient(180deg,#e0b483,#b5793f)',
+    move:'⬆️ Do a tiny jump to start the oven', action:'jump', target:7,
+    bg:['#f3e2cf','#d9b48a'], teach:'Different shapes: star, heart, circle.',
+    intro:'Bake cookies in funny shapes in the hot oven.',
+    palette:['#c98a4a','#ffd34e','#ff6ea9','#8a5cff'] },
+  { key:'icecream', name:'Ice Cream Palace', emo:'🍦', color:'linear-gradient(180deg,#a6e9ff,#5cc8ff)',
+    move:'🌀 Twist to stack scoops', action:'twist', target:8,
+    bg:['#d9f4ff','#a9e2ff'], teach:'Stack the layers: 1 at the bottom, then on top!',
+    intro:'Neatly stack cold layers of ice cream.',
+    palette:['#ff9ec6','#fff3a0','#b89bff','#8ff0d4','#ffb38a'] },
+  { key:'choco', name:'Chocolate Mountain', emo:'🍫', color:'linear-gradient(180deg,#9c6b43,#5b3a1e)',
+    move:'🙌 Arm swing for the chocolate waterfall', action:'swing', target:8,
+    bg:['#e7cdb5','#b98d66'], teach:'Pour the chocolate and count the layers.',
+    intro:'Let the chocolate waterfall flow over the cake.',
+    palette:['#5b3a1e','#8a5a34','#c98a4a','#ffd34e'] },
+  { key:'festival', name:'Royal Feast', emo:'👑', color:'linear-gradient(180deg,#ffd34e,#ff6ea9)',
+    move:'🎲 Do the move the chef asks for!', action:'mixed', target:9,
+    bg:['#fff0d6','#ffd9e8'], teach:'Now everything is mixed up! Listen carefully.',
+    intro:'The big feast: every dessert needs a different move.',
+    palette:['#ff6ea9','#ffd34e','#6ee7c7','#8a5cff','#ff8a5c','#5cc8ff'] },
+];
+
+/* ---------------- DOM ---------------- */
+const $ = id => document.getElementById(id);
+const scene = $('scene'), sctx = scene.getContext('2d');
+const fx = $('fx'), fxx = fx.getContext('2d');
+const skel = $('skel'), skx = skel.getContext('2d');
+const video = $('cam');
+
+function resize(){
+  for(const c of [scene,fx]){ c.width=innerWidth*devicePixelRatio; c.height=innerHeight*devicePixelRatio; }
+  sctx.setTransform(devicePixelRatio,0,0,devicePixelRatio,0,0);
+  fxx.setTransform(devicePixelRatio,0,0,devicePixelRatio,0,0);
+  skel.width=skel.clientWidth; skel.height=skel.clientHeight;
+}
+addEventListener('resize',resize); addEventListener('orientationchange',()=>setTimeout(resize,200)); resize();
+
+/* ---------------- Audio (WebAudio, no files) ---------------- */
+let AC=null, musicGain=null, musicTimer=null;
+function audio(){ if(!AC){ AC=new (window.AudioContext||window.webkitAudioContext)(); musicGain=AC.createGain(); musicGain.gain.value=0.12; musicGain.connect(AC.destination);} return AC; }
+function beep(freq,dur=0.15,type='sine',vol=0.25){
+  if(S.muted) return; const ac=audio(); if(ac.state==='suspended') ac.resume();
+  const o=ac.createOscillator(), g=ac.createGain();
+  o.type=type; o.frequency.value=freq; g.gain.value=vol;
+  o.connect(g); g.connect(ac.destination);
+  g.gain.setValueAtTime(vol,ac.currentTime);
+  g.gain.exponentialRampToValueAtTime(0.001,ac.currentTime+dur);
+  o.start(); o.stop(ac.currentTime+dur);
+}
+function chord(freqs,dur=0.4){ freqs.forEach((f,i)=>setTimeout(()=>beep(f,dur,'triangle',0.2),i*70)); }
+const sfx={
+  good(){ chord([660,880,1040],0.25); },
+  level(){ chord([523,659,784,1046,1318],0.5); },
+  oops(){ beep(200,0.2,'sawtooth',0.15); },
+  pop(){ beep(500+Math.random()*200,0.08,'square',0.18); },
+  tick(){ beep(880,0.05,'sine',0.1); },
+};
+const MUSIC=[523,587,659,784,659,587,523,440,494,523,587,659,587,523];
+let mi=0;
+function startMusic(){ stopMusic(); if(S.muted) return;
+  musicTimer=setInterval(()=>{ if(S.muted||S.paused) return;
+    const ac=audio(); const o=ac.createOscillator(), g=ac.createGain();
+    o.type='triangle'; o.frequency.value=MUSIC[mi%MUSIC.length]; mi++;
+    g.gain.value=0.06; o.connect(g); g.connect(musicGain||ac.destination);
+    g.gain.setValueAtTime(0.06,ac.currentTime); g.gain.exponentialRampToValueAtTime(0.001,ac.currentTime+0.45);
+    o.start(); o.stop(ac.currentTime+0.45);
+  },340);
+}
+function stopMusic(){ if(musicTimer){clearInterval(musicTimer);musicTimer=null;} }
+let voices=null;
+function speak(text){
+  if(S.muted||!('speechSynthesis' in window)) return;
+  try{ const u=new SpeechSynthesisUtterance(text); u.lang='en-US'; u.rate=0.95; u.pitch=1.2;
+    speechSynthesis.cancel(); speechSynthesis.speak(u);}catch(e){}
+}
+
+/* ---------------- Camera + MediaPipe ---------------- */
+async function initCamera(){
+  try{
+    const stream=await navigator.mediaDevices.getUserMedia({video:{width:640,height:480,facingMode:'user'},audio:false});
+    video.srcObject=stream;
+    await new Promise(r=>{ video.onloadedmetadata=()=>{ video.play(); r(); }; });
+    $('camTag').textContent='You ✨';
+    return true;
+  }catch(e){
+    $('errMsg').textContent = e.name==='NotAllowedError'
+      ? 'Camera access was denied. Allow the camera in your browser and try again.'
+      : 'We could not open the camera. Check that no other app is using it.';
+    show('errOv'); return false;
+  }
+}
+async function initPose(){
+  setLoad(30,'Loading motion tracking…');
+  const vision=await FilesetResolver.forVisionTasks("https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.14/wasm");
+  setLoad(60,'Waking up Chef Gingerbread…');
+  S.landmarker=await PoseLandmarker.createFromOptions(vision,{
+    baseOptions:{ modelAssetPath:"https://storage.googleapis.com/mediapipe-models/pose_landmarker/pose_landmarker_lite/float16/1/pose_landmarker_lite.task", delegate:"GPU" },
+    runningMode:"VIDEO", numPoses:1
+  });
+  setLoad(100,'Ready!');
+}
+
+/* ---------------- Smoothing ---------------- */
+const smooth={};
+function sm(key,val,a=0.5){ if(smooth[key]==null) smooth[key]=val; smooth[key]=smooth[key]*(1-a)+val*a; return smooth[key]; }
+
+/* ---------------- Pose analysis ---------------- */
+function analyze(lm){
+  // Mediapipe BlazePose indices
+  const L={nose:0,lsh:11,rsh:12,lel:13,rel:14,lwr:15,rwr:16,lhip:23,rhip:24,};
+  const g=i=>lm[i];
+  const vis = (g(L.lsh).visibility+g(L.rsh).visibility+g(L.lhip).visibility+g(L.rhip).visibility)/4;
+  const shMidX=(g(L.lsh).x+g(L.rsh).x)/2, shMidY=(g(L.lsh).y+g(L.rsh).y)/2;
+  const hipMidY=(g(L.lhip).y+g(L.rhip).y)/2;
+  // torso twist: horizontal distance between shoulders vs normal; use shoulder x difference sign & magnitude relative to hips
+  const shoulderSpan=Math.abs(g(L.lsh).x-g(L.rsh).x);
+  const hipSpan=Math.abs(g(L.lhip).x-g(L.rhip).x);
+  const twist = sm('twist', (shMidX-(g(L.lhip).x+g(L.rhip).x)/2), 0.4); // lateral lean/twist proxy
+  const shoulderTilt = sm('tilt', g(L.lsh).y-g(L.rsh).y, 0.4);
+  // jump: height of the body centre (shoulders + hips) in the frame, plus torso length for scaling
+  const torsoLen = Math.max(0.05, hipMidY-shMidY);
+  const bodyY = sm('bodyY', (shMidY+hipMidY)/2, 0.55);
+  // arm height (wrists above shoulders)
+  const armsUp = (g(L.lwr).y < shMidY-0.02) && (g(L.rwr).y < shMidY-0.02);
+  const wristSpread = sm('spread', Math.abs(g(L.lwr).x-g(L.rwr).x), 0.4);
+  const wristMidY = sm('wristY',(g(L.lwr).y+g(L.rwr).y)/2,0.4);
+  return { vis, shMidX, shMidY, twist, shoulderTilt, torsoLen, bodyY, armsUp, wristSpread, wristMidY, shoulderSpan, lm };
+}
+
+/* Gesture detectors with debounce */
+const gest={ twistDir:0, twistPeaks:0, lastTwistSign:0, jumpState:0, baseY:null, swingState:0, swingDir:0, baseTilt:null, celebrating:false };
+function detectTwist(p){
+  // Use shoulder tilt oscillation as "stir" proxy — rotating torso tilts shoulders back and forth
+  const t=p.shoulderTilt;
+  const sign = t>0.03?1 : t<-0.03?-1 : 0;
+  if(sign!==0 && sign!==gest.lastTwistSign){ gest.lastTwistSign=sign; return true; }
+  return false;
+}
+function detectJump(p){
+  // Easy jump: counts as soon as the body rises just a little (a small hop or even a big bounce on tiptoes).
+  // The resting height follows the player slowly, so it adapts to distance and small drifting.
+  if(gest.baseY==null) gest.baseY=p.bodyY;
+  const rise = gest.baseY - p.bodyY;            // positive when the body goes UP in the frame
+  const need = p.torsoLen*0.06;                  // ~6% of torso height = a very small hop
+  if(gest.jumpState===0){
+    if(rise>need){ gest.jumpState=1; return true; }
+    gest.baseY = gest.baseY*0.95 + p.bodyY*0.05; // adapt resting height while standing
+  } else {
+    if(rise<need*0.4){ gest.jumpState=0; }        // landed, ready for the next jump
+  }
+  return false;
+}
+function detectSwing(p){
+  // broad arm swing: wrists wide then narrow (or big horizontal movement)
+  const wide = p.wristSpread > 0.55;
+  const narrow = p.wristSpread < 0.3;
+  if(wide && gest.swingState===0){ gest.swingState=1; }
+  if(narrow && gest.swingState===1){ gest.swingState=0; return true; }
+  return false;
+}
+function detectCelebrate(p){ return p.armsUp; }
+
+/* ---------------- Rendering: skeleton ---------------- */
+const CONN=[[11,12],[11,13],[13,15],[12,14],[14,16],[11,23],[12,24],[23,24],[23,25],[25,27],[24,26],[26,28]];
+function drawSkeleton(lm){
+  skx.clearRect(0,0,skel.width,skel.height);
+  if(!lm) return;
+  const W=skel.width,H=skel.height;
+  skx.lineWidth=4; skx.strokeStyle='rgba(110,231,199,.95)';
+  for(const [a,b] of CONN){
+    skx.beginPath(); skx.moveTo(lm[a].x*W,lm[a].y*H); skx.lineTo(lm[b].x*W,lm[b].y*H); skx.stroke();
+  }
+  skx.fillStyle='#ff6ea9';
+  for(const i of [0,11,12,13,14,15,16,23,24,25,26]){
+    skx.beginPath(); skx.arc(lm[i].x*W,lm[i].y*H,5,0,7); skx.fill();
+  }
+}
+
+/* ---------------- Scene graphics ---------------- */
+let anim={t:0, bowl:0, oven:0, roller:0, items:[], particles:[], charMood:'happy', shake:0};
+/* Responsive layout: one scale factor + station positions for phones (portrait) and wide screens */
+function lay(){
+  const w=innerWidth, h=innerHeight;
+  const portrait = h>=w && w<=760;
+  const u = portrait ? Math.max(0.55,Math.min(1,w/520,h/900)) : Math.max(0.5,Math.min(1,w/900,h/640));
+  return {w,h,portrait,u};
+}
+function at(x,y,u,fn){ sctx.save(); sctx.translate(x,y); sctx.scale(u,u); sctx.translate(-x,-y); fn(); sctx.restore(); }
+function addItem(level){
+  const L=LEVELS[level];
+  const G=lay(), w=G.w, h=G.h;
+  const m=G.portrait? w*0.08 : Math.min(120,w*0.1);
+  anim.items.push({
+    x: m+Math.random()*(w-2*m), y:-60, vy:1.4+Math.random()*1.2,
+    col:L.palette[Math.floor(Math.random()*L.palette.length)],
+    emo:L.emo, rot:Math.random()*6, settled:false,
+    sy: G.portrait ? h*0.80+Math.random()*h*0.05 : h*0.62+Math.random()*60*G.u, scale:0 });
+}
+function burst(x,y,color,n=26){
+  for(let i=0;i<n;i++){
+    const a=Math.random()*Math.PI*2, s=2+Math.random()*6;
+    anim.particles.push({x,y,vx:Math.cos(a)*s,vy:Math.sin(a)*s-2,life:1,col:color||`hsl(${Math.random()*360},90%,65%)`,size:4+Math.random()*6});
+  }
+}
+function confetti(){ const w=innerWidth; for(let i=0;i<120;i++){ anim.particles.push({x:Math.random()*w,y:-20,vx:(Math.random()-.5)*4,vy:2+Math.random()*4,life:1.6,col:`hsl(${Math.random()*360},90%,65%)`,size:5+Math.random()*7,conf:true}); } }
+
+function drawScene(dt){
+  const w=innerWidth,h=innerHeight; anim.t+=dt;
+  const L=LEVELS[S.level]||LEVELS[0];
+  // background gradient
+  const gr=sctx.createLinearGradient(0,0,0,h);
+  gr.addColorStop(0,L.bg[0]); gr.addColorStop(1,L.bg[1]);
+  sctx.fillStyle=gr; sctx.fillRect(0,0,w,h);
+  // floating candy clouds
+  for(let i=0;i<5;i++){
+    const cx=((anim.t*12*(i%2?1:-1))+i*260)%(w+200)-100;
+    const cy=70+i*42+Math.sin(anim.t+i)*10;
+    puff(cx<0?cx+w+200:cx, cy, 34+i*4, 'rgba(255,255,255,.55)');
+  }
+  // floor / counter
+  sctx.fillStyle='rgba(255,255,255,.35)';
+  sctx.fillRect(0,h*0.72,w,h*0.28);
+  sctx.fillStyle='rgba(138,92,255,.15)';
+  sctx.fillRect(0,h*0.72,w,10);
+
+  const shx=(Math.random()-.5)*anim.shake; const shy=(Math.random()-.5)*anim.shake;
+  sctx.save(); sctx.translate(shx,shy);
+
+  // central station depends on action
+  const G=lay(), u=G.u, mixed=L.action==='mixed';
+  let chef,bowl,oven,roll;
+  if(G.portrait){
+    // phone held upright: stations sit in the middle band, chef bottom-left, items collect along the bottom
+    chef=[w*0.20,h*0.70];
+    bowl= mixed?[w*0.30,h*0.38]:[w*0.50,h*0.42];
+    oven= mixed?[w*0.72,h*0.38]:[w*0.50,h*0.42];
+    roll= mixed?[w*0.58,h*0.56]:[w*0.50,h*0.48];
+  } else {
+    chef=[w*0.18,h*0.60]; bowl=[w*0.50,h*0.50]; oven=[w*0.78,h*0.55]; roll=[w*0.50,h*0.66];
+  }
+  at(chef[0],chef[1],u,()=>drawChef(chef[0],chef[1],anim.charMood));
+  if(L.action==='twist'||mixed) at(bowl[0],bowl[1],u,()=>drawBowl(bowl[0],bowl[1],anim.bowl));
+  if(L.action==='jump'||mixed)  at(oven[0],oven[1],u,()=>drawOven(oven[0],oven[1],anim.oven));
+  if(L.action==='swing'||mixed) at(roll[0],roll[1],u,()=>drawRoller(roll[0],roll[1],anim.roller));
+
+  // falling/settled items
+  for(const it of anim.items){
+    if(it.scale<1) it.scale=Math.min(1,it.scale+dt*4);
+    if(!it.settled){ it.y+=it.vy*dt*60; it.rot+=dt*2; if(it.y>=it.sy){ it.y=it.sy; it.settled=true; burst(it.x,it.y,it.col,10); sfx.pop(); } }
+    drawCandy(it);
+  }
+  sctx.restore();
+
+  // decay effects
+  if(anim.bowl>0) anim.bowl=Math.max(0,anim.bowl-dt*2);
+  if(anim.oven>0) anim.oven=Math.max(0,anim.oven-dt*1.2);
+  if(anim.roller>0) anim.roller=Math.max(0,anim.roller-dt*2);
+  if(anim.shake>0) anim.shake=Math.max(0,anim.shake-dt*20);
+}
+function puff(x,y,r,col){ sctx.fillStyle=col;
+  for(const o of [[-r*.6,0,r*.7],[r*.6,0,r*.7],[0,-r*.4,r*.8],[0,0,r]]){
+    sctx.beginPath(); sctx.arc(x+o[0],y+o[1],o[2],0,7); sctx.fill(); } }
+function drawChef(x,y,mood){
+  // gingerbread chef
+  sctx.save(); sctx.translate(x,y+Math.sin(anim.t*2)*4);
+  sctx.fillStyle='rgba(0,0,0,.12)'; sctx.beginPath(); sctx.ellipse(0,70,46,14,0,0,7); sctx.fill();
+  // body
+  sctx.fillStyle='#b5793f'; roundRect(-40,-20,80,90,30); sctx.fill();
+  // head
+  sctx.beginPath(); sctx.arc(0,-40,38,0,7); sctx.fill();
+  // hat
+  sctx.fillStyle='#fff'; roundRect(-34,-96,68,36,16); sctx.fill();
+  sctx.beginPath(); sctx.arc(-18,-92,16,0,7); sctx.arc(0,-98,18,0,7); sctx.arc(18,-92,16,0,7); sctx.fill();
+  // eyes
+  sctx.fillStyle='#fff'; sctx.beginPath(); sctx.arc(-13,-44,8,0,7); sctx.arc(13,-44,8,0,7); sctx.fill();
+  sctx.fillStyle='#3a2416'; const bl=Math.sin(anim.t*3)>.9?2:7;
+  sctx.beginPath(); sctx.arc(-13,-43,3,0,bl); sctx.arc(13,-43,3,0,bl); sctx.fill();
+  // smile
+  sctx.strokeStyle='#fff'; sctx.lineWidth=4; sctx.beginPath();
+  if(mood==='happy') sctx.arc(0,-32,14,0.1*Math.PI,0.9*Math.PI);
+  else sctx.arc(0,-24,12,1.1*Math.PI,1.9*Math.PI);
+  sctx.stroke();
+  // icing buttons
+  sctx.fillStyle='#ff6ea9'; for(const by of [0,24,48]){ sctx.beginPath(); sctx.arc(0,by,6,0,7); sctx.fill(); }
+  sctx.restore();
+}
+function drawBowl(x,y,spin){
+  sctx.save(); sctx.translate(x,y);
+  sctx.fillStyle='rgba(0,0,0,.12)'; sctx.beginPath(); sctx.ellipse(0,74,86,18,0,0,7); sctx.fill();
+  // bowl
+  sctx.fillStyle='#fff'; sctx.beginPath(); sctx.moveTo(-90,0); sctx.quadraticCurveTo(0,120,90,0); sctx.lineTo(70,-6); sctx.quadraticCurveTo(0,40,-70,-6); sctx.closePath(); sctx.fill();
+  sctx.fillStyle='#8a5cff'; sctx.beginPath(); sctx.ellipse(0,0,90,22,0,0,7); sctx.fill();
+  // swirl batter
+  sctx.save(); sctx.rotate(anim.t*3*(0.3+spin));
+  sctx.fillStyle='#ffd34e';
+  for(let i=0;i<6;i++){ sctx.rotate(Math.PI/3); sctx.beginPath(); sctx.ellipse(34,0,16,9,0,0,7); sctx.fill(); }
+  sctx.restore();
+  // whisk
+  sctx.strokeStyle='#9a9a9a'; sctx.lineWidth=6; sctx.save(); sctx.rotate(Math.sin(anim.t*6)*0.2*(0.3+spin));
+  sctx.beginPath(); sctx.moveTo(0,-60); sctx.lineTo(0,-6); sctx.stroke(); sctx.restore();
+  sctx.restore();
+}
+function drawOven(x,y,heat){
+  sctx.save(); sctx.translate(x,y);
+  sctx.fillStyle='#8a5cff'; roundRect(-70,-70,140,150,18); sctx.fill();
+  sctx.fillStyle='#c9b8ff'; roundRect(-56,-54,112,96,12); sctx.fill();
+  // glow
+  const glow=0.2+heat*0.8;
+  sctx.fillStyle=`rgba(255,${120+heat*100|0},60,${glow})`; roundRect(-50,-48,100,84,10); sctx.fill();
+  if(heat>0.2){ for(let i=0;i<10;i++){ const fx2=(Math.random()-.5)*80; sctx.fillStyle=`rgba(255,${180+Math.random()*60|0},80,${heat})`;
+    sctx.beginPath(); sctx.arc(fx2,30-Math.random()*60*heat,4+Math.random()*4,0,7); sctx.fill(); } }
+  // knobs
+  sctx.fillStyle='#ff6ea9'; sctx.beginPath(); sctx.arc(-40,60,10,0,7); sctx.arc(0,60,10,0,7); sctx.arc(40,60,10,0,7); sctx.fill();
+  sctx.restore();
+}
+function drawRoller(x,y,roll){
+  sctx.save(); sctx.translate(x,y);
+  // dough
+  sctx.fillStyle='#ffe9c9'; roundRect(-120,10,240,36,16); sctx.fill();
+  // rolling pin
+  sctx.save(); sctx.translate(Math.sin(anim.t*4*(0.3+roll))*60,0);
+  sctx.fillStyle='#c98a4a'; roundRect(-70,-14,140,28,14); sctx.fill();
+  sctx.fillStyle='#a06a34'; roundRect(-92,-6,22,12,6); roundRect(70,-6,22,12,6); sctx.fill();
+  sctx.restore(); sctx.restore();
+}
+function drawCandy(it){
+  sctx.save(); sctx.translate(it.x,it.y); sctx.rotate(Math.sin(it.rot)*0.1); { const k=it.scale*lay().u; sctx.scale(k,k); }
+  sctx.font='44px serif'; sctx.textAlign='center'; sctx.textBaseline='middle';
+  // colored halo
+  sctx.fillStyle=it.col; sctx.globalAlpha=0.35; sctx.beginPath(); sctx.arc(0,0,28,0,7); sctx.fill(); sctx.globalAlpha=1;
+  sctx.fillText(it.emo,0,2);
+  sctx.restore();
+}
+function roundRect(x,y,w,h,r){ sctx.beginPath(); sctx.moveTo(x+r,y); sctx.arcTo(x+w,y,x+w,y+h,r); sctx.arcTo(x+w,y+h,x,y+h,r); sctx.arcTo(x,y+h,x,y,r); sctx.arcTo(x,y,x+w,y,r); sctx.closePath(); }
+
+function drawFX(dt){
+  fxx.clearRect(0,0,innerWidth,innerHeight);
+  for(let i=anim.particles.length-1;i>=0;i--){
+    const p=anim.particles[i]; p.x+=p.vx; p.y+=p.vy; p.vy+=p.conf?0.12:0.18; p.life-=dt*(p.conf?0.6:1.4);
+    if(p.life<=0){ anim.particles.splice(i,1); continue; }
+    fxx.globalAlpha=Math.max(0,p.life); fxx.fillStyle=p.col;
+    if(p.conf){ fxx.fillRect(p.x,p.y,p.size,p.size*0.6); } else { fxx.beginPath(); fxx.arc(p.x,p.y,p.size*p.life,0,7); fxx.fill(); }
+  }
+  fxx.globalAlpha=1;
+}
+
+/* ---------------- Game loop ---------------- */
+let lastT=performance.now();
+let mixedPrompt=null, mixedTimer=0;
+function loop(now){
+  if(!S.running){ return; }
+  const dt=Math.min(0.05,(now-lastT)/1000); lastT=now;
+
+  // detect pose
+  if(S.landmarker && video.readyState>=2 && video.currentTime!==S.lastVideoTime){
+    S.lastVideoTime=video.currentTime;
+    const res=S.landmarker.detectForVideo(video,now);
+    if(res.landmarks && res.landmarks.length){
+      S.pose=analyze(res.landmarks[0]);
+      drawSkeleton(res.landmarks[0]);
+    } else { S.pose=null; drawSkeleton(null); }
+  }
+
+  // tracking lost handling (only during active play)
+  if(S.scene==='play' && !S.paused){
+    const okVis = S.pose && S.pose.vis>0.4;
+    if(!okVis){ if(!S.lost){ S.lost=true; show('lostOv'); stopMusic(); } }
+    else if(S.lost){ S.lost=false; hide('lostOv'); if(!S.muted) startMusic(); }
+  }
+
+  // gameplay
+  if(S.scene==='play' && !S.paused && !S.lost && S.pose){
+    S.actionCooldown=Math.max(0,S.actionCooldown-dt);
+    const L=LEVELS[S.level];
+    if(S.goal>=S.goalMax){
+      // Target reached: stop asking for moves (also in the mixed Royal Feast) and wait for the celebration
+      mixedPrompt=null; gest.doneT=(gest.doneT||0)+dt;
+      if(!gest.celebrateHint){ gest.celebrateHint=true; bigInstruction('🙌 All done! Raise both arms to celebrate!',true); }
+      if(gest.doneT>1.0 && detectCelebrate(S.pose) && !gest.celebrating){ gest.celebrating=true; winLevel(); }
+    } else {
+    let action=L.action;
+    if(L.action==='mixed'){
+      if(!mixedPrompt){ pickMixed(); }
+      action=mixedPrompt;
+    }
+    let did=false;
+    if(action==='twist' && detectTwist(S.pose)){ anim.bowl=1; did=true; }
+    else if(action==='jump' && detectJump(S.pose)){ anim.oven=1; anim.shake=8; did=true; }
+    else if(action==='swing' && detectSwing(S.pose)){ anim.roller=1; did=true; }
+    if(did && S.actionCooldown<=0){
+      S.actionCooldown=0.8; onProgress();
+      if(L.action==='mixed'){ mixedPrompt=null; }
+    }
+    }
+  }
+
+  drawScene(dt); drawFX(dt);
+  requestAnimationFrame(loop);
+}
+function pickMixed(){
+  const opts=['twist','jump','swing'];
+  mixedPrompt=opts[Math.floor(Math.random()*3)];
+  const map={twist:'🌀 Twist your upper body!',jump:'⬆️ Tiny jump!',swing:'🙌 Big arm swing!'};
+  bigInstruction(map[mixedPrompt]);
+  speak({twist:'Twist!',jump:'Jump!',swing:'Swing your arms!'}[mixedPrompt]);
+}
+function onProgress(){
+  S.goal++; S.score+=10; updateHUD();
+  addItem(S.level); burst(innerWidth*0.5,innerHeight*0.4,LEVELS[S.level].palette[S.goal%LEVELS[S.level].palette.length]);
+  anim.charMood='happy'; sfx.good();
+  const n=S.goal;
+  if(n<=S.goalMax) speak(nl(n));
+  $('progFill').style.width=(S.goal/S.goalMax*100)+'%';
+  $('progLab').textContent=`${S.goal} / ${S.goalMax} ${LEVELS[S.level].emo}`;
+  if(S.goal>=S.goalMax){
+    bigInstruction('🙌 All done! Raise your arms to celebrate!');
+    speak('Super! Raise your arms up!');
+  }
+}
+function nl(n){ const w=['','one','two','three','four','five','six','seven','eight','nine','ten','eleven','twelve']; return w[n]||(''+n); }
+
+/* ---------------- Flow ---------------- */
+function show(id){ $(id).style.display='flex'; }
+function hide(id){ $(id).style.display='none'; }
+function hideAllOverlays(){ ['loadingOv','startOv','calibOv','mapOv','introOv','pauseOv','lostOv','winOv','finalOv','errOv'].forEach(hide); }
+function updateHUD(){ $('scoreVal').textContent=S.score; $('goalVal').textContent=S.goal; $('goalMax').textContent=S.goalMax; }
+function bigInstruction(txt,sticky){ const el=$('bigInstruction'); el.textContent=txt; el.style.display='block'; clearTimeout(el._t); if(!sticky) el._t=setTimeout(()=>el.style.display='none',3500); }
+function toast(txt){ const t=$('toast'); t.textContent=txt; t.classList.add('show'); clearTimeout(t._t); t._t=setTimeout(()=>t.classList.remove('show'),900); }
+function setLoad(p,msg){ $('loadBar').style.width=p+'%'; if(msg)$('loadMsg').textContent=msg; }
+
+function buildMap(){
+  const grid=$('levelGrid'); grid.innerHTML='';
+  LEVELS.forEach((L,i)=>{
+    const unlocked=S.unlocked.includes(i);
+    const b=document.createElement('button');
+    b.className='lvl'+(unlocked?'':' locked'); b.style.background=L.color;
+    const st=S.stars[i]||0;
+    b.innerHTML=`<span class="emo">${L.emo}</span>${L.name}<div class="stars" style="font-size:14px;min-height:16px">${unlocked?'⭐'.repeat(st):''}</div>${unlocked?'':'<span class="lock">🔒</span>'}`;
+    if(unlocked) b.onclick=()=>startLevel(i);
+    grid.appendChild(b);
+  });
+}
+function openMap(){ S.scene='map'; stopMusic(); hideAllOverlays(); buildMap(); show('mapOv'); $('progwrap').style.display='none'; bigInstruction('');$('bigInstruction').style.display='none'; }
+
+function startLevel(i){
+  S.level=i; const L=LEVELS[i];
+  $('introTitle').textContent=`${L.emo} ${L.name}`;
+  $('introEmo').textContent=L.emo;
+  $('introText').textContent=L.intro+' '+L.teach;
+  $('introMove').textContent=L.move;
+  hideAllOverlays(); S.scene='intro'; show('introOv');
+}
+function beginPlay(){
+  const L=LEVELS[S.level];
+  S.goal=0; S.goalMax=L.target; S.mistakes=0; gest.celebrating=false; gest.celebrateHint=false; gest.doneT=0; gest.baseY=null; gest.jumpState=0; gest.swingState=0; mixedPrompt=null;
+  anim.items=[]; anim.particles=[]; anim.charMood='happy';
+  hideAllOverlays(); S.scene='play'; S.paused=false; S.lost=false;
+  $('levelName').textContent=L.name; updateHUD();
+  $('progwrap').style.display='block'; $('progFill').style.width='0%'; $('progLab').textContent=`0 / ${S.goalMax} ${L.emo}`;
+  bigInstruction(L.move); speak('Here we go! '+L.intro);
+  if(!S.muted) startMusic();
+}
+function renderFinalStars(){
+  const box=$('finalStars'); box.innerHTML=''; let total=0;
+  LEVELS.forEach((L,i)=>{ const n=S.stars[i]||0; total+=n;
+    const g=document.createElement('span'); g.className='grp';
+    g.innerHTML=`<i>${L.emo}</i>`+'⭐'.repeat(n)+'☆'.repeat(3-n);
+    box.appendChild(g); });
+  $('finalTotal').textContent=`⭐ ${total} / ${LEVELS.length*3} stars`;
+}
+function winLevel(){
+  const L=LEVELS[S.level]; S.scene='win'; stopMusic(); $('bigInstruction').style.display='none';
+  const stars = S.mistakes===0?3 : S.mistakes<=2?2:1;
+  S.stars[S.level]=Math.max(S.stars[S.level]||0,stars);
+  if(!S.unlocked.includes(S.level+1) && S.level+1<LEVELS.length) S.unlocked.push(S.level+1);
+  localStorage.setItem('ccb_unlocked',JSON.stringify(S.unlocked));
+  localStorage.setItem('ccb_stars',JSON.stringify(S.stars));
+  confetti(); sfx.level(); speak('Hooray! Well done!');
+  $('winStars').textContent='⭐'.repeat(stars)+'☆'.repeat(3-stars);
+  $('winText').textContent=`You finished baking ${L.name}!`;
+  const last = S.level===LEVELS.length-1;
+  $('nextBtn').style.display=last?'none':'inline-block';
+  hideAllOverlays();
+  if(last){ show('finalOv'); renderFinalStars(); S.scene='final'; }
+  else show('winOv');
+  $('progwrap').style.display='none'; $('bigInstruction').style.display='none';
+}
+
+/* ---------------- Calibration ---------------- */
+let calibProg=0, calibActive=false;
+function startCalibration(){
+  hideAllOverlays(); S.scene='calib'; show('calibOv'); calibProg=0; calibActive=true;
+  const tick=()=>{
+    if(!calibActive) return;
+    if(S.pose && S.pose.vis>0.5){ calibProg=Math.min(100,calibProg+4); $('calibEmo').textContent='🧍✨'; $('calibMsg').textContent='Perfect, stay right there!'; }
+    else { calibProg=Math.max(0,calibProg-2); $('calibEmo').textContent='🧍'; $('calibMsg').textContent='Make sure we can see you clearly…'; }
+    $('calibFill').style.width=calibProg+'%';
+    if(calibProg>=100){ calibActive=false; speak('Ready to bake!'); setTimeout(openMap,500); return; }
+    setTimeout(tick,120);
+  };
+  tick();
+}
+
+/* ---------------- Buttons ---------------- */
+$('toCalib').onclick=()=>{ audio(); startCalibration(); };
+$('introGo').onclick=beginPlay;
+$('nextBtn').onclick=()=>{ if(S.unlocked.includes(S.level+1)) startLevel(S.level+1); else openMap(); };
+$('winMapBtn').onclick=openMap;
+$('playAgainBtn').onclick=()=>{ openMap(); };
+$('pauseBtn').onclick=()=>{ if(S.scene!=='play')return; S.paused=true; stopMusic(); show('pauseOv'); };
+$('resumeBtn').onclick=()=>{ S.paused=false; hide('pauseOv'); if(!S.muted&&!S.lost) startMusic(); };
+$('restartBtn').onclick=()=>{ hide('pauseOv'); beginPlay(); };
+$('toMapBtn').onclick=()=>{ hide('pauseOv'); openMap(); };
+$('retryBtn').onclick=async()=>{ hide('errOv'); if(await initCamera()) startCalibration(); };
+$('muteBtn').onclick=()=>{ S.muted=!S.muted; $('muteBtn').textContent=S.muted?'🔇':'🔊';
+  if(S.muted){ stopMusic(); try{speechSynthesis.cancel();}catch(e){} } else if(S.scene==='play'&&!S.paused) startMusic(); };
+
+/* ---------------- Boot ---------------- */
+async function boot(){
+  resize();
+  setLoad(10,'Opening camera…');
+  const cam=await initCamera(); if(!cam) return;
+  await initPose();
+  S.running=true; requestAnimationFrame(loop);
+  hideAllOverlays(); S.scene='start'; show('startOv');
+}
+// warm voices
+if('speechSynthesis' in window){ speechSynthesis.onvoiceschanged=()=>{ voices=speechSynthesis.getVoices(); }; }
+// cleanup
+addEventListener('beforeunload',()=>{ try{ video.srcObject&&video.srcObject.getTracks().forEach(t=>t.stop()); }catch(e){} stopMusic(); if(S.landmarker)S.landmarker.close&&S.landmarker.close(); });
+document.addEventListener('visibilitychange',()=>{ if(document.hidden && S.scene==='play' && !S.paused){ $('pauseBtn').click(); } });
+
+boot();
+</script>
+</body>
+</html>
