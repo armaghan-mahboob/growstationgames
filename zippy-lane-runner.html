@@ -1576,7 +1576,7 @@ addEventListener('touchstart',e=>{
 },{passive:false});
 addEventListener('touchmove',e=>{
  if(swipeOn())e.preventDefault();
- if(SW.id===null||!swipeOn())return;
+ if(SW.id===null||!swipeOn()||SW.done)return;
  for(const t of e.changedTouches){
   if(t.identifier!==SW.id)continue;
   const dx=t.clientX-SW.x,dy=t.clientY-SW.y,th=swipeThresh();
@@ -1584,7 +1584,7 @@ addEventListener('touchmove',e=>{
   ctl.ignoreZone=-1;
   if(Math.abs(dx)>Math.abs(dy)){if(dx<0){setLane(P.lane-1);feedback('\u2b05\ufe0f')}else{setLane(P.lane+1);feedback('\u27a1\ufe0f')}}
   else{if(dy<0)doJump();else doSlide()}
-  SW.x=t.clientX;SW.y=t.clientY; /* reset origin so one long drag can chain moves */
+  SW.done=true; /* one swipe = one action, however long the drag; next swipe needs a new touch */
  }
 },{passive:false});
 function swipeEnd(e){for(const t of e.changedTouches)if(t.identifier===SW.id)SW.id=null}
