@@ -8,6 +8,7 @@
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Fredoka:wght@600;700&family=Lilita+One&display=swap" rel="stylesheet">
 <style>
+html,body{touch-action:none;overscroll-behavior:none;-webkit-user-select:none;user-select:none;-webkit-touch-callout:none;-webkit-tap-highlight-color:transparent}
 :root{
   --ink:#141d3b;
   --ink-soft:#253363;
@@ -1560,6 +1561,38 @@ addEventListener('keydown',e=>{
   else if(state==='GAME_OVER'&&!$('scOver').classList.contains('hide'))$('btnAgain').click();
  }
 });
+
+/* ---- touch swipe controls (phones/tablets): swipe left/right = change lane, up = jump, down = slide ---- */
+const IS_TOUCH=('ontouchstart' in window)||navigator.maxTouchPoints>0;
+const SW={id:null,x:0,y:0,done:false};
+function swipeOn(){return state==='PLAYING'&&(kbMode||!camOn)}
+function swipeThresh(){return Math.max(24,Math.min(innerWidth,innerHeight)*.06)}
+addEventListener('touchstart',e=>{
+ if(e.target.closest&&e.target.closest('button'))return;
+ if(!swipeOn())return;
+ e.preventDefault();
+ if(SW.id!==null)return;
+ const t=e.changedTouches[0];SW.id=t.identifier;SW.x=t.clientX;SW.y=t.clientY;SW.done=false;
+},{passive:false});
+addEventListener('touchmove',e=>{
+ if(swipeOn())e.preventDefault();
+ if(SW.id===null||!swipeOn())return;
+ for(const t of e.changedTouches){
+  if(t.identifier!==SW.id)continue;
+  const dx=t.clientX-SW.x,dy=t.clientY-SW.y,th=swipeThresh();
+  if(Math.max(Math.abs(dx),Math.abs(dy))<th)return;
+  ctl.ignoreZone=-1;
+  if(Math.abs(dx)>Math.abs(dy)){if(dx<0){setLane(P.lane-1);feedback('\u2b05\ufe0f')}else{setLane(P.lane+1);feedback('\u27a1\ufe0f')}}
+  else{if(dy<0)doJump();else doSlide()}
+  SW.x=t.clientX;SW.y=t.clientY; /* reset origin so one long drag can chain moves */
+ }
+},{passive:false});
+function swipeEnd(e){for(const t of e.changedTouches)if(t.identifier===SW.id)SW.id=null}
+addEventListener('touchend',swipeEnd);addEventListener('touchcancel',swipeEnd);
+addEventListener('contextmenu',e=>{if(IS_TOUCH)e.preventDefault()});
+if(IS_TOUCH){ /* relabel the keyboard buttons for touch screens */
+ ['btnKb','btnKb2'].forEach(id=>{const b=$(id);if(!b)return;const n=[...b.childNodes].reverse().find(x=>x.nodeType===3&&x.textContent.trim());if(n)n.textContent=n.textContent.replace('Play with keyboard','Play with swipes')});
+}
 
 /* ======================== 7. CAMERA & POSE TRACKING ======================= */
 const vid=$('vid'),ov=$('ov'),octx=ov.getContext('2d');
